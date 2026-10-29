@@ -31,6 +31,28 @@
   }
 
   /* ---------- trade validation ---------- */
+  // Free-text labels (tags, emotions, mistake tags): trimmed, de-duplicated ignoring case, capped. Accepts an array or a comma-separated string.
+  var LABEL_MAX = 30;
+  function cleanLabels(v, max) {
+    var arr = Array.isArray(v) ? v : (typeof v === 'string' ? v.split(',') : []), out = [], seen = {};
+    arr.forEach(function (x) {
+      var s = str(x).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX), k = s.toLowerCase();
+      if (s && !seen[k] && out.length < max) { seen[k] = 1; out.push(s); }
+    });
+    return out;
+  }
+  var GRADES = ['A', 'B', 'C', 'D', 'F'];
+  function cleanCustom(v) {
+    var out = {}, n = 0;
+    if (v && typeof v === 'object' && !Array.isArray(v)) Object.keys(v).forEach(function (k) {
+      if (n >= 20 || !/^[A-Za-z0-9_-]{1,40}$/.test(k)) return;
+      var x = v[k];
+      if (typeof x === 'number' && isFinite(x)) { out[k] = x; n++; }
+      else if (typeof x === 'boolean') { out[k] = x; n++; }
+      else if (typeof x === 'string' && x.trim() !== '') { out[k] = x.trim().slice(0, 200); n++; }
+    });
+    return n ? out : null;
+  }
   function normalizeTrade(raw) {
     var e = [];
     if (!raw || typeof raw !== 'object') return { ok: false, errors: ['Not a trade.'] };
@@ -118,6 +140,10 @@
     if (isBlank(raw.rating)) t.rating = null;
     else { var r = num(raw.rating); if (Number.isInteger(r) && r >= 1 && r <= 5) t.rating = r; else { t.rating = null; e.push('Rating must be 1 to 5.'); } }
 
+    // Journal v2 fields. Only stored when used, so older trades are unchanged.
+    var tg = cleanLabels(raw.tags, 12), em = cleanLabels(raw.emotions, 8), mk = cleanLabels(raw.mistakeTags, 8), cu = cleanCustom(raw.custom);
+    if (tg.length) t.tags = tg; if (em.length) t.emotions = em; if (mk.length) t.mistakeTags = mk; if (cu) t.custom = cu;
+    if (!isBlank(raw.grade)) { var gr = str(raw.grade).trim().toUpperCase(); if (GRADES.indexOf(gr) >= 0) t.grade = gr; else e.push('Grade must be A, B, C, D or F.'); }
     t.accountId = (typeof raw.accountId === 'string' && raw.accountId.trim()) ? raw.accountId.trim().slice(0, 64) : 'acct-default';
     // Provenance for imported trades (used for duplicate detection and rollback). Ignored if malformed, never an error.
     if (Array.isArray(raw.srcKeys) && raw.srcKeys.length && raw.srcKeys.length <= 400 && raw.srcKeys.every(function (k) { return typeof k === 'string' && k.length > 0 && k.length <= 160; })) t.srcKeys = raw.srcKeys.slice();
@@ -281,11 +307,18 @@
       if (f.session === '__none') { if (t.session) return false; } else if (f.session && t.session !== f.session) return false;
       if (f.strategy === '__none') { if (t.strategy) return false; } else if (f.strategy && t.strategy.toLowerCase() !== str(f.strategy).toLowerCase()) return false;   // strategy names match regardless of case
       if (f.result && c.result !== f.result && !(f.result === 'open' && c.status !== 'closed')) return false;
+      var hasL = function (arr, want) { want = str(want).toLowerCase(); return (arr || []).some(function (x) { return x.toLowerCase() === want; }); };
+      if (f.tag === '__none') { if (t.tags) return false; } else if (f.tag && !hasL(t.tags, f.tag)) return false;
+      if (f.emotion === '__none') { if (t.emotions) return false; } else if (f.emotion && !hasL(t.emotions, f.emotion)) return false;
+      if (f.mistake === '__none') { if (t.mistakeTags) return false; } else if (f.mistake && !hasL(t.mistakeTags, f.mistake)) return false;
+      if (f.grade === '__none') { if (t.grade) return false; } else if (f.grade && t.grade !== f.grade) return false;
+      if (f.minR != null && f.minR !== '') { if (c.rMultiple == null || c.rMultiple < Number(f.minR)) return false; }
+      if (f.maxR != null && f.maxR !== '') { if (c.rMultiple == null || c.rMultiple > Number(f.maxR)) return false; }
       if (f.rules === 'yes' && t.followedRules !== true) return false;
       if (f.rules === 'no' && t.followedRules !== false) return false;
       if (f.rules === 'unknown' && t.followedRules !== null) return false;
       if (q) {
-        var hay = [t.strategy, t.notes, t.entryReason, t.exitReason, t.mistakes, t.lessons, t.contract, t.side, t.session, t.date].join(' \n ').toLowerCase();
+        var hay = [t.strategy, t.notes, t.entryReason, t.exitReason, t.mistakes, t.lessons, t.contract, t.side, t.session, t.date, (t.tags || []).join(' '), (t.emotions || []).join(' '), (t.mistakeTags || []).join(' ')].join(' \n ').toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       return true;
@@ -301,7 +334,7 @@
   }
   var CSV_COLS = ['id', 'date', 'time', 'contract', 'side', 'session', 'strategy', 'contracts', 'entry', 'stop', 'exits', 'avg_exit', 'status',
     'gross_pnl', 'fees', 'net_pnl', 'planned_risk', 'r_multiple', 'rules_followed', 'rating', 'entry_reason', 'exit_reason', 'mistakes', 'lessons', 'notes',
-    'account', 'account_id', 'entries'];   // appended in Batch 2: existing columns keep their positions, so older exports and readers stay compatible
+    'account', 'account_id', 'entries', 'tags', 'emotions', 'mistake_tags', 'grade'];   // appended in Batch 2: existing columns keep their positions, so older exports and readers stay compatible
   function toCsv(rows, accountNames) {
     accountNames = accountNames || {};
     var lines = [CSV_COLS.join(',')];
@@ -315,7 +348,8 @@
         cell(t.followedRules === true ? 'yes' : t.followedRules === false ? 'no' : ''), cell(t.rating == null ? '' : t.rating),
         cell(t.entryReason, true), cell(t.exitReason, true), cell(t.mistakes, true), cell(t.lessons, true), cell(t.notes, true),
         cell(accountNames[t.accountId || 'acct-default'] || '', true), cell(t.accountId || 'acct-default', true),
-        cell((t.entries && t.entries.length ? t.entries : [{ qty: t.contracts, price: t.entry }]).map(function (x) { return x.qty + '@' + x.price; }).join(' | '))
+        cell((t.entries && t.entries.length ? t.entries : [{ qty: t.contracts, price: t.entry }]).map(function (x) { return x.qty + '@' + x.price; }).join(' | ')),
+        cell((t.tags || []).join(' | '), true), cell((t.emotions || []).join(' | '), true), cell((t.mistakeTags || []).join(' | '), true), cell(t.grade || '')
       ].join(','));
     });
     return lines.join('\r\n') + '\r\n';
@@ -421,7 +455,7 @@
 
   var api = { SESSIONS: SESSIONS, STORE_KEY: STORE_KEY, normalizeTrade: normalizeTrade, compute: compute, analyze: analyze, plOf: plOf,
     stats: stats, breakdown: breakdown, dailyMap: dailyMap, summaryForDate: summaryForDate, todaySummary: todaySummary,
-    filterRows: filterRows, toCsv: toCsv, CSV_COLS: CSV_COLS, INST_LIST_TEXT: INST.list.map(function (i) { return i.id; }).join(', '), serializeBackup: serializeBackup, parseBackup: parseBackup, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
+    filterRows: filterRows, cleanLabels: cleanLabels, GRADES: GRADES, cleanCustom: cleanCustom, toCsv: toCsv, CSV_COLS: CSV_COLS, INST_LIST_TEXT: INST.list.map(function (i) { return i.id; }).join(', '), serializeBackup: serializeBackup, parseBackup: parseBackup, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
     parseStored: parseStored, serializeStored: serializeStored, mergeTrades: mergeTrades, fmtMoney: fmtMoney, fmtCompact: fmtCompact,
     order: order, num: num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -43,7 +43,11 @@
   /* ---------- state ---------- */
   var now0 = new Date();
   var S = { trades: [], corrupt: false, rejected: 0, tab: 'entries', editing: null, filters: {}, filtersOpen: false, expanded: null, limit: 30,
-    basis: null, accounts: [], dbOk: false, loaded: false, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null };
+    basis: null, accounts: [], dbOk: false, loaded: false, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null,
+    fields: [], templates: [], saved: [], selMode: false, sel: {}, compare: null };
+  var EMOTIONS = ['Calm', 'Confident', 'Focused', 'Patient', 'Anxious', 'Fearful', 'Greedy', 'Impatient', 'Frustrated', 'Revenge', 'Bored', 'Tired', 'FOMO'];
+  var MISTAKES = ['Moved stop', 'Oversized', 'Chased entry', 'Exited early', 'Held a loser', 'No plan', 'Overtraded', 'Ignored setup'];
+  var J2 = window.TTJournal2Core, EXT = window.TTJournalExt = window.TTJournalExt || { tabs: [] };
 
   function loadTrades() {
     var raw = null; try { raw = localStorage.getItem(C.STORE_KEY); } catch (e) {}
@@ -165,8 +169,9 @@
   function render() {
     if (S.editing) { root.innerHTML = bannersHtml() + formHtml(); afterForm(); }
     else {
-      var tabs = [['entries', 'ENTRIES'], ['calendar', 'CALENDAR'], ['analytics', 'ANALYTICS'], ['backup', 'BACKUP']];
-      var body = S.tab === 'calendar' ? calendarHtml() : S.tab === 'analytics' ? analyticsHtml() : S.tab === 'backup' ? backupHtml() : entriesHtml();
+      var tabs = [['entries', 'ENTRIES'], ['calendar', 'CALENDAR'], ['analytics', 'ANALYTICS']].concat(EXT.tabs.filter(function (x) { return !x.hidden; }).map(function (x) { return [x.id, x.label]; }), [['backup', 'BACKUP']]);
+      var ext = EXT.tabs.filter(function (x) { return x.id === S.tab; })[0];
+      var body = ext ? ext.html(EXT.ctx) : S.tab === 'calendar' ? calendarHtml() : S.tab === 'analytics' ? analyticsHtml() : S.tab === 'backup' ? backupHtml() : entriesHtml();
       root.innerHTML = bannersHtml() + '<div class="chips jtabs" role="tablist">' + tabs.map(function (t) {
         return '<button type="button" role="tab" aria-selected="' + (S.tab === t[0]) + '" class="chip' + (S.tab === t[0] ? ' on' : '') + '" data-act="tab" data-tab="' + t[0] + '">' + t[1] + '</button>';
       }).join('') + '</div>' + body;
@@ -179,7 +184,7 @@
     return '<button type="button" class="btn big" data-act="new">+ NEW TRADE</button>' +
       '<div class="panel jsearch"><input id="jq" type="text" data-f="q" placeholder="Search strategy, reasons, mistakes, notes…" autocomplete="off" value="' + esc(S.filters.q || '') + '" aria-label="Search journal">' +
       '<div class="jbar"><button type="button" class="chip' + (S.filtersOpen ? ' on' : '') + '" data-act="toggle-filters" aria-expanded="' + S.filtersOpen + '">FILTERS<span id="jFiltBadge"></span></button>' +
-      '<button type="button" class="chip" data-act="clear-filters">CLEAR</button><span class="note" id="jCount"></span></div>' +
+      '<button type="button" class="chip" data-act="clear-filters">CLEAR</button><button type="button" class="chip' + (S.selMode ? ' on' : '') + '" data-act="sel-mode" aria-pressed="' + S.selMode + '">SELECT</button><span class="note" id="jCount"></span></div>' +
       '<div id="jFilters"' + (S.filtersOpen ? '' : ' hidden') + '>' + filtersHtml() + '</div></div><div id="jList"></div>';
   }
   function filtersHtml() {
@@ -197,7 +202,16 @@
       sel('result', 'Result', [['', 'All'], ['win', 'Winners'], ['loss', 'Losers'], ['be', 'Breakeven'], ['open', 'Open / partial']]) +
       sel('rules', 'Followed rules', [['', 'All'], ['yes', 'Yes'], ['no', 'No'], ['unknown', 'Not recorded']]) +
       '<div class="field"><label for="jf-from">From date</label><input id="jf-from" type="date" data-f="from" value="' + esc(f.from || '') + '"></div>' +
-      '<div class="field"><label for="jf-to">To date</label><input id="jf-to" type="date" data-f="to" value="' + esc(f.to || '') + '"></div></div>';
+      '<div class="field"><label for="jf-to">To date</label><input id="jf-to" type="date" data-f="to" value="' + esc(f.to || '') + '"></div>' +
+      sel('tag', 'Tag', [['', 'All'], ['__none', 'No tags']].concat(usedLabels('tags').map(function (x) { return [x, x]; }))) +
+      sel('emotion', 'Emotion', [['', 'All'], ['__none', 'Not recorded']].concat(usedLabels('emotions').map(function (x) { return [x, x]; }))) +
+      sel('mistake', 'Mistake tag', [['', 'All'], ['__none', 'None']].concat(usedLabels('mistakeTags').map(function (x) { return [x, x]; }))) +
+      sel('grade', 'Grade', [['', 'All'], ['__none', 'Not graded']].concat(C.GRADES.map(function (g) { return [g, g]; }))) +
+      '<div class="field"><label for="jf-minR">Min R</label><input id="jf-minR" type="text" inputmode="decimal" data-f="minR" placeholder="e.g. 1" value="' + esc(f.minR || '') + '"></div>' +
+      '<div class="field"><label for="jf-maxR">Max R</label><input id="jf-maxR" type="text" inputmode="decimal" data-f="maxR" placeholder="e.g. -0.5" value="' + esc(f.maxR || '') + '"></div></div>' +
+      '<div class="jbar presets"><span class="note" style="margin:0">Dates:</span>' + [['today', 'TODAY'], ['week', 'THIS WEEK'], ['month', 'THIS MONTH'], ['30d', 'LAST 30 DAYS']].map(function (x) { return '<button type="button" class="chip" data-act="preset" data-p="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="jbar saved"><select id="jf-saved" aria-label="Saved filters"><option value="">Saved filters…</option>' + S.saved.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>'; }).join('') + '</select>' +
+      '<button type="button" class="chip" data-act="filter-save">SAVE THESE</button>' + (S.saved.length ? '<button type="button" class="chip" data-act="filter-del">DELETE SELECTED</button>' : '') + '</div>';
   }
   function activeFilterCount() { var n = 0; Object.keys(S.filters).forEach(function (k) { if (S.filters[k]) n++; }); return n; }
   function renderList() {
@@ -205,7 +219,7 @@
     var all = rows(), fr = filteredRows(all), shown = fr.slice(0, S.limit);
     var n = activeFilterCount(), badge = $('#jFiltBadge'); if (badge) badge.textContent = n ? ' · ' + n : '';
     var cnt = $('#jCount'); if (cnt) cnt.textContent = all.length ? 'Showing ' + fr.length + ' of ' + all.length : '';
-    var h = '';
+    var h = S.selMode ? bulkBarHtml() : '';
     if (S.filters.date) h += '<div class="fchip">Date: ' + esc(fmtDate(S.filters.date)) + ' <button type="button" data-act="clear-date" aria-label="Clear date filter">✕</button></div>';
     if (!all.length) h += '<div class="panel empty"><h2>No trades yet</h2><p class="note" style="margin-top:0">Log your first trade to start building your journal, calendar and analytics. Everything you see here comes only from trades you enter.</p></div>';
     else if (!fr.length) h += '<div class="panel empty"><p class="note" style="margin:0">No trades match these filters.</p></div>';
@@ -213,6 +227,45 @@
     if (fr.length > shown.length) h += '<button type="button" class="btn wide" data-act="more">SHOW MORE (' + (fr.length - shown.length) + ')</button>';
     list.innerHTML = h;
     loadThumbs();
+  }
+  function selCount() { return Object.keys(S.sel).filter(function (k) { return S.sel[k]; }).length; }
+  function bulkBarHtml() {
+    var n = selCount();
+    return '<div class="panel bulkbar" id="jBulk"><b id="jSelN">' + n + ' selected</b><div class="jbar"><button type="button" class="chip" data-act="sel-all">ALL SHOWN BY FILTER</button><button type="button" class="chip" data-act="sel-none">NONE</button>' +
+      '<button type="button" class="chip" data-act="compare"' + (n >= 2 && n <= 4 ? '' : ' disabled') + '>COMPARE (2–4)</button><button type="button" class="chip" data-act="bulk"' + (n ? '' : ' disabled') + '>BULK ACTION</button></div></div>';
+  }
+  function updateBulkBar() {
+    var n = selCount(), a = $('#jSelN'); if (a) a.textContent = n + ' selected';
+    var c = $('[data-act="compare"]'), b = $('[data-act="bulk"]'); if (c) c.disabled = !(n >= 2 && n <= 4); if (b) b.disabled = !n;
+  }
+  function bulkAction() {
+    var ids = Object.keys(S.sel).filter(function (k) { return S.sel[k]; }); if (!ids.length) return;
+    var D = window.TTUI;
+    D.dialog({ title: 'Bulk action on ' + plural(ids.length, 'trade'), ok: 'NEXT', fields: [{ name: 'op', label: 'What do you want to do?', type: 'select', options: [
+      { value: 'addTag', label: 'Add a tag' }, { value: 'removeTag', label: 'Remove a tag' }, { value: 'addMistake', label: 'Add a mistake tag' }, { value: 'setStrategy', label: 'Set strategy' },
+      { value: 'setGrade', label: 'Set grade' }, { value: 'setAccount', label: 'Move to another account' }, { value: 'delete', label: 'Delete these trades' }] }] }).then(function (a) {
+      if (!a) return;
+      if (a.op === 'delete') return D.confirm('Delete ' + plural(ids.length, 'trade') + '?', 'This also removes their screenshots and cannot be undone. Take a backup first if unsure.', 'DELETE', true).then(function (yes) { if (yes) deleteMany(ids); });
+      var f = a.op === 'setGrade' ? { name: 'v', label: 'Grade', type: 'select', options: [{ value: '', label: 'Clear grade' }].concat(C.GRADES.map(function (g) { return { value: g, label: g }; })) }
+        : a.op === 'setAccount' ? { name: 'v', label: 'Account', type: 'select', options: accountChoices(null).map(function (x) { return { value: x.id, label: x.name }; }) }
+        : { name: 'v', label: a.op === 'setStrategy' ? 'Strategy (blank clears it)' : 'Label', max: 60, placeholder: '' };
+      return D.dialog({ title: 'Apply to ' + plural(ids.length, 'trade'), ok: 'APPLY', fields: [f], validate: function (v) { return (a.op === 'addTag' || a.op === 'removeTag' || a.op === 'addMistake') && !v.v.trim() ? 'Type a label.' : null; } }).then(function (v) {
+        if (!v) return; var res = J2.bulkApply(S.trades, ids, { type: a.op, value: v.v });
+        return EXT.ctx.updateTrades(res.trades).then(function (ok) {
+          if (!ok) { toast('Could not save (browser storage blocked). Nothing was changed.', true); return; }
+          toast('Updated ' + plural(res.changed, 'trade') + (res.failed.length ? '; ' + res.failed.length + ' could not be changed (' + res.failed[0].reason + ')' : '') + '.', res.failed.length > 0);
+          renderList();
+        });
+      });
+    });
+  }
+  function deleteMany(ids) {
+    var set = {}; ids.forEach(function (i) { set[i] = 1; });
+    EXT.ctx.updateTrades(S.trades.filter(function (t) { return !set[t.id]; })).then(function (ok) {
+      if (!ok) { toast('Could not delete (browser storage blocked).', true); return; }
+      if (S.imgOk !== false) ids.forEach(function (id) { SLOTS.forEach(function (sl) { IMG.del(id + ':' + sl).catch(function () {}); }); });
+      S.sel = {}; S.expanded = null; toast(plural(ids.length, 'trade') + ' deleted.'); render();
+    });
   }
   function pnlChip(c) {
     if (c.shownCents == null) return '<span class="jt-pnl none">OPEN<small>nothing realized</small></span>';
@@ -228,7 +281,10 @@
     if (t.session) tags.push('<span class="tag">' + esc(t.session) + '</span>');
     if (t.strategy) tags.push('<span class="tag">' + esc(t.strategy) + '</span>');
     if (t.rating) tags.push('<span class="tag">★ ' + t.rating + '</span>');
-    return '<article class="jt' + (open ? ' open' : '') + '"><button type="button" class="jt-head" data-act="toggle-card" data-id="' + esc(t.id) + '" aria-expanded="' + open + '">' +
+    if (t.grade) tags.push('<span class="tag grade g' + t.grade + '">GRADE ' + t.grade + '</span>');
+    (t.tags || []).slice(0, 3).forEach(function (x) { tags.push('<span class="tag lbl">#' + esc(x) + '</span>'); });
+    if ((t.tags || []).length > 3) tags.push('<span class="tag lbl">+' + (t.tags.length - 3) + '</span>');
+    return '<article class="jt' + (open ? ' open' : '') + (S.selMode ? ' selmode' : '') + '">' + (S.selMode ? '<label class="jt-sel"><input type="checkbox" data-act="sel" data-id="' + esc(t.id) + '"' + (S.sel[t.id] ? ' checked' : '') + ' aria-label="Select this trade"></label>' : '') + '<button type="button" class="jt-head\" data-act="toggle-card" data-id="' + esc(t.id) + '" aria-expanded="' + open + '">' +
       '<span class="jt-l"><span class="jt-date">' + esc(fmtDate(t.date)) + (t.time ? ' · ' + esc(fmtTime(t.time)) : '') + '</span>' +
       '<span class="jt-title"><b class="dir ' + t.side + '">' + t.side.toUpperCase() + '</b> ' + t.contracts + ' × ' + esc(t.contract) + '</span></span>' + pnlChip(c) + '</button>' +
       (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + (open ? detailHtml(r) : '') + '</article>';
@@ -244,6 +300,8 @@
       ['Net P&L', c.netCents != null ? m(c.netCents, true) : (c.isClosed ? 'Needs fees' : DASH)],
       ['Risk at stop', c.plannedRiskCents != null ? m(c.plannedRiskCents) : DASH + ' no stop'],
       ['Realized R (gross)', fmtR(c.rMultiple)]];
+    if (t.grade) facts.push(['Grade', t.grade]); if (t.tags) facts.push(['Tags', t.tags.join(', ')]); if (t.emotions) facts.push(['Emotions', t.emotions.join(', ')]); if (t.mistakeTags) facts.push(['Mistake tags', t.mistakeTags.join(', ')]);
+    Object.keys(t.custom || {}).forEach(function (k) { var d = S.fields.filter(function (f) { return f.id === k; })[0], v = t.custom[k]; facts.push([d ? d.label : 'Removed field (' + k + ')', v === true ? 'Yes' : v === false ? 'No' : v]); });
     var text = [['Entry reason', t.entryReason], ['Exit reason', t.exitReason], ['Mistakes', t.mistakes], ['Lessons learned', t.lessons], ['Notes', t.notes]]
       .filter(function (x) { return x[1]; }).map(function (x) { return '<div class="jt-tx"><h3>' + x[0] + '</h3><p>' + esc(x[1]) + '</p></div>'; }).join('');
     return '<div class="jt-det"><dl class="facts">' + facts.map(function (f) { return '<div><dt>' + f[0] + '</dt><dd>' + esc(f[1]) + '</dd></div>'; }).join('') + '</dl>' + text +
@@ -430,6 +488,73 @@
   var DEFACCT = 'acct-default';
   // Accounts you can pick: all active ones, plus the trade's own account even if archived (so editing never silently moves a trade).
   function accountChoices(t) { return S.accounts.filter(function (a) { return !a.archived || (t && t.accountId === a.id); }); }
+
+  /* ---- journal v2 form helpers ---- */
+  function usedLabels(field) { var m = {}; S.trades.forEach(function (t) { (t[field] || []).forEach(function (x) { m[x.toLowerCase()] = m[x.toLowerCase()] || x; }); }); return Object.keys(m).sort().map(function (k) { return m[k]; }); }
+  function chipHtml(group, label, on) { return '<button type="button" class="chip lpc" data-act="lp-toggle" data-v="' + esc(label) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(label) + '</button>'; }
+  function pickerHtml(group, field, title, presets, selected, hint) {
+    var pool = [], seen = {}; selected = selected || [];
+    presets.concat(usedLabels(field), selected).forEach(function (x) { var k = x.toLowerCase(); if (!seen[k]) { seen[k] = 1; pool.push(x); } });
+    var selSet = {}; selected.forEach(function (x) { selSet[x.toLowerCase()] = 1; });
+    return '<div class="field"><label id="lp-' + group + '-l">' + title + '</label><div class="lp" data-group="' + group + '" role="group" aria-labelledby="lp-' + group + '-l">' +
+      pool.map(function (x) { return chipHtml(group, x, selSet[x.toLowerCase()]); }).join('') + '</div>' +
+      '<div class="lp-add"><input type="text" maxlength="30" data-lp-input="' + group + '" placeholder="Add your own" aria-label="Add your own ' + esc(title.toLowerCase()) + '"><button type="button" class="chip" data-act="lp-add" data-group="' + group + '">ADD</button></div>' + (hint ? '<p class="hint">' + hint + '</p>' : '') + '</div>';
+  }
+  function picked(group) { return $$('.lp[data-group="' + group + '"] .lpc[aria-pressed="true"]').map(function (e) { return e.getAttribute('data-v'); }); }
+  function addPicked(group) {
+    var inp = $('[data-lp-input="' + group + '"]'), box = $('.lp[data-group="' + group + '"]'); if (!inp || !box) return;
+    var v = C.cleanLabels([inp.value], 1)[0]; inp.value = ''; if (!v) return;
+    var hit = $$('.lpc', box).filter(function (e) { return e.getAttribute('data-v').toLowerCase() === v.toLowerCase(); })[0];
+    if (hit) hit.setAttribute('aria-pressed', 'true'); else { box.insertAdjacentHTML('beforeend', chipHtml(group, v, true)); }
+  }
+  function setPicked(group, list) {
+    var box = $('.lp[data-group="' + group + '"]'); if (!box) return; var want = {}; (list || []).forEach(function (x) { want[x.toLowerCase()] = x; });
+    $$('.lpc', box).forEach(function (e) { var k = e.getAttribute('data-v').toLowerCase(); e.setAttribute('aria-pressed', want[k] ? 'true' : 'false'); delete want[k]; });
+    Object.keys(want).forEach(function (k) { box.insertAdjacentHTML('beforeend', chipHtml(group, want[k], true)); });
+  }
+  function customFieldHtml(def, val) {
+    var id = 'f-cf-' + def.id, lab = esc(def.label), v = val == null ? '' : val, inner;
+    if (def.type === 'choice') inner = '<select id="' + id + '" data-cf="' + esc(def.id) + '"><option value="">Not recorded</option>' + def.choices.map(function (c) { return '<option' + (String(v) === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select>';
+    else if (def.type === 'yesno') inner = '<select id="' + id + '" data-cf="' + esc(def.id) + '"><option value="">Not recorded</option><option value="yes"' + (v === true ? ' selected' : '') + '>Yes</option><option value="no"' + (v === false ? ' selected' : '') + '>No</option></select>';
+    else inner = '<input id="' + id + '" data-cf="' + esc(def.id) + '" type="text" ' + (def.type === 'number' ? 'inputmode="decimal" ' : '') + 'maxlength="200" value="' + esc(v) + '">';
+    return fld(lab, id, inner);
+  }
+  function readCustom(errors) {
+    var out = {}, E = S.editing, known = {};
+    S.fields.forEach(function (d) {
+      known[d.id] = 1; var el = $('#f-cf-' + d.id); if (!el) return;
+      var r = J2.cleanFieldValue(d, el.value); if (!r.ok) { if (errors) errors.push(r.error); return; } if (r.value !== undefined) out[d.id] = r.value;
+    });
+    var old = (E && E.trade && E.trade.custom) || {}; Object.keys(old).forEach(function (k) { if (!known[k]) out[k] = old[k]; });   // values of fields you later removed are kept, not erased
+    return out;
+  }
+  function templateBarHtml(isNew) {
+    if (!isNew) return '';
+    return '<div class="panel tplbar"><div class="row-inline">' + (S.templates.length ? '<select id="f-tpl" aria-label="Apply a template"><option value="">Start from a template…</option>' + S.templates.map(function (t) { return '<option value="' + esc(t.id) + '">' + esc(t.name) + '</option>'; }).join('') + '</select>' : '<span class="note" style="margin:0">Templates pre-fill the setup, tags and reasons (never prices).</span>') +
+      '<button type="button" class="chip" data-act="tpl-save">SAVE AS TEMPLATE</button></div></div>';
+  }
+  function applyTemplate(tpl) {
+    var set = function (id, v) { var e = $('#' + id); if (e && v != null) e.value = v; };
+    if (tpl.contract && INST.byId[tpl.contract]) set('f-contract', tpl.contract);
+    if (tpl.side) { var r = $('input[name="f-side"][value="' + tpl.side + '"]'); if (r) r.checked = true; }
+    set('f-session', tpl.session); set('f-strategy', tpl.strategy); set('f-entryReason', tpl.entryReason); set('f-exitReason', tpl.exitReason); set('f-notes', tpl.notes);
+    if (tpl.followedRules != null) { var rr = $('input[name="f-rules"][value="' + (tpl.followedRules ? 'yes' : 'no') + '"]'); if (rr) rr.checked = true; }
+    if (tpl.tags) setPicked('tags', tpl.tags); if (tpl.emotions) setPicked('emotions', tpl.emotions);
+    Object.keys(tpl.custom || {}).forEach(function (k) { var e = $('#f-cf-' + k); if (e) e.value = tpl.custom[k] === true ? 'yes' : tpl.custom[k] === false ? 'no' : tpl.custom[k]; });
+    updatePreview();
+  }
+  function saveTemplate() {
+    var raw = readForm(), cu = readCustom(null);
+    var tpl = J2.cleanTemplate({ contract: raw.contract, side: raw.side, session: raw.session, strategy: raw.strategy, tags: raw.tags, emotions: raw.emotions, entryReason: raw.entryReason, exitReason: raw.exitReason, notes: raw.notes, followedRules: raw.followedRules === 'yes' ? true : raw.followedRules === 'no' ? false : undefined, custom: cu });
+    window.TTUI.dialog({ title: 'Save as template', body: 'Saves the setup, tags, reasons and custom fields from this form. Prices, quantities and dates are never saved.', ok: 'SAVE', fields: [{ name: 'name', label: 'Template name', placeholder: 'e.g. Opening range breakout', max: 60 }],
+      validate: function (v) { return v.name.trim() ? (S.templates.some(function (t) { return t.name.toLowerCase() === v.name.trim().toLowerCase(); }) ? 'A template with that name exists. Delete it in Setup first, or pick another name.' : null) : 'Give the template a name.'; } })
+      .then(function (v) { if (!v) return; return window.TTStore.save({ kind: 'template', type: 'trade', name: v.name.trim().slice(0, 60), data: tpl }).then(function () { return loadDocs(); }).then(function () { toast('Template saved.'); var sel = $('#f-tpl'); if (!sel && S.editing) { var f = readForm(); } }); })
+      .catch(function () { toast('Could not save the template.', true); });
+  }
+  function gradeHtml(cur) {
+    function r(v, l) { return '<label class="seg-i"><input type="radio" name="f-grade" value="' + v + '"' + ((cur || '') === v ? ' checked' : '') + '><span>' + l + '</span></label>'; }
+    return '<div class="field"><label id="f-grade-l">Trade grade <span class="lh">(how well you executed your plan, not whether it won)</span></label><div class="seg" role="radiogroup" aria-labelledby="f-grade-l">' + r('', '—') + C.GRADES.map(function (g) { return r(g, g); }).join('') + '</div></div>';
+  }
   function formHtml() {
     var E = S.editing, t = E.trade || {}, p = loadPrefs(), isNew = !E.id;
     var v = { date: t.date || todayKey(), time: t.time || '', contract: t.contract || p.contract || INST.defaultId, side: t.side || p.side || 'long',
@@ -440,7 +565,7 @@
     var rules = t.followedRules === true ? 'yes' : t.followedRules === false ? 'no' : '';
     function radio(name, val, label, cur) { return '<label class="seg-i"><input type="radio" name="' + name + '" value="' + val + '"' + (cur === val ? ' checked' : '') + '><span>' + label + '</span></label>'; }
     var h = '<div class="jform' + (anyFillTime(t) ? ' times-on' : '') + '" id="jForm"><div class="formtop"><button type="button" class="chip" data-act="cancel">‹ BACK</button><h2 class="calt">' + (isNew ? 'New trade' : 'Edit trade') + '</h2></div>' +
-      '<div class="errs" id="fErrs" role="alert" hidden></div>' +
+      '<div class="errs" id="fErrs" role="alert" hidden></div>' + templateBarHtml(isNew) +
       '<div class="panel"><h2>Trade</h2><div class="fgrid">' +
       fld('Trade date', 'f-date', '<input id="f-date" type="date" value="' + esc(v.date) + '">') +
       fld('Entry time (optional)', 'f-time', '<input id="f-time" type="time" value="' + esc(v.time) + '">') +
@@ -471,6 +596,9 @@
       fld('Mistakes', 'f-mistakes', '<textarea id="f-mistakes" rows="3" maxlength="1000" placeholder="What went wrong?">' + esc(t.mistakes || '') + '</textarea>') +
       fld('Lessons learned', 'f-lessons', '<textarea id="f-lessons" rows="3" maxlength="1000" placeholder="What will you do differently?">' + esc(t.lessons || '') + '</textarea>') +
       fld('Notes', 'f-notes', '<textarea id="f-notes" rows="2" maxlength="1000" placeholder="Anything else">' + esc(t.notes || '') + '</textarea>') + '</div>';
+    h += '<div class="panel"><h2>Tags &amp; psychology</h2>' + pickerHtml('tags', 'tags', 'Tags', [], t.tags, 'Free labels such as the market condition or setup variant.') + pickerHtml('emotions', 'emotions', 'How did you feel?', EMOTIONS, t.emotions) +
+      pickerHtml('mistakes', 'mistakeTags', 'Mistakes made', MISTAKES, t.mistakeTags, 'Recurring mistakes show up in your Review tab.') + gradeHtml(t.grade) +
+      (S.fields.length ? '<div class="fgrid">' + S.fields.map(function (d) { return customFieldHtml(d, (t.custom || {})[d.id]); }).join('') + '</div>' : '') + '</div>';
     h += '<div class="panel"><h2>Screenshots (optional)</h2>' + (S.imgOk === false ? '<p class="note" style="margin:0">Screenshot storage is not available in this browser (private mode?). Everything else still works.</p>' :
       '<div class="shots">' + SLOTS.map(function (s) {
         return '<div class="shot" data-slot="' + s + '"><div class="shot-t">' + s.toUpperCase() + ' TRADE</div><div class="shot-box" id="shot-' + s + '"></div>' +
@@ -508,6 +636,7 @@
     var entries = adds.length ? [{ qty: g('f-qty'), price: g('f-entry'), time: g('f-time'), date: E.trade && E.trade.entries && E.trade.entries[0] ? (E.trade.entries[0].date || '') : '' }].concat(adds) : undefined;
     return { id: E.id || undefined, createdAt: E.trade ? E.trade.createdAt : undefined, srcKeys: E.trade ? E.trade.srcKeys : undefined, importBatch: E.trade ? E.trade.importBatch : undefined, entries: entries, date: g('f-date'), time: g('f-time'), accountId: g('f-account') || (E.trade ? E.trade.accountId : undefined), contract: g('f-contract'), side: side,
       contracts: g('f-qty'), session: g('f-session'), strategy: g('f-strategy'), entry: g('f-entry'), stop: g('f-stop'), exits: exits, fees: g('f-fees'),
+      tags: picked('tags'), emotions: picked('emotions'), mistakeTags: picked('mistakes'), grade: ($('input[name="f-grade"]:checked') || {}).value || '', custom: readCustom(null),
       entryReason: g('f-entryReason'), exitReason: g('f-exitReason'), followedRules: rules, rating: g('f-rating'), mistakes: g('f-mistakes'), lessons: g('f-lessons'), notes: g('f-notes') };
   }
   // A lone, untouched exit row follows the total position size (first entry plus scale-ins).
@@ -540,7 +669,8 @@
     render(); window.scrollTo(0, 0);
   }
   function saveForm() {
-    var E = S.editing, r = C.normalizeTrade(readForm());
+    var E = S.editing, cerr = []; readCustom(cerr); if (cerr.length) { showErrors(cerr); return; }
+    var r = C.normalizeTrade(readForm());
     if (!r.ok) { showErrors(r.errors); return; }
     var t = r.trade, before = S.trades.slice(), idx = S.trades.findIndex(function (x) { return x.id === t.id; });
     if (idx >= 0) S.trades[idx] = t; else S.trades.push(t);
@@ -570,6 +700,7 @@
 
   /* ---------- tab setup ---------- */
   function afterTab() {
+    var ext = EXT.tabs.filter(function (x) { return x.id === S.tab; })[0]; if (ext && ext.after) ext.after(EXT.ctx);
     if (S.tab === 'entries') renderList();
     if (S.tab === 'analytics') bindChart();
     if (S.tab === 'backup' && S.imgOk !== false) IMG.keys().then(function (k) { var e = $('#bkShots'); if (e) e.textContent = k.length; }).catch(function () { var e = $('#bkShots'); if (e) e.textContent = 'n/a'; });
@@ -705,6 +836,18 @@
       case 'bk-save': saveBackupFile(); break;
       case 'wipe': wipeAll(); break;
       case 'lightbox': lightbox(el.src); break;
+      case 'lp-toggle': el.setAttribute('aria-pressed', el.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); break;
+      case 'lp-add': addPicked(el.getAttribute('data-group')); break;
+      case 'tpl-save': saveTemplate(); break;
+      case 'sel-mode': S.selMode = !S.selMode; if (!S.selMode) S.sel = {}; render(); break;
+      case 'sel': S.sel[el.getAttribute('data-id')] = el.checked; updateBulkBar(); break;
+      case 'sel-all': filteredRows().forEach(function (r) { S.sel[r.t.id] = true; }); renderList(); break;
+      case 'sel-none': S.sel = {}; renderList(); break;
+      case 'bulk': bulkAction(); break;
+      case 'compare': S.compare = Object.keys(S.sel).filter(function (k) { return S.sel[k]; }).slice(0, 4); S.tab = 'compare'; render(); window.scrollTo(0, 0); break;
+      case 'preset': var pr = J2.rangePreset(el.getAttribute('data-p'), todayKey()); if (pr) { S.filters.from = pr.from; S.filters.to = pr.to; delete S.filters.date; S.limit = 30; S.filtersOpen = true; render(); } break;
+      case 'filter-save': saveFilter(); break;
+      case 'filter-del': var sid = ($('#jf-saved') || {}).value; if (sid) window.TTStore.remove(sid, 'filter').then(loadDocs).then(function () { toast('Saved filter deleted.'); render(); }); else toast('Pick a saved filter first.', true); break;
     }
   });
   function onInput(ev) {
@@ -720,10 +863,20 @@
     updatePreview();
   }
   root.addEventListener('input', onInput);
+  root.addEventListener('keydown', function (ev) { var g = ev.target.getAttribute && ev.target.getAttribute('data-lp-input'); if (g && ev.key === 'Enter') { ev.preventDefault(); addPicked(g); } });
+  function saveFilter() {
+    var f = J2.cleanFilter(S.filters); if (!Object.keys(f).length) { toast('Set at least one filter first.', true); return; }
+    window.TTUI.dialog({ title: 'Save this filter', ok: 'SAVE', fields: [{ name: 'name', label: 'Name', max: 60, placeholder: 'e.g. Winning ORB trades' }], validate: function (v) { return v.name.trim() ? null : 'Give it a name.'; } }).then(function (v) {
+      if (!v) return; var nm = v.name.trim().slice(0, 60), ex = S.saved.filter(function (x) { return x.name.toLowerCase() === nm.toLowerCase(); })[0];
+      return window.TTStore.save({ id: ex ? ex.id : undefined, kind: 'filter', type: 'journal', name: nm, filter: f }).then(loadDocs).then(function () { toast('Filter saved.'); render(); });
+    }).catch(function () { toast('Could not save the filter.', true); });
+  }
   root.addEventListener('change', function (ev) {
     var t = ev.target;
     if (t.name === 'bkmode') { S.restoreMode = t.value; return; }
     if (t.id === 'bkFile' && t.files && t.files[0]) { var f = t.files[0]; t.value = ''; restoreFrom(f); return; }
+    if (t.id === 'f-tpl') { var tp = S.templates.filter(function (x) { return x.id === t.value; })[0]; if (tp) applyTemplate(tp.data || {}); t.value = ''; return; }
+    if (t.id === 'jf-saved') { var sv = S.saved.filter(function (x) { return x.id === t.value; })[0]; if (sv) { S.filters = J2.cleanFilter(sv.filter); S.filtersOpen = true; S.limit = 30; render(); } return; }
     if (t.type === 'file' && t.getAttribute('data-slot') && S.editing) {
       var slot = t.getAttribute('data-slot'), f2 = t.files && t.files[0]; t.value = ''; if (!f2) return;
       compressImage(f2).then(function (url) { var sh = S.editing && S.editing.shots[slot]; if (!sh) return; sh.dataUrl = url; sh.changed = true; sh.removed = false; renderShot(slot); })
@@ -745,13 +898,25 @@
     });
   }
   function loadAccounts() { return window.TTDB.getAll('accounts').then(function (a) { S.accounts = a.filter(function (x) { return x && x.id; }).sort(function (x, y) { return x.createdAt - y.createdAt; }); }).catch(function () {}); }
+  function loadDocs() {
+    if (!window.TTStore || !S.dbOk) return Promise.resolve();
+    return Promise.all([window.TTStore.list('field'), window.TTStore.list('template'), window.TTStore.list('filter')]).then(function (r) {
+      S.fields = r[0].filter(function (f) { return f.type && f.label; }).sort(function (a, b) { return a.createdAt - b.createdAt; });
+      S.templates = r[1].filter(function (t) { return t.type === 'trade'; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+      S.saved = r[2].filter(function (f) { return f.type === 'journal'; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+    }).catch(function () {});
+  }
   window.addEventListener('tt:accounts-changed', function () { if (S.dbOk) loadAccounts().then(function () { if (!S.editing) render(); }); });
   function boot() {
     if (!window.TTDB || !window.indexedDB) { loadTrades(); S.loaded = true; render(); changed(); return; }
-    window.TTDB.ready().then(function () { S.dbOk = true; return Promise.all([loadFromDb(), loadAccounts()]); })
+    window.TTDB.ready().then(function () { S.dbOk = true; return Promise.all([loadFromDb(), loadAccounts(), loadDocs()]); })
       .catch(function () { S.dbOk = false; loadTrades(); })       // database unusable: fall back to the old localStorage journal
       .then(function () { S.loaded = true; render(); changed(); });
   }
+  EXT.ctx = { state: S, rows: rows, filteredRows: filteredRows, effBasis: effBasis, render: render, toast: toast, loadDocs: loadDocs, accountNames: acctNames, fmtDate: fmtDate, fmtR: fmtR, fmtPct: fmtPct, clsOf: clsOf, todayKey: todayKey,
+    go: function (tab) { S.tab = tab; render(); window.scrollTo(0, 0); },
+    openTrade: function (id) { S.tab = 'entries'; S.expanded = id; S.filters = {}; render(); },
+    updateTrades: function (next) { var before = S.trades; S.trades = next; return persist().then(function (ok) { if (!ok) S.trades = before; else changed(); return ok; }); } };
   boot();
   window.TTJournal = { hasShots: function (id) { if (S.imgOk === false) return Promise.resolve(false); return Promise.all(SLOTS.map(function (sl) { return IMG.get(id + ':' + sl).catch(function () { return null; }); })).then(function (r) { return r.some(Boolean); }); }, reload: function () { (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { render(); }); } };
 })();

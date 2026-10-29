@@ -165,3 +165,24 @@ button.cal-d { cursor: pointer; transition: transform .1s; } button.cal-d:active
 .jtabs { gap: 6px; }
 .jtabs .chip { padding: 0 8px; letter-spacing: .06em; font-size: 10.5px; flex: 1 1 0; min-width: max-content; }
 .kpi-v { overflow-wrap: break-word; }
+
+/* ---- journal v2 ---- */
+.lp { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.lpc[aria-pressed="true"] { background: var(--wash2); border-color: var(--cyan); color: var(--cyan); }
+.lp-add { display: flex; gap: 8px; align-items: center; } .lp-add input { flex: 1; min-width: 0; }
+.tag.lbl { text-transform: none; letter-spacing: .02em; } .tag.grade { color: var(--cyan); border-color: var(--line-hot); }
+.tag.gF, .tag.gD { color: var(--bad-text); } .tag.gA { color: var(--good); }
+.tplbar .row-inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; } .tplbar select { flex: 1; min-width: 160px; }
+.jbar.presets, .jbar.saved { margin-top: 10px; flex-wrap: wrap; } .jbar.saved select { flex: 1; min-width: 140px; }
+.bulkbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+.jt { position: relative; } .jt.selmode .jt-head { padding-left: 46px; }
+.jt-sel { position: absolute; left: 6px; top: 10px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; z-index: 1; margin: 0; }
+.jt-sel input { width: 22px; height: 22px; accent-color: var(--cyan); margin: 0; }
+.rv-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; } .rv-nav b { flex: 1; text-align: center; }
+.lb-bar { flex: 1; height: 8px; background: var(--wash2); border-radius: 6px; margin: 0 10px; overflow: hidden; } .lb-bar i { display: block; height: 100%; background: var(--cyan); border-radius: 6px; } .lb-bar i.bad { background: var(--bad); }
+.ui-list li > span:first-child { min-width: 0; }
+.linkbtn { background: none; border: 0; color: var(--cyan); font: inherit; font-weight: 700; padding: 6px 0; min-height: 36px; cursor: pointer; text-align: left; }
+.sub { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+table.cmp th[scope=row] { text-align: left; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; position: sticky; left: 0; background: var(--glass-strong); }
+table.cmp td { text-align: right; min-width: 96px; }
+#jRoot .ui-stat b { white-space: nowrap; font-size: clamp(16px, 5.2vw, 22px); }
