@@ -4,8 +4,8 @@
    (that lives in IndexedDB / localStorage, not in the network layer). */
 var CACHE = 'tt-app-v1';
 var PRECACHE = ['./', 'index.html', 'manifest.webmanifest',
-  'assets/app.css', 'assets/journal.css', 'assets/app.js', 'assets/calculator.js', 'assets/instruments.js', 'assets/sessions.js',
-  'assets/intel-data.js', 'assets/intel.js', 'assets/journal-core.js', 'assets/db.js', 'assets/pwa.js', 'assets/journal.js',
+  'assets/app.css', 'assets/journal.css', 'assets/accounts.css', 'assets/app.js', 'assets/calculator.js', 'assets/instruments.js', 'assets/sessions.js',
+  'assets/intel-data.js', 'assets/intel.js', 'assets/journal-core.js', 'assets/db.js', 'assets/accounts-core.js', 'assets/propfirm-data.js', 'assets/accounts.js', 'assets/pwa.js', 'assets/journal.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {

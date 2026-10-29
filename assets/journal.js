@@ -42,7 +42,7 @@
   /* ---------- state ---------- */
   var now0 = new Date();
   var S = { trades: [], corrupt: false, rejected: 0, tab: 'entries', editing: null, filters: {}, filtersOpen: false, expanded: null, limit: 30,
-    basis: null, dbOk: false, loaded: false, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null };
+    basis: null, accounts: [], dbOk: false, loaded: false, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null };
 
   function loadTrades() {
     var raw = null; try { raw = localStorage.getItem(C.STORE_KEY); } catch (e) {}
@@ -187,6 +187,7 @@
       sel('side', 'Direction', [['', 'All'], ['long', 'Long'], ['short', 'Short']]) +
       sel('session', 'Session', [['', 'All'], ['__none', 'Not set']].concat(C.SESSIONS.map(function (s) { return [s, s]; }))) +
       sel('strategy', 'Strategy', [['', 'All'], ['__none', 'No strategy']].concat(Object.keys(labels).sort().map(function (k) { return [labels[k], labels[k]]; }))) +
+      (S.accounts.length > 1 ? sel('account', 'Account', [['', 'All']].concat(S.accounts.map(function (a) { return [a.id, a.name + (a.archived ? ' (archived)' : '')]; }))) : '') +
       sel('result', 'Result', [['', 'All'], ['win', 'Winners'], ['loss', 'Losers'], ['be', 'Breakeven'], ['open', 'Open / partial']]) +
       sel('rules', 'Followed rules', [['', 'All'], ['yes', 'Yes'], ['no', 'No'], ['unknown', 'Not recorded']]) +
       '<div class="field"><label for="jf-from">From date</label><input id="jf-from" type="date" data-f="from" value="' + esc(f.from || '') + '"></div>' +
@@ -408,6 +409,9 @@
       '<input class="ex-price" type="text" inputmode="decimal" placeholder="Exit price" aria-label="Exit price" value="' + esc(price) + '">' +
       '<button type="button" class="xbtn" data-act="ex-del" aria-label="Remove this exit">✕</button></div>';
   }
+  var DEFACCT = 'acct-default';
+  // Accounts you can pick: all active ones, plus the trade's own account even if archived (so editing never silently moves a trade).
+  function accountChoices(t) { return S.accounts.filter(function (a) { return !a.archived || (t && t.accountId === a.id); }); }
   function formHtml() {
     var E = S.editing, t = E.trade || {}, p = loadPrefs(), isNew = !E.id;
     var v = { date: t.date || todayKey(), time: t.time || '', contract: t.contract || p.contract || INST.defaultId, side: t.side || p.side || 'long',
@@ -421,6 +425,7 @@
       '<div class="panel"><h2>Trade</h2><div class="fgrid">' +
       fld('Trade date', 'f-date', '<input id="f-date" type="date" value="' + esc(v.date) + '">') +
       fld('Entry time (optional)', 'f-time', '<input id="f-time" type="time" value="' + esc(v.time) + '">') +
+      (accountChoices(t).length > 1 ? fld('Account', 'f-account', '<select id="f-account">' + accountChoices(t).map(function (a) { return '<option value="' + esc(a.id) + '"' + ((t.accountId || p.account || DEFACCT) === a.id ? ' selected' : '') + '>' + esc(a.name) + '</option>'; }).join('') + '</select>') : '') +
       fld('Contract', 'f-contract', '<select id="f-contract">' + INST.list.map(function (i) { return '<option value="' + i.id + '"' + (v.contract === i.id ? ' selected' : '') + '>' + i.id + ' · ' + i.label + '/pt</option>'; }).join('') + '</select>') +
       fld('Contracts', 'f-qty', '<input id="f-qty" type="text" inputmode="numeric" placeholder="e.g. 2" autocomplete="off" value="' + esc(v.qty) + '">') + '</div>' +
       '<div class="field"><label id="f-side-l">Direction</label><div class="seg" role="radiogroup" aria-labelledby="f-side-l">' + radio('f-side', 'long', 'LONG', v.side) + radio('f-side', 'short', 'SHORT', v.side) + '</div></div>' +
@@ -476,7 +481,7 @@
       if (String(pr).trim() === '' && q.getAttribute('data-auto') === '1') qv = '';          // untouched auto-filled qty with no price = empty row
       return { qty: qv, price: pr };
     });
-    return { id: E.id || undefined, createdAt: E.trade ? E.trade.createdAt : undefined, date: g('f-date'), time: g('f-time'), contract: g('f-contract'), side: side,
+    return { id: E.id || undefined, createdAt: E.trade ? E.trade.createdAt : undefined, date: g('f-date'), time: g('f-time'), accountId: g('f-account') || (E.trade ? E.trade.accountId : undefined), contract: g('f-contract'), side: side,
       contracts: g('f-qty'), session: g('f-session'), strategy: g('f-strategy'), entry: g('f-entry'), stop: g('f-stop'), exits: exits, fees: g('f-fees'),
       entryReason: g('f-entryReason'), exitReason: g('f-exitReason'), followedRules: rules, rating: g('f-rating'), mistakes: g('f-mistakes'), lessons: g('f-lessons'), notes: g('f-notes') };
   }
@@ -515,7 +520,7 @@
     persist().then(function (ok) {
     if (!ok) { S.trades = before; showErrors(['Your browser would not save this trade (storage full or blocked). Export a backup, free some space, then try again.']); return; }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
-    savePrefs({ contract: t.contract, side: t.side });
+    savePrefs({ contract: t.contract, side: t.side, account: t.accountId });
     var ops = [];
     if (S.imgOk !== false) SLOTS.forEach(function (s) {
       var sh = E.shots[s], key = t.id + ':' + s;
@@ -682,9 +687,11 @@
       S.corrupt = q.some(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; });
     });
   }
+  function loadAccounts() { return window.TTDB.getAll('accounts').then(function (a) { S.accounts = a.filter(function (x) { return x && x.id; }).sort(function (x, y) { return x.createdAt - y.createdAt; }); }).catch(function () {}); }
+  window.addEventListener('tt:accounts-changed', function () { if (S.dbOk) loadAccounts().then(function () { if (!S.editing) render(); }); });
   function boot() {
     if (!window.TTDB || !window.indexedDB) { loadTrades(); S.loaded = true; render(); changed(); return; }
-    window.TTDB.ready().then(function () { S.dbOk = true; return loadFromDb(); })
+    window.TTDB.ready().then(function () { S.dbOk = true; return Promise.all([loadFromDb(), loadAccounts()]); })
       .catch(function () { S.dbOk = false; loadTrades(); })       // database unusable: fall back to the old localStorage journal
       .then(function () { S.loaded = true; render(); changed(); });
   }

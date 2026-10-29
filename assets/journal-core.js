@@ -241,6 +241,7 @@
       if (f.from && t.date < f.from) return false;
       if (f.to && t.date > f.to) return false;
       if (f.contract && t.contract !== f.contract) return false;
+      if (f.account && (t.accountId || 'acct-default') !== f.account) return false;
       if (f.side && t.side !== f.side) return false;
       if (f.session === '__none') { if (t.session) return false; } else if (f.session && t.session !== f.session) return false;
       if (f.strategy === '__none') { if (t.strategy) return false; } else if (f.strategy && t.strategy.toLowerCase() !== str(f.strategy).toLowerCase()) return false;   // strategy names match regardless of case
