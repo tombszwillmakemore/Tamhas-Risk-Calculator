@@ -103,6 +103,7 @@
     var cat = CATEGORIES.indexOf(a.category) >= 0 ? a.category : 'other', allowed = STATUSES[cat];
     return Object.assign({ note: '', startingBalanceCents: null, firmSlug: null, productName: null, template: null, startedOn: ymd(a.createdAt || Date.now()) }, a, {
       category: cat, status: allowed.indexOf(a.status) >= 0 ? a.status : allowed[0], archived: !!a.archived,
+      dd: a.dd && typeof a.dd === 'object' ? { draft: a.dd.draft && typeof a.dd.draft === 'object' ? a.dd.draft : null, versions: Array.isArray(a.dd.versions) ? a.dd.versions : [] } : { draft: null, versions: [] },
       rules: a.rules && typeof a.rules === 'object' ? a.rules : {}, ruleHistory: Array.isArray(a.ruleHistory) ? a.ruleHistory : [], statusHistory: Array.isArray(a.statusHistory) ? a.statusHistory : [] });
   }
 

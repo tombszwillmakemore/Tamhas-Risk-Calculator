@@ -390,13 +390,13 @@
       (last ? ' Last backup created: ' + esc(last) + '.' : '') + '</p></div>' +
       '<div class="panel"><h2>Export CSV</h2><p class="note" style="margin-top:0">Opens in Excel or Google Sheets. Missing values stay blank (never 0).</p>' +
       '<div class="row-inline"><button type="button" class="btn" data-act="csv-all"' + (S.trades.length ? '' : ' disabled') + '>ALL TRADES</button><button type="button" class="btn" data-act="csv-filtered"' + (S.trades.length ? '' : ' disabled') + '>CURRENT FILTER</button></div></div>' +
-      '<div class="panel"><h2>Full backup</h2><p class="note" style="margin-top:0">A JSON file you can restore later, on this or another device.</p>' +
+      '<div class="panel"><h2>Full backup</h2><p class="note" style="margin-top:0">A JSON file you can restore later, on this or another device. Includes trades, accounts, rule versions, fees, payouts and firm snapshots.</p>' +
       (shotsOk ? '<label class="chk"><input type="checkbox" id="bkInclShots" checked> Include screenshots (larger file)</label>' : '') +
-      '<button type="button" class="btn wide" data-act="bk-prepare"' + (S.trades.length ? '' : ' disabled') + '>PREPARE BACKUP</button><div id="bkReady"></div></div>' +
+      '<button type="button" class="btn wide" data-act="bk-prepare"' + (S.trades.length || S.accounts.length > 1 ? '' : ' disabled') + '>PREPARE BACKUP</button><div id="bkReady"></div></div>' +
       '<div class="panel"><h2>Restore from backup</h2>' +
       '<div class="seg" role="radiogroup" aria-label="Restore mode"><label class="seg-i"><input type="radio" name="bkmode" value="merge"' + (S.restoreMode === 'merge' ? ' checked' : '') + '><span>MERGE</span></label>' +
       '<label class="seg-i"><input type="radio" name="bkmode" value="replace"' + (S.restoreMode === 'replace' ? ' checked' : '') + '><span>REPLACE ALL</span></label></div>' +
-      '<p class="note">Merge keeps your current trades and adds any that are new. Replace swaps your whole journal for the backup.</p>' +
+      '<p class="note">Merge keeps what you have and adds anything new, including accounts and account records (fees, payouts, snapshots) from newer backups. Replace swaps your journal, accounts and account records for the backup.</p>' +
       '<label class="btn wide filebtn">CHOOSE BACKUP FILE<input type="file" id="bkFile" accept=".json,application/json" class="vh"></label></div>' +
       '<div class="panel"><h2>Danger zone</h2><p class="note" style="margin-top:0">Permanently deletes every trade and screenshot from this device.</p><button type="button" class="btn danger wide" data-act="wipe"' + (S.trades.length ? '' : ' disabled') + '>DELETE ALL JOURNAL DATA</button></div>';
   }
@@ -550,10 +550,11 @@
 
   /* ---------- backup / restore actions ---------- */
   function stamp() { return todayKey(); }
+  function acctNames() { var m = {}; S.accounts.forEach(function (a) { m[a.id] = a.name; }); return m; }
   function exportCsv(onlyFiltered) {
     var all = rows(), list = onlyFiltered ? filteredRows(all) : all;
     if (!list.length) { toast('No trades to export.', true); return; }
-    deliver('tamhas-journal-' + stamp() + '.csv', 'text/csv;charset=utf-8', '﻿' + C.toCsv(list)).then(function (ok) { if (ok) toast('CSV ready (' + plural(list.length, 'trade') + ').'); });
+    deliver('tamhas-journal-' + stamp() + '.csv', 'text/csv;charset=utf-8', '﻿' + C.toCsv(list, acctNames())).then(function (ok) { if (ok) toast('CSV ready (' + plural(list.length, 'trade') + ').'); });
   }
   function prepareBackup() {
     var incl = $('#bkInclShots') && $('#bkInclShots').checked, ready = $('#bkReady'); if (!ready) return;
@@ -561,14 +562,36 @@
     var shots = {}, jobs = [];
     if (incl && S.imgOk !== false) S.trades.forEach(function (t) { SLOTS.forEach(function (s) { jobs.push(IMG.get(t.id + ':' + s).then(function (u) { if (u) shots[t.id + ':' + s] = u; }).catch(function () {})); }); });
     Promise.all(jobs).then(function () {
-      var json = C.serializeBackup(S.trades, shots), n = Object.keys(shots).length;
+      return S.dbOk ? Promise.all([window.TTDB.getAll('accounts'), window.TTDB.getAll('ledger')]) : [[], []];
+    }).then(function (ex) {
+      var json = C.serializeBackup(S.trades, shots, { accounts: ex[0], ledger: ex[1] }), n = Object.keys(shots).length;
       S.backupBlob = { name: 'tamhas-journal-backup-' + stamp() + '.json', json: json };
-      ready.innerHTML = '<p class="note">Backup ready: ' + plural(S.trades.length, 'trade') + (incl ? ', ' + plural(n, 'screenshot') : '') + ', ' + (json.length / 1024).toFixed(0) + ' KB.</p><button type="button" class="btn wide" data-act="bk-save">SAVE / SHARE FILE</button>';
+      ready.innerHTML = '<p class="note">Backup ready: ' + plural(S.trades.length, 'trade') + (incl ? ', ' + plural(n, 'screenshot') : '') + ', ' + plural(ex[0].length, 'account') + ', ' + plural(ex[1].length, 'account record') + ', ' + (json.length / 1024).toFixed(0) + ' KB.</p><button type="button" class="btn wide" data-act="bk-save">SAVE / SHARE FILE</button>';
     });
   }
   function saveBackupFile() {
     var b = S.backupBlob; if (!b) return;
     deliver(b.name, 'application/json', b.json).then(function (ok) { if (ok) { savePrefs({ lastBackup: Date.now() }); toast('Backup file created.'); } });
+  }
+  // Restores accounts and the account ledger from a version-2 backup. Existing records are never overwritten in merge mode.
+  function restoreExtras(r, mode) {
+    if (!S.dbOk) return Promise.resolve();
+    var T = window.TTDB, DEF = T.DEFAULT_ACCOUNT_ID;
+    if (!r.hasExtras) mode = 'merge';   // an older (version 1) backup has no accounts or records, so it must never erase yours
+    return Promise.all([T.getAll('accounts'), T.getAll('ledger')]).then(function (cur) {
+      var haveA = {}, haveL = {}, ops = [];
+      cur[0].forEach(function (a) { haveA[a.id] = 1; }); cur[1].forEach(function (l) { haveL[l.id] = 1; });
+      if (mode === 'replace') {
+        cur[0].forEach(function (a) { if (a.id !== DEF) { ops.push({ store: 'accounts', type: 'del', key: a.id }); delete haveA[a.id]; } });
+        ops.push({ store: 'ledger', type: 'clear' }); haveL = {};
+      }
+      (r.accounts || []).forEach(function (a) { if (!haveA[a.id]) { ops.push({ store: 'accounts', type: 'put', value: a }); haveA[a.id] = 1; } });
+      (r.ledger || []).forEach(function (l) { if (!haveL[l.id]) { ops.push({ store: 'ledger', type: 'put', value: l }); haveL[l.id] = 1; } });
+      // A restored trade must never point at a missing account: add a clearly named placeholder instead of silently re-assigning it.
+      var AC = window.TTAccountsCore;
+      S.trades.forEach(function (t) { var id = t.accountId || DEF; if (!haveA[id] && AC) { var n = AC.newAccount({ id: id, name: 'Restored account', category: 'other', note: 'Created during restore because trades referenced this account.' }); if (n.ok) { ops.push({ store: 'accounts', type: 'put', value: n.account }); haveA[id] = 1; } } });
+      return T.batch(ops);
+    }).then(function () { loadAccounts().then(function () { try { window.dispatchEvent(new Event('tt:accounts-changed')); } catch (e) {} }); });
   }
   function restoreFrom(file) {
     var rd = new FileReader();
@@ -587,6 +610,7 @@
       if (!ok) { S.trades = before; toast('Could not save the restored journal (storage full or blocked).', true); return; }
       var addIds = {}; (mode === 'replace' ? r.trades : r.trades.filter(function (t) { return before.every(function (b) { return b.id !== t.id; }); })).forEach(function (t) { addIds[t.id] = 1; });
       var chain = Promise.resolve();
+      chain = chain.then(function () { return restoreExtras(r, mode); });
       if (S.imgOk !== false) {
         if (mode === 'replace') chain = chain.then(function () { return IMG.clear(); });
         Object.keys(r.shots).forEach(function (k) { if (addIds[k.split(':')[0]]) chain = chain.then(function () { return IMG.put(k, r.shots[k]); }); });

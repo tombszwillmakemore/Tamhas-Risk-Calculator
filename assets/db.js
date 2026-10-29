@@ -1,5 +1,5 @@
 /* Tamhas Trading - local database (IndexedDB), versioned, Promise-based.
-   Stores: meta, accounts, trades, quarantine, audit.
+   Stores: meta, accounts, trades, quarantine, audit, ledger (v2).
    Screenshots stay in the separate 'tt-journal' database (unchanged), so nothing there needs migrating.
    Everything lives on this device. Nothing is sent anywhere.
 
@@ -7,7 +7,7 @@
    original is left untouched. Unreadable data is quarantined (kept), never deleted. */
 (function (root) {
   'use strict';
-  var DB_NAME = 'tt-platform', SCHEMA_VERSION = 1, LEGACY_KEY = 'tt.journal.v1', DEFAULT_ACCOUNT_ID = 'acct-default';
+  var DB_NAME = 'tt-platform', SCHEMA_VERSION = 2, LEGACY_KEY = 'tt.journal.v1', DEFAULT_ACCOUNT_ID = 'acct-default';
   var dbp = null, readyp = null;
 
   function open() {
@@ -32,6 +32,9 @@
       var t = db.createObjectStore('trades', { keyPath: 'id' }); t.createIndex('accountId', 'accountId'); t.createIndex('date', 'date');
       db.createObjectStore('quarantine', { keyPath: 'id' });
       db.createObjectStore('audit', { keyPath: 'id' });
+    }
+    if (oldV < 2) {   // Batch 2: fees, payouts, deposits, transfers and firm-reported snapshots. Additive: no existing store is touched.
+      var l = db.createObjectStore('ledger', { keyPath: 'id' }); l.createIndex('accountId', 'accountId');
     }
   }
 

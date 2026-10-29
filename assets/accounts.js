@@ -5,7 +5,7 @@
   var A = window.TTAccountsCore, DB = window.TTDB, P = window.TTPropData, JC = window.TTJournalCore, root = document.getElementById('aRoot');
   if (!root || !A || !DB || !P) return;
   var DEF = DB.DEFAULT_ACCOUNT_ID;
-  var S = { tab: 'accounts', accounts: [], rows: [], adding: false, form: {}, open: null, editing: null, firm: null, errors: [], loaded: false, err: null };
+  var S = { tab: 'accounts', accounts: [], ledger: [], rows: [], adding: false, form: {}, open: null, editing: null, firm: null, errors: [], loaded: false, err: null };
   var LABEL = { prop: 'PROP FIRM', live: 'LIVE', sim: 'SIM', other: 'OTHER' };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -18,7 +18,8 @@
   function toast(msg, bad) { var t = document.createElement('div'); t.className = 'toast show' + (bad ? ' bad' : ''); t.setAttribute('role', 'status'); t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, bad ? 6000 : 3000); }
 
   function load() {
-    return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), DB.getAll('trades')]); }).then(function (r) {
+    return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), DB.getAll('trades'), DB.getAll('ledger')]); }).then(function (r) {
+      S.ledger = r[2];
       S.accounts = r[0].map(A.normalizeAccount).sort(function (a, b) { return a.createdAt - b.createdAt; });
       var ok = []; r[1].forEach(function (t) { var n = JC.normalizeTrade(t); if (n.ok) ok.push(n.trade); }); S.rows = JC.analyze(ok); S.loaded = true; S.err = null;
     }).catch(function (e) { S.err = e && e.message || 'Could not open the local database.'; S.loaded = true; });
@@ -47,7 +48,7 @@
     var st = A.accountStats(S.rows, a.id, DEF), ruleKeys = Object.keys(a.rules), stale = ruleKeys.filter(function (k) { return A.ruleAge(a.rules[k], a.template && a.template.researchedOn, today()).stale; }).length;
     var open = S.open === a.id;
     var h = '<div class="panel a-card' + (a.archived ? ' arch' : '') + '"><button type="button" class="a-head" data-act="a-toggle" data-id="' + esc(a.id) + '" aria-expanded="' + open + '">' +
-      '<div><b>' + esc(a.name) + '</b><div class="a-sub"><span class="a-tag">' + LABEL[a.category] + '</span> <span class="a-tag st-' + esc(a.status) + '">' + esc(a.status.toUpperCase()) + '</span>' + (a.archived ? ' <span class="a-tag">ARCHIVED</span>' : '') + '</div></div>' +
+      '<div><b>' + esc(a.name) + '</b><div class="a-sub"><span class="a-tag">' + LABEL[a.category] + '</span> <span class="a-tag st-' + esc(a.status) + '">' + esc(a.status.toUpperCase()) + '</span>' + (a.archived ? ' <span class="a-tag">ARCHIVED</span>' : '') + (window.TTTracker ? ' ' + TTTracker.chip(a) : '') + '</div></div>' +
       '<div class="a-pnl"><small>' + (st.netCents != null ? 'NET' : st.grossCents != null ? 'GROSS' : 'P&amp;L') + '</small><b class="' + ((st.netCents != null ? st.netCents : st.grossCents) > 0 ? 'pos' : (st.netCents != null ? st.netCents : st.grossCents) < 0 ? 'neg' : 'none') + '">' + money(st.netCents != null ? st.netCents : st.grossCents) + '</b></div></button>';
     if (open) h += detail(a, st, ruleKeys, stale);
     return h + '</div>';
@@ -58,6 +59,7 @@
     if (a.template) h += '<p class="note">Started from the <b>' + esc((firmBySlug(a.template.slug) || {}).name || a.template.slug) + ' · ' + esc(a.template.product || 'custom') + '</b> template, researched ' + esc(a.template.researchedOn) + '. These are your editable copies, not live rules.</p>';
     h += '<div class="field"><label for="a-st-' + esc(a.id) + '">Status</label><select id="a-st-' + esc(a.id) + '" data-act="a-status" data-id="' + esc(a.id) + '">' +
       A.STATUSES[a.category].map(function (s) { return '<option' + (s === a.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>';
+    if (window.TTTracker) h += TTTracker.html(a);
     if (a.category === 'prop') {
       h += '<h3 class="a-h">Rules' + (stale ? ' <span class="a-age stale">' + stale + ' need re-checking</span>' : '') + '</h3>';
       if (!ruleKeys.length) h += '<p class="note">No rules saved yet. Add the ones you care about below. Leave blank anything you have not checked.</p>';
@@ -168,6 +170,7 @@
   root.addEventListener('click', function (ev) {
     var el = ev.target.closest('[data-act]'); if (!el || el.tagName === 'SELECT') return; var act = el.getAttribute('data-act'), id = el.getAttribute('data-id');
     switch (act) {
+      default: if (act && act.indexOf('t-') === 0 && window.TTTracker) TTTracker.click(el); break;
       case 'a-tab': S.tab = el.getAttribute('data-tab'); render(); break;
       case 'a-new': S.adding = true; S.form = { category: 'prop' }; S.errors = []; render(); break;
       case 'n-cancel': S.adding = false; S.errors = []; render(); break;
@@ -185,7 +188,7 @@
     }
   });
   root.addEventListener('change', function (ev) {
-    var el = ev.target, act = el.getAttribute && el.getAttribute('data-act'); if (!act) return;
+    var el = ev.target; if (window.TTTracker && el.getAttribute && TTTracker.change(el)) return; var act = el.getAttribute && el.getAttribute('data-act'); if (!act) return;
     if (act === 'n-cat') { readNew(); S.form.firm = ''; S.form.product = ''; render(); }
     else if (act === 'n-firm') { readNew(); S.form.product = ''; render(); }
     else if (act === 'n-prod') { readNew(); render(); }
@@ -193,6 +196,7 @@
     else if (act === 'a-status') { var a = acctById(el.getAttribute('data-id')), r = a && A.setStatus(a, el.value, ''); if (r && r.ok && !r.unchanged) save(r.account).then(function () { render(); toast('Status updated.'); }); }
   });
   window.addEventListener('tt:journal-changed', function () { if (!S.loaded) return; load().then(function () { if (!S.editing && !S.adding) render(); }); });
+  if (window.TTTracker) TTTracker.init({ getLedger: function () { return S.ledger; }, getRows: function () { return S.rows; }, getAccounts: function () { return S.accounts; }, getOpenAccount: function () { return acctById(S.open); }, save: save, rerender: function () { render(); }, toast: toast });
   window.TTAccounts = { reload: function () { return load().then(render); } };
   render(); load().then(render);
 })();

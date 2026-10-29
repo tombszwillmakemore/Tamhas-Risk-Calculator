@@ -265,8 +265,10 @@
     return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
   var CSV_COLS = ['id', 'date', 'time', 'contract', 'side', 'session', 'strategy', 'contracts', 'entry', 'stop', 'exits', 'avg_exit', 'status',
-    'gross_pnl', 'fees', 'net_pnl', 'planned_risk', 'r_multiple', 'rules_followed', 'rating', 'entry_reason', 'exit_reason', 'mistakes', 'lessons', 'notes'];
-  function toCsv(rows) {
+    'gross_pnl', 'fees', 'net_pnl', 'planned_risk', 'r_multiple', 'rules_followed', 'rating', 'entry_reason', 'exit_reason', 'mistakes', 'lessons', 'notes',
+    'account', 'account_id'];   // appended in Batch 2: existing columns keep their positions, so older exports and readers stay compatible
+  function toCsv(rows, accountNames) {
+    accountNames = accountNames || {};
     var lines = [CSV_COLS.join(',')];
     rows.slice().sort(order).forEach(function (r) {
       var t = r.t, c = r.c;
@@ -276,15 +278,37 @@
         cell(c.avgExit == null ? '' : c.avgExit), cell(c.status), cell(money(c.grossCents)), cell(money(c.feesCents)), cell(money(c.netCents)),
         cell(money(c.plannedRiskCents)), cell(c.rMultiple == null ? '' : c.rMultiple),
         cell(t.followedRules === true ? 'yes' : t.followedRules === false ? 'no' : ''), cell(t.rating == null ? '' : t.rating),
-        cell(t.entryReason, true), cell(t.exitReason, true), cell(t.mistakes, true), cell(t.lessons, true), cell(t.notes, true)
+        cell(t.entryReason, true), cell(t.exitReason, true), cell(t.mistakes, true), cell(t.lessons, true), cell(t.notes, true),
+        cell(accountNames[t.accountId || 'acct-default'] || '', true), cell(t.accountId || 'acct-default', true)
       ].join(','));
     });
     return lines.join('\r\n') + '\r\n';
   }
 
   /* ---------- backup ---------- */
-  function serializeBackup(trades, shots) {
-    return JSON.stringify({ app: 'tamhas-trading', kind: 'journal-backup', version: 1, exportedAt: new Date().toISOString(), trades: trades, shots: shots || {} });
+  // Version 2 adds accounts and the account ledger (fees, payouts, transfers, firm snapshots). Version 1 files still restore.
+  function serializeBackup(trades, shots, extra) {
+    extra = extra || {};
+    return JSON.stringify({ app: 'tamhas-trading', kind: 'journal-backup', version: 2, exportedAt: new Date().toISOString(), trades: trades, shots: shots || {}, accounts: extra.accounts || [], ledger: extra.ledger || [] });
+  }
+  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
+  function cleanAccounts(list) {
+    var out = [], skipped = 0, seen = {};
+    (Array.isArray(list) ? list : []).slice(0, 2000).forEach(function (a) {
+      if (!a || typeof a !== 'object' || typeof a.id !== 'string' || !a.id || a.id.length > 64 || seen[a.id] || typeof a.name !== 'string' || ACCT_CATS.indexOf(a.category) < 0) { skipped++; return; }
+      seen[a.id] = 1; out.push(a);
+    });
+    return { list: out, skipped: skipped };
+  }
+  function cleanLedger(list) {
+    var out = [], skipped = 0, seen = {};
+    (Array.isArray(list) ? list : []).slice(0, 200000).forEach(function (l) {
+      var ok = l && typeof l === 'object' && typeof l.id === 'string' && l.id && !seen[l.id] && typeof l.accountId === 'string' && l.accountId && LEDGER_TYPES.indexOf(l.type) >= 0 && typeof l.at === 'number' && isFinite(l.at);
+      if (ok && l.type !== 'snapshot') ok = Number.isInteger(l.amountCents) && l.amountCents > 0;
+      if (ok && l.type === 'snapshot') ok = ['balanceCents', 'equityCents', 'thresholdCents', 'hwmCents'].every(function (k) { return l[k] == null || Number.isInteger(l[k]); });
+      if (!ok) { skipped++; return; } seen[l.id] = 1; out.push(l);
+    });
+    return { list: out, skipped: skipped };
   }
   function parseBackup(text) {
     var data; try { data = JSON.parse(text); } catch (e) { return { ok: false, error: 'That file is not valid JSON.' }; }
@@ -304,7 +328,10 @@
         if (/^[A-Za-z0-9_-]{1,40}:(before|after)$/.test(k) && seen[id] && typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(v) && v.length < 4000000) shots[k] = v;
       });
     }
-    return { ok: true, trades: trades, skipped: skipped, shots: shots };
+    var ca = cleanAccounts(data && data.accounts), cl = cleanLedger(data && data.ledger);
+    if (ca.skipped) skipped.push(ca.skipped + ' account record(s) could not be read');
+    if (cl.skipped) skipped.push(cl.skipped + ' account ledger record(s) could not be read');
+    return { ok: true, trades: trades, skipped: skipped, shots: shots, accounts: ca.list, ledger: cl.list, hasExtras: !!(data && !Array.isArray(data) && Array.isArray(data.accounts) && Array.isArray(data.ledger)) };
   }
 
   /* ---------- storage / merge / formatting ---------- */
