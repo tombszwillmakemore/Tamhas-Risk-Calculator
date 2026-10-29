@@ -180,3 +180,7 @@ input[type=date] { flex: 1; min-width: 0; height: 52px; font-size: 18px; color: 
 input[type=date]:focus { border-color: var(--cyan); }
 .io { margin-top: 16px; } .io summary { color: var(--muted); font-size: 12px; letter-spacing: .1em; cursor: pointer; margin-bottom: 10px; }
 textarea { width: 100%; font-size: 14px; color: var(--text); background: rgba(3,7,20,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-family: ui-monospace, Menlo, monospace; resize: vertical; outline: none; }
+
+/* ---------- Calculator contract selector ---------- */
+#instrument { width: 100%; }
+.note a { color: var(--cyan); }
