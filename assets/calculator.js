@@ -1,10 +1,15 @@
 /* Tamhas Trading - Risk Calculator
-   CALCULATION LOGIC IS UNCHANGED from the original calculator (see calculator-classic.html).
-   Only the element ids' surrounding markup/styling changed. */
+   The calculation is unchanged from the original calculator (see calculator-classic.html):
+   risk per contract = stop points x point value, whole contracts only, never above your maximum.
+   The only difference is that the point value now comes from the selected contract
+   (NNQ, the original $0.20 per point, is the default). Values are in assets/instruments.js. */
 (function () {
-  // Fixed contract value: $0.20 per point per contract = 20 cents.
+  // Point value in whole cents (NNQ default = $0.20 = 20 cents).
   // All math is done in whole cents to avoid floating-point rounding errors.
-  var CENTS_PER_POINT = 20;
+  var INST = window.TTInstruments;
+  var INST_KEY = 'tt.calc.instrument.v1';
+  var CENTS_PER_POINT = INST.byId[INST.defaultId].centsPerPoint;
+  var instEl = document.getElementById('instrument');
 
   var stopEl = document.getElementById('stop');
   var minEl = document.getElementById('minRisk');
@@ -72,6 +77,30 @@
     show('', 'Recommended contracts',
       '<div class="value">' + contracts + '<small>contract' + (contracts === 1 ? '' : 's') + '</small></div>',
       fmt(perCents), fmt(totalCents));
+  }
+
+  /* ---------- Contract selector ---------- */
+  var noteEl = document.getElementById('instNote');
+  var footEl = document.getElementById('calcFoot');
+  function applyInstrument(id) {
+    var i = INST.byId[id] || INST.byId[INST.defaultId];
+    CENTS_PER_POINT = i.centsPerPoint;
+    if (noteEl) noteEl.innerHTML = '<b>' + i.label + '</b> per point per contract · <a href="' + i.url + '" target="_blank" rel="noopener noreferrer">CME spec</a>';
+    if (footEl) footEl.textContent = i.id + ' · ' + i.label + ' per point per contract · Calculated on your device · Not financial advice';
+    return i.id;
+  }
+  if (instEl) {
+    instEl.innerHTML = INST.list.map(function (i) {
+      return '<option value="' + i.id + '">' + i.id + ' — ' + i.name + ' (' + i.label + '/pt)</option>';
+    }).join('');
+    var saved = INST.defaultId;
+    try { saved = localStorage.getItem(INST_KEY) || saved; } catch (e) {}
+    instEl.value = applyInstrument(saved);
+    instEl.addEventListener('change', function () {
+      var id = applyInstrument(instEl.value);
+      try { localStorage.setItem(INST_KEY, id); } catch (e) {}
+      calculate();
+    });
   }
 
   ['input', 'change', 'keyup'].forEach(function (ev) {

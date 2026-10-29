@@ -83,6 +83,11 @@
       <div class="welcome" style="padding-bottom:12px"><small>RISK</small><h1 style="font-size:26px">Calculator</h1></div>
       <div class="panel">
         <div class="field">
+          <label for="instrument">Contract</label>
+          <select id="instrument" aria-label="Contract"></select>
+          <p class="note" id="instNote"></p>
+        </div>
+        <div class="field">
           <label for="stop">Stop-loss distance</label>
           <div class="input-wrap"><input id="stop" class="pts" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 500"><span class="suffix">points</span></div>
         </div>
@@ -103,7 +108,7 @@
           <div class="row"><span>Total planned risk</span><span id="totalRisk">—</span></div>
         </div>
       </div>
-      <div class="foot">$0.20 per point per contract · Calculated on your device · Not financial advice</div>
+      <div class="foot" id="calcFoot">$0.20 per point per contract · Calculated on your device · Not financial advice</div>
     </section>
 
     <!-- PLACEHOLDERS -->
@@ -167,6 +172,7 @@
     </section>
   </main>
 </div>
+<script src="assets/instruments.js"></script>
 <script src="assets/calculator.js"></script>
 <script src="assets/sessions.js"></script>
 <script src="assets/intel-data.js"></script>
