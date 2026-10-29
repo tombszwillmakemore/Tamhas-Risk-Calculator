@@ -1,6 +1,6 @@
 /* Tamhas Trading - app shell: navigation, settings, home dashboard.
    All data stays on this device (localStorage). Nothing here is fabricated:
-   P&L is computed only from trades the user logs in the journal (built in a later stage). */
+   P&L is computed only from closed trades the user logs in the journal. */
 (function () {
   var KEY = 'tt.settings.v1';
   var JOURNAL_KEY = 'tt.journal.v1';
@@ -51,25 +51,35 @@
   });
   nameIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('saveName').click(); });
 
-  /* ---------- Today's P&L (real data only) ---------- */
+  /* ---------- Today's P&L (real data only) ----------
+     Comes only from fully closed trades in the journal dated today. Net (after fees) when every one of
+     them has fees recorded; otherwise gross, and it says so. Open / partly closed trades are never counted. */
   function todayKey(d) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
   function renderPnl() {
-    var trades = load(JOURNAL_KEY, []);
-    var el = document.getElementById('pnlValue'), note = document.getElementById('pnlNote');
-    var today = todayKey(new Date());
-    var todays = trades.filter(function (t) { return t && typeof t.pnlCents === 'number' && t.date === today; });
-    if (!todays.length) {
+    var C = window.TTJournalCore, el = document.getElementById('pnlValue'), note = document.getElementById('pnlNote');
+    var raw = null; try { raw = localStorage.getItem(JOURNAL_KEY); } catch (e) {}
+    var res = C ? C.parseStored(raw) : { trades: [], corrupt: false };
+    var s = C ? C.todaySummary(C.analyze(res.trades), todayKey(new Date())) : { closed: 0, open: 0, basis: null, cents: null, feesMissing: 0 };
+    var openNote = s.open ? ' ' + plural(s.open, 'open or partly closed trade') + ' not counted until fully exited.' : '';
+    if (res.corrupt) {
       el.className = 'pnl-value none'; el.textContent = '—';
-      note.textContent = 'No trades logged today. P&L appears here from your own journal entries (and later your Tradovate sync). Nothing is simulated.';
+      note.textContent = 'Your saved journal could not be read, so no P&L is shown. Open Journal › Backup for options.';
       return;
     }
-    var cents = todays.reduce(function (a, t) { return a + t.pnlCents; }, 0);
-    el.className = 'pnl-value ' + (cents > 0 ? 'pos' : cents < 0 ? 'neg' : 'none');
-    el.textContent = (cents < 0 ? '-' : cents > 0 ? '+' : '') + '$' + (Math.abs(cents) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    note.textContent = todays.length + ' trade' + (todays.length === 1 ? '' : 's') + ' logged today.';
+    if (!s.closed) {
+      el.className = 'pnl-value none'; el.textContent = '—';
+      note.textContent = (s.open ? '' : 'No trades logged today. ') + 'P&L comes only from closed trades you log in your Journal. Nothing is simulated.' + openNote;
+      return;
+    }
+    el.className = 'pnl-value ' + (s.cents > 0 ? 'pos' : s.cents < 0 ? 'neg' : 'none');
+    el.textContent = C.fmtMoney(s.cents, true);
+    note.textContent = plural(s.closed, 'closed trade') + ' today · ' +
+      (s.basis === 'net' ? 'net after fees.' : 'before fees (fees not entered on ' + s.feesMissing + ').') + openNote;
   }
+  window.addEventListener('tt:journal-changed', renderPnl);
 
   renderName();
   renderPnl();
