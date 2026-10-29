@@ -153,3 +153,30 @@ input[type=text]:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(4
 input[type=time] { flex: 1; min-width: 0; height: 52px; font-size: 18px; color: var(--text); background: rgba(3,7,20,.7); color-scheme: dark;
   border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; outline: none; -webkit-appearance: none; appearance: none; font-family: inherit; }
 input[type=time]:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(45,226,255,.15); }
+
+/* ---------- Tamhas Intel (Stage 3) ---------- */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.chip { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--muted); background: rgba(5,10,26,.5); border: 1px solid var(--line);
+  border-radius: 999px; padding: 8px 12px; cursor: pointer; transition: color .2s, border-color .2s, box-shadow .2s; }
+.chip.on { color: var(--cyan); border-color: var(--line-hot); box-shadow: 0 0 14px rgba(45,226,255,.18); }
+.cat { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .14em; padding: 3px 9px; border-radius: 999px; color: var(--c); border: 1px solid var(--c); background: rgba(255,255,255,.03); }
+.day { font-size: 11px; font-weight: 700; letter-spacing: .16em; color: var(--cyan); margin: 16px 0 8px; text-transform: uppercase; }
+.day:first-child { margin-top: 0; }
+.ev { display: flex; gap: 14px; padding: 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 14px; background: rgba(5,10,26,.45); cursor: pointer; transition: border-color .2s; }
+.ev:hover, .ev:focus-visible { border-color: var(--line-hot); outline: none; }
+.ev.done { opacity: .55; }
+.ev-t { min-width: 64px; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px; }
+.ev-t small { display: block; color: var(--muted); font-weight: 600; font-size: 11px; margin-top: 2px; }
+.ev-title { font-weight: 600; font-size: 15px; line-height: 1.3; margin-bottom: 6px; }
+.ev-det { margin: -2px 0 10px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; font-size: 14px; line-height: 1.5; }
+.ev-det p { margin: 0 0 6px; } .ev-det a { color: var(--cyan); }
+.btn.danger { color: var(--bad); border-color: rgba(255,93,122,.5); background: rgba(255,93,122,.08); height: 38px; margin-top: 4px; }
+.nx { text-align: left; } .nx-title { font-size: 18px; font-weight: 700; margin: 8px 0 4px; line-height: 1.3; }
+.nx-time { color: var(--muted); font-size: 13px; } .nx-count { color: var(--cyan); font-size: 22px; font-weight: 800; margin-top: 8px; font-variant-numeric: tabular-nums; text-shadow: 0 0 16px rgba(45,226,255,.4); }
+.nxtile { width: 100%; }
+select { flex: 1; min-width: 0; height: 52px; font-size: 16px; color: var(--text); background: rgba(3,7,20,.7); border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; font-family: inherit; color-scheme: dark; outline: none; }
+select:focus { border-color: var(--cyan); }
+input[type=date] { flex: 1; min-width: 0; height: 52px; font-size: 18px; color: var(--text); background: rgba(3,7,20,.7); color-scheme: dark; border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; font-family: inherit; outline: none; -webkit-appearance: none; appearance: none; }
+input[type=date]:focus { border-color: var(--cyan); }
+.io { margin-top: 16px; } .io summary { color: var(--muted); font-size: 12px; letter-spacing: .1em; cursor: pointer; margin-bottom: 10px; }
+textarea { width: 100%; font-size: 14px; color: var(--text); background: rgba(3,7,20,.7); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; font-family: ui-monospace, Menlo, monospace; resize: vertical; outline: none; }
