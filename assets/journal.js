@@ -42,7 +42,7 @@
   /* ---------- state ---------- */
   var now0 = new Date();
   var S = { trades: [], corrupt: false, rejected: 0, tab: 'entries', editing: null, filters: {}, filtersOpen: false, expanded: null, limit: 30,
-    basis: null, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null };
+    basis: null, accounts: [], dbOk: false, loaded: false, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null };
 
   function loadTrades() {
     var raw = null; try { raw = localStorage.getItem(C.STORE_KEY); } catch (e) {}
@@ -52,8 +52,14 @@
     if (r.corrupt && raw) { try { localStorage.setItem(C.STORE_KEY + '.corrupt', raw); } catch (e) {} }
     if (r.rejected.length) { try { localStorage.setItem(C.STORE_KEY + '.rejected', JSON.stringify(r.rejected)); } catch (e) {} }
   }
+  // Saves the whole journal. Resolves true only once it is really stored. IndexedDB (atomic: all trades or none); localStorage only if IndexedDB is unavailable.
   function persist() {
-    try { localStorage.setItem(C.STORE_KEY, C.serializeStored(S.trades)); S.saveFail = false; return true; } catch (e) { S.saveFail = true; return false; }
+    if (S.dbOk) {
+      var ops = [{ store: 'trades', type: 'clear' }];
+      S.trades.forEach(function (t) { ops.push({ store: 'trades', type: 'put', value: t }); });
+      return window.TTDB.batch(ops).then(function () { S.saveFail = false; return true; }).catch(function () { S.saveFail = true; return false; });
+    }
+    try { localStorage.setItem(C.STORE_KEY, C.serializeStored(S.trades)); S.saveFail = false; return Promise.resolve(true); } catch (e) { S.saveFail = true; return Promise.resolve(false); }
   }
   function changed() { try { window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} }
   function rows() { return C.analyze(S.trades); }
@@ -181,6 +187,7 @@
       sel('side', 'Direction', [['', 'All'], ['long', 'Long'], ['short', 'Short']]) +
       sel('session', 'Session', [['', 'All'], ['__none', 'Not set']].concat(C.SESSIONS.map(function (s) { return [s, s]; }))) +
       sel('strategy', 'Strategy', [['', 'All'], ['__none', 'No strategy']].concat(Object.keys(labels).sort().map(function (k) { return [labels[k], labels[k]]; }))) +
+      (S.accounts.length > 1 ? sel('account', 'Account', [['', 'All']].concat(S.accounts.map(function (a) { return [a.id, a.name + (a.archived ? ' (archived)' : '')]; }))) : '') +
       sel('result', 'Result', [['', 'All'], ['win', 'Winners'], ['loss', 'Losers'], ['be', 'Breakeven'], ['open', 'Open / partial']]) +
       sel('rules', 'Followed rules', [['', 'All'], ['yes', 'Yes'], ['no', 'No'], ['unknown', 'Not recorded']]) +
       '<div class="field"><label for="jf-from">From date</label><input id="jf-from" type="date" data-f="from" value="' + esc(f.from || '') + '"></div>' +
@@ -383,13 +390,13 @@
       (last ? ' Last backup created: ' + esc(last) + '.' : '') + '</p></div>' +
       '<div class="panel"><h2>Export CSV</h2><p class="note" style="margin-top:0">Opens in Excel or Google Sheets. Missing values stay blank (never 0).</p>' +
       '<div class="row-inline"><button type="button" class="btn" data-act="csv-all"' + (S.trades.length ? '' : ' disabled') + '>ALL TRADES</button><button type="button" class="btn" data-act="csv-filtered"' + (S.trades.length ? '' : ' disabled') + '>CURRENT FILTER</button></div></div>' +
-      '<div class="panel"><h2>Full backup</h2><p class="note" style="margin-top:0">A JSON file you can restore later, on this or another device.</p>' +
+      '<div class="panel"><h2>Full backup</h2><p class="note" style="margin-top:0">A JSON file you can restore later, on this or another device. Includes trades, accounts, rule versions, fees, payouts and firm snapshots.</p>' +
       (shotsOk ? '<label class="chk"><input type="checkbox" id="bkInclShots" checked> Include screenshots (larger file)</label>' : '') +
-      '<button type="button" class="btn wide" data-act="bk-prepare"' + (S.trades.length ? '' : ' disabled') + '>PREPARE BACKUP</button><div id="bkReady"></div></div>' +
+      '<button type="button" class="btn wide" data-act="bk-prepare"' + (S.trades.length || S.accounts.length > 1 ? '' : ' disabled') + '>PREPARE BACKUP</button><div id="bkReady"></div></div>' +
       '<div class="panel"><h2>Restore from backup</h2>' +
       '<div class="seg" role="radiogroup" aria-label="Restore mode"><label class="seg-i"><input type="radio" name="bkmode" value="merge"' + (S.restoreMode === 'merge' ? ' checked' : '') + '><span>MERGE</span></label>' +
       '<label class="seg-i"><input type="radio" name="bkmode" value="replace"' + (S.restoreMode === 'replace' ? ' checked' : '') + '><span>REPLACE ALL</span></label></div>' +
-      '<p class="note">Merge keeps your current trades and adds any that are new. Replace swaps your whole journal for the backup.</p>' +
+      '<p class="note">Merge keeps what you have and adds anything new, including accounts and account records (fees, payouts, snapshots) from newer backups. Replace swaps your journal, accounts and account records for the backup.</p>' +
       '<label class="btn wide filebtn">CHOOSE BACKUP FILE<input type="file" id="bkFile" accept=".json,application/json" class="vh"></label></div>' +
       '<div class="panel"><h2>Danger zone</h2><p class="note" style="margin-top:0">Permanently deletes every trade and screenshot from this device.</p><button type="button" class="btn danger wide" data-act="wipe"' + (S.trades.length ? '' : ' disabled') + '>DELETE ALL JOURNAL DATA</button></div>';
   }
@@ -402,6 +409,9 @@
       '<input class="ex-price" type="text" inputmode="decimal" placeholder="Exit price" aria-label="Exit price" value="' + esc(price) + '">' +
       '<button type="button" class="xbtn" data-act="ex-del" aria-label="Remove this exit">✕</button></div>';
   }
+  var DEFACCT = 'acct-default';
+  // Accounts you can pick: all active ones, plus the trade's own account even if archived (so editing never silently moves a trade).
+  function accountChoices(t) { return S.accounts.filter(function (a) { return !a.archived || (t && t.accountId === a.id); }); }
   function formHtml() {
     var E = S.editing, t = E.trade || {}, p = loadPrefs(), isNew = !E.id;
     var v = { date: t.date || todayKey(), time: t.time || '', contract: t.contract || p.contract || INST.defaultId, side: t.side || p.side || 'long',
@@ -415,6 +425,7 @@
       '<div class="panel"><h2>Trade</h2><div class="fgrid">' +
       fld('Trade date', 'f-date', '<input id="f-date" type="date" value="' + esc(v.date) + '">') +
       fld('Entry time (optional)', 'f-time', '<input id="f-time" type="time" value="' + esc(v.time) + '">') +
+      (accountChoices(t).length > 1 ? fld('Account', 'f-account', '<select id="f-account">' + accountChoices(t).map(function (a) { return '<option value="' + esc(a.id) + '"' + ((t.accountId || p.account || DEFACCT) === a.id ? ' selected' : '') + '>' + esc(a.name) + '</option>'; }).join('') + '</select>') : '') +
       fld('Contract', 'f-contract', '<select id="f-contract">' + INST.list.map(function (i) { return '<option value="' + i.id + '"' + (v.contract === i.id ? ' selected' : '') + '>' + i.id + ' · ' + i.label + '/pt</option>'; }).join('') + '</select>') +
       fld('Contracts', 'f-qty', '<input id="f-qty" type="text" inputmode="numeric" placeholder="e.g. 2" autocomplete="off" value="' + esc(v.qty) + '">') + '</div>' +
       '<div class="field"><label id="f-side-l">Direction</label><div class="seg" role="radiogroup" aria-labelledby="f-side-l">' + radio('f-side', 'long', 'LONG', v.side) + radio('f-side', 'short', 'SHORT', v.side) + '</div></div>' +
@@ -470,7 +481,7 @@
       if (String(pr).trim() === '' && q.getAttribute('data-auto') === '1') qv = '';          // untouched auto-filled qty with no price = empty row
       return { qty: qv, price: pr };
     });
-    return { id: E.id || undefined, createdAt: E.trade ? E.trade.createdAt : undefined, date: g('f-date'), time: g('f-time'), contract: g('f-contract'), side: side,
+    return { id: E.id || undefined, createdAt: E.trade ? E.trade.createdAt : undefined, date: g('f-date'), time: g('f-time'), accountId: g('f-account') || (E.trade ? E.trade.accountId : undefined), contract: g('f-contract'), side: side,
       contracts: g('f-qty'), session: g('f-session'), strategy: g('f-strategy'), entry: g('f-entry'), stop: g('f-stop'), exits: exits, fees: g('f-fees'),
       entryReason: g('f-entryReason'), exitReason: g('f-exitReason'), followedRules: rules, rating: g('f-rating'), mistakes: g('f-mistakes'), lessons: g('f-lessons'), notes: g('f-notes') };
   }
@@ -506,9 +517,10 @@
     if (!r.ok) { showErrors(r.errors); return; }
     var t = r.trade, before = S.trades.slice(), idx = S.trades.findIndex(function (x) { return x.id === t.id; });
     if (idx >= 0) S.trades[idx] = t; else S.trades.push(t);
-    if (!persist()) { S.trades = before; showErrors(['Your browser would not save this trade (storage full or blocked). Export a backup, free some space, then try again.']); return; }
+    persist().then(function (ok) {
+    if (!ok) { S.trades = before; showErrors(['Your browser would not save this trade (storage full or blocked). Export a backup, free some space, then try again.']); return; }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
-    savePrefs({ contract: t.contract, side: t.side });
+    savePrefs({ contract: t.contract, side: t.side, account: t.accountId });
     var ops = [];
     if (S.imgOk !== false) SLOTS.forEach(function (s) {
       var sh = E.shots[s], key = t.id + ':' + s;
@@ -516,14 +528,17 @@
     });
     Promise.all(ops).then(function () { toast('Trade saved.'); }).catch(function () { toast('Trade saved, but a screenshot could not be stored.', true); }).then(function () { if (S.tab === 'entries') renderList(); });
     S.editing = null; S.tab = 'entries'; S.expanded = t.id; changed(); render(); window.scrollTo(0, 0);
+    });
   }
   function deleteTrade(id) {
     var t = S.trades.filter(function (x) { return x.id === id; })[0]; if (!t) return;
     if (!window.confirm('Delete this ' + t.contract + ' trade from ' + t.date + '? This cannot be undone.')) return;
     var before = S.trades.slice(); S.trades = S.trades.filter(function (x) { return x.id !== id; });
-    if (!persist()) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
-    if (S.imgOk !== false) SLOTS.forEach(function (s) { IMG.del(id + ':' + s).catch(function () {}); });
-    S.editing = null; S.expanded = null; changed(); render(); toast('Trade deleted.');
+    persist().then(function (ok) {
+      if (!ok) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
+      if (S.imgOk !== false) SLOTS.forEach(function (s) { IMG.del(id + ':' + s).catch(function () {}); });
+      S.editing = null; S.expanded = null; changed(); render(); toast('Trade deleted.');
+    });
   }
 
   /* ---------- tab setup ---------- */
@@ -535,10 +550,11 @@
 
   /* ---------- backup / restore actions ---------- */
   function stamp() { return todayKey(); }
+  function acctNames() { var m = {}; S.accounts.forEach(function (a) { m[a.id] = a.name; }); return m; }
   function exportCsv(onlyFiltered) {
     var all = rows(), list = onlyFiltered ? filteredRows(all) : all;
     if (!list.length) { toast('No trades to export.', true); return; }
-    deliver('tamhas-journal-' + stamp() + '.csv', 'text/csv;charset=utf-8', '﻿' + C.toCsv(list)).then(function (ok) { if (ok) toast('CSV ready (' + plural(list.length, 'trade') + ').'); });
+    deliver('tamhas-journal-' + stamp() + '.csv', 'text/csv;charset=utf-8', '﻿' + C.toCsv(list, acctNames())).then(function (ok) { if (ok) toast('CSV ready (' + plural(list.length, 'trade') + ').'); });
   }
   function prepareBackup() {
     var incl = $('#bkInclShots') && $('#bkInclShots').checked, ready = $('#bkReady'); if (!ready) return;
@@ -546,14 +562,36 @@
     var shots = {}, jobs = [];
     if (incl && S.imgOk !== false) S.trades.forEach(function (t) { SLOTS.forEach(function (s) { jobs.push(IMG.get(t.id + ':' + s).then(function (u) { if (u) shots[t.id + ':' + s] = u; }).catch(function () {})); }); });
     Promise.all(jobs).then(function () {
-      var json = C.serializeBackup(S.trades, shots), n = Object.keys(shots).length;
+      return S.dbOk ? Promise.all([window.TTDB.getAll('accounts'), window.TTDB.getAll('ledger')]) : [[], []];
+    }).then(function (ex) {
+      var json = C.serializeBackup(S.trades, shots, { accounts: ex[0], ledger: ex[1] }), n = Object.keys(shots).length;
       S.backupBlob = { name: 'tamhas-journal-backup-' + stamp() + '.json', json: json };
-      ready.innerHTML = '<p class="note">Backup ready: ' + plural(S.trades.length, 'trade') + (incl ? ', ' + plural(n, 'screenshot') : '') + ', ' + (json.length / 1024).toFixed(0) + ' KB.</p><button type="button" class="btn wide" data-act="bk-save">SAVE / SHARE FILE</button>';
+      ready.innerHTML = '<p class="note">Backup ready: ' + plural(S.trades.length, 'trade') + (incl ? ', ' + plural(n, 'screenshot') : '') + ', ' + plural(ex[0].length, 'account') + ', ' + plural(ex[1].length, 'account record') + ', ' + (json.length / 1024).toFixed(0) + ' KB.</p><button type="button" class="btn wide" data-act="bk-save">SAVE / SHARE FILE</button>';
     });
   }
   function saveBackupFile() {
     var b = S.backupBlob; if (!b) return;
     deliver(b.name, 'application/json', b.json).then(function (ok) { if (ok) { savePrefs({ lastBackup: Date.now() }); toast('Backup file created.'); } });
+  }
+  // Restores accounts and the account ledger from a version-2 backup. Existing records are never overwritten in merge mode.
+  function restoreExtras(r, mode) {
+    if (!S.dbOk) return Promise.resolve();
+    var T = window.TTDB, DEF = T.DEFAULT_ACCOUNT_ID;
+    if (!r.hasExtras) mode = 'merge';   // an older (version 1) backup has no accounts or records, so it must never erase yours
+    return Promise.all([T.getAll('accounts'), T.getAll('ledger')]).then(function (cur) {
+      var haveA = {}, haveL = {}, ops = [];
+      cur[0].forEach(function (a) { haveA[a.id] = 1; }); cur[1].forEach(function (l) { haveL[l.id] = 1; });
+      if (mode === 'replace') {
+        cur[0].forEach(function (a) { if (a.id !== DEF) { ops.push({ store: 'accounts', type: 'del', key: a.id }); delete haveA[a.id]; } });
+        ops.push({ store: 'ledger', type: 'clear' }); haveL = {};
+      }
+      (r.accounts || []).forEach(function (a) { if (!haveA[a.id]) { ops.push({ store: 'accounts', type: 'put', value: a }); haveA[a.id] = 1; } });
+      (r.ledger || []).forEach(function (l) { if (!haveL[l.id]) { ops.push({ store: 'ledger', type: 'put', value: l }); haveL[l.id] = 1; } });
+      // A restored trade must never point at a missing account: add a clearly named placeholder instead of silently re-assigning it.
+      var AC = window.TTAccountsCore;
+      S.trades.forEach(function (t) { var id = t.accountId || DEF; if (!haveA[id] && AC) { var n = AC.newAccount({ id: id, name: 'Restored account', category: 'other', note: 'Created during restore because trades referenced this account.' }); if (n.ok) { ops.push({ store: 'accounts', type: 'put', value: n.account }); haveA[id] = 1; } } });
+      return T.batch(ops);
+    }).then(function () { loadAccounts().then(function () { try { window.dispatchEvent(new Event('tt:accounts-changed')); } catch (e) {} }); });
   }
   function restoreFrom(file) {
     var rd = new FileReader();
@@ -568,15 +606,19 @@
       if (r.skipped.length) msg += '\n\n' + plural(r.skipped.length, 'row') + ' in the file could not be read and will be skipped.';
       if (!window.confirm(msg)) return;
       var before = S.trades.slice(); S.trades = res.trades;
-      if (!persist()) { S.trades = before; toast('Could not save the restored journal (storage full or blocked).', true); return; }
+      persist().then(function (ok) {
+      if (!ok) { S.trades = before; toast('Could not save the restored journal (storage full or blocked).', true); return; }
       var addIds = {}; (mode === 'replace' ? r.trades : r.trades.filter(function (t) { return before.every(function (b) { return b.id !== t.id; }); })).forEach(function (t) { addIds[t.id] = 1; });
       var chain = Promise.resolve();
+      chain = chain.then(function () { return restoreExtras(r, mode); });
       if (S.imgOk !== false) {
         if (mode === 'replace') chain = chain.then(function () { return IMG.clear(); });
         Object.keys(r.shots).forEach(function (k) { if (addIds[k.split(':')[0]]) chain = chain.then(function () { return IMG.put(k, r.shots[k]); }); });
       }
       chain.catch(function () { toast('Trades restored, but some screenshots could not be stored.', true); }).then(function () { changed(); render(); });
+      if (S.dbOk) window.TTDB.getAll('quarantine').then(function (q) { return window.TTDB.batch(q.filter(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; }).map(function (x) { x.resolved = true; return { store: 'quarantine', type: 'put', value: x }; })); }).catch(function () {}); // kept, just marked handled
       S.corrupt = false; S.rejected = 0; toast('Restored ' + plural(res.added, 'trade') + '.');
+      });
     };
     rd.readAsText(file);
   }
@@ -585,9 +627,11 @@
     var a = window.prompt('This permanently deletes ' + plural(S.trades.length, 'trade') + ' and all screenshots from this device.\n\nType DELETE to confirm.');
     if (a !== 'DELETE') { if (a !== null) toast('Nothing was deleted.'); return; }
     var before = S.trades; S.trades = [];
-    if (!persist()) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
-    if (S.imgOk !== false) IMG.clear().catch(function () {});
-    S.expanded = null; changed(); render(); toast('Journal cleared.');
+    persist().then(function (ok) {
+      if (!ok) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
+      if (S.imgOk !== false) IMG.clear().catch(function () {});
+      S.expanded = null; changed(); render(); toast('Journal cleared.');
+    });
   }
 
   /* ---------- lightbox ---------- */
@@ -657,7 +701,24 @@
     if (S.editing) updatePreview();
   });
 
-  loadTrades();
-  render();
-  window.TTJournal = { reload: function () { loadTrades(); render(); } };
+  function loadFromDb() {
+    return window.TTDB.getAll('trades').then(function (list) {
+      var ok = [], bad = 0;
+      list.forEach(function (raw) { var r = C.normalizeTrade(raw); if (r.ok) ok.push(r.trade); else bad++; });
+      S.trades = ok; S.rejected = bad;
+    }).then(function () { return window.TTDB.getAll('quarantine'); }).then(function (q) {
+      // Unreadable earlier data was kept aside (never deleted). Keep telling the person until they dismiss it via backup/restore.
+      S.corrupt = q.some(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; });
+    });
+  }
+  function loadAccounts() { return window.TTDB.getAll('accounts').then(function (a) { S.accounts = a.filter(function (x) { return x && x.id; }).sort(function (x, y) { return x.createdAt - y.createdAt; }); }).catch(function () {}); }
+  window.addEventListener('tt:accounts-changed', function () { if (S.dbOk) loadAccounts().then(function () { if (!S.editing) render(); }); });
+  function boot() {
+    if (!window.TTDB || !window.indexedDB) { loadTrades(); S.loaded = true; render(); changed(); return; }
+    window.TTDB.ready().then(function () { S.dbOk = true; return Promise.all([loadFromDb(), loadAccounts()]); })
+      .catch(function () { S.dbOk = false; loadTrades(); })       // database unusable: fall back to the old localStorage journal
+      .then(function () { S.loaded = true; render(); changed(); });
+  }
+  boot();
+  window.TTJournal = { reload: function () { (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { render(); }); } };
 })();

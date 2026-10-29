@@ -1,0 +1,28 @@
+/* Accounts view */
+.a-card{padding:0;overflow:hidden}
+.a-head{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;background:none;border:0;color:inherit;font:inherit;text-align:left;padding:14px 16px;min-height:56px;cursor:pointer}
+.a-head:focus-visible{outline:2px solid var(--cyan);outline-offset:-2px}
+.a-sub{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.a-tag{font-size:10px;letter-spacing:.1em;padding:2px 8px;border-radius:99px;border:1px solid rgba(45,226,255,.35);color:var(--cyan)}
+.a-tag.st-funded,.a-tag.st-passed{border-color:rgba(37,226,154,.5);color:var(--good)}
+.a-tag.st-failed{border-color:rgba(255,93,122,.5);color:var(--bad)}
+.a-pnl{text-align:right}.a-pnl small{display:block;font-size:10px;letter-spacing:.1em;color:var(--muted)}
+.a-pnl .pos{color:var(--good)}.a-pnl .neg{color:var(--bad)}
+.a-chev{font-size:22px;color:var(--cyan)}
+.a-body{padding:0 16px 16px;border-top:1px solid rgba(255,255,255,.07)}
+.a-h{font-size:13px;letter-spacing:.1em;margin:16px 0 4px;color:var(--cyan)}
+.a-rule{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.a-rl{font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.a-rv{margin:3px 0;overflow-wrap:anywhere}
+.a-rm{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px}
+.a-rm a{color:var(--cyan)}
+.a-b{font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:6px;border:1px solid}
+.a-b.off{color:var(--good);border-color:rgba(37,226,154,.5)}
+.a-b.tp{color:var(--warn);border-color:rgba(255,200,87,.5)}
+.a-b.you{color:var(--cyan);border-color:rgba(45,226,255,.4)}
+.a-age{font-size:11px;color:var(--muted)}.a-age.stale{color:var(--warn)}
+.linkbtn{background:none;border:0;color:var(--cyan);font:inherit;font-size:12px;min-height:44px;padding:0 6px;cursor:pointer;text-decoration:underline}
+.a-ed{display:grid;gap:6px}.a-ed input[type=text],.a-ed input[type=url]{width:100%}
+.a-chk{display:flex;gap:10px;align-items:center;min-height:44px}.a-chk input{width:22px;height:22px}
+.a-hist summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--cyan)}
+#aRoot .row2{display:flex;gap:10px;margin-top:12px}#aRoot .row2 .btn{flex:1}
