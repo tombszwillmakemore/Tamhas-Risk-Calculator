@@ -73,8 +73,11 @@
 .seg-i span { display: flex; align-items: center; justify-content: center; height: 48px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--muted); background: var(--field); text-align: center; padding: 0 6px; transition: all .2s; }
 .seg-i input:checked + span { color: var(--cyan); border-color: var(--line-hot); background: rgba(45,226,255,.12); box-shadow: 0 0 16px rgba(45,226,255,.15); }
 .seg-i input:focus-visible + span { outline: 2px solid var(--cyan); outline-offset: 2px; }
-.exrow { display: grid; grid-template-columns: 84px 1fr 44px; gap: 8px; margin-bottom: 8px; }
-.exrow input { width: 100%; min-width: 0; }
+.exrow, .scrow { display: grid; grid-template-columns: 84px 1fr 44px; gap: 8px; margin-bottom: 8px; }
+.exrow input, .scrow input { width: 100%; min-width: 0; }
+.fill-time { display: none; grid-column: 1 / 3; height: 44px !important; font-size: 15px !important; }
+.times-on .fill-time { display: block; }
+.chip[aria-pressed=true] { color: var(--cyan); border-color: var(--line-hot); }
 .xbtn { height: 52px; border-radius: 12px; border: 1px solid var(--line); background: var(--field); color: var(--muted); font-size: 16px; cursor: pointer; }
 textarea { font-family: inherit; font-size: 16px; line-height: 1.45; }
 .panel select { height: 52px; }

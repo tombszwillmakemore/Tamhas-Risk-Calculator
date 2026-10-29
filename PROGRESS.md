@@ -8,7 +8,7 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
-**Stage C - scale-in fills + CSV import** (next). Stages A (foundation) and B (money) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
+**Stage D - journal v2** (next). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
 
 ## Completed features
 - Batch 0: IndexedDB platform, non-destructive legacy migration, PWA (manifest, offline service worker, icons), CSP.
@@ -42,9 +42,11 @@ Recorded per stage below (only tests that were actually run).
 - GC/MGC contract specs not yet verified against CME (Stage F verifies before adding).
 
 ## Next steps
-Stage C: multi-fill trades (scale-ins, partial exits with times) and a generic CSV import engine with duplicate detection, import history and rollback.
+Stage D: journal v2 - tags, emotions, grades, custom fields, templates, daily/weekly/monthly reviews, comparisons, bulk tools, saved filters.
 
 ## Test log
 - Stage A (run): stageA.js 24 passed; regression: engine 230, tracker e2e 54, backup/CSV 15, upgrade, migration, journal e2e, audit (XSS + 3,000 trades) all passed after updating assertions for the intentional changes (5-button nav, schema v3, backup v3). A flaky test (async waitForFunction does not await) was fixed with a polling helper.
 - Stage B (run): bmoney.js 79 passed (costs, payouts, economics, recurring, readiness, validation); bmoney_e2e.js 38 passed (UI flows: add/void/duplicate prompts, ledger-vs-expense routing, post-once recurring, readiness section); full regression rerun: all green.
+- Stage C (run): c1core 34 + c1e2e 13 (multi-fill model, FIFO P&L, per-lot risk, UI); c2core 78 (import engine: parsing, mapping, pairing, flips, duplicates, 20k fills < 4 s); c3e2e 42 (import UI in dark and light: preview writes nothing, import, re-import = all duplicates, overlapping export skips partly-known trades, rollback keeps an edited trade, journal save no longer erases trades it did not load). Safety fix: journal persist() is now diff-based. Full regression (20 suites) all green.
+- Stage C notes: no broker presets (broker CSV headers could not be verified) - generic mapping with saved templates instead. Prices with more than 2 decimals are rejected, unsupported contracts skipped and listed, missing fees stay unknown. Realized P&L is still attributed to the entry date.
 - Known test-infrastructure note: tests currently live outside the repo (scratchpad) and use absolute paths; they are moved into `tests/` with a runner in Stage I so the release candidate is self-contained.

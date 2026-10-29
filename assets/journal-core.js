@@ -52,31 +52,50 @@
     if (t.session && SESSIONS.indexOf(t.session) < 0) e.push('Session must be Asia, London or New York.');
     t.strategy = clip(raw.strategy, LIMITS.strategy);
 
-    var q = num(raw.contracts);
-    if (!(Number.isInteger(q) && q >= 1 && q <= LIMITS.maxContracts)) e.push('Contracts must be a whole number from 1 to ' + LIMITS.maxContracts + '.');
+    // Scale-ins: when `entries` has 2+ fills, those fills ARE the position. `contracts` becomes their total and `entry` their
+    // quantity-weighted average (display only: P&L uses each fill's own price, first-in-first-out). One fill, or none, means the
+    // original single-entry fields are used, exactly as before.
+    var multi = [], rawEntries = Array.isArray(raw.entries) ? raw.entries : [];
+    rawEntries.slice(0, 200).forEach(function (x, i) {
+      if (!x || (isBlank(x.qty) && isBlank(x.price))) return;
+      var xq = num(x.qty), xp = num(x.price), xt = isBlank(x.time) ? '' : str(x.time).trim(), xd = isBlank(x.date) ? '' : str(x.date).trim();
+      if (!(Number.isInteger(xq) && xq >= 1)) { e.push('Entry ' + (i + 1) + ': quantity must be a whole number of 1 or more.'); return; }
+      if (!(xp > 0) || decimals(x.price) > 2) { e.push('Entry ' + (i + 1) + ': price must be a positive number (max 2 decimals).'); return; }
+      if (xt && !validHM(xt)) { e.push('Entry ' + (i + 1) + ': time must look like 09:30.'); return; }
+      if (xd && !validDate(xd)) { e.push('Entry ' + (i + 1) + ': date is not a real date.'); return; }
+      var en = { qty: xq, price: xp }; if (xt) en.time = xt; if (xd) en.date = xd; multi.push(en);
+    });
+    var isMulti = multi.length >= 2, entry, q;
+    if (isMulti) {
+      q = multi.reduce(function (a, x) { return a + x.qty; }, 0);
+      var notional = multi.reduce(function (a, x) { return a + x.qty * x.price; }, 0);
+      entry = Math.round(notional / q * 10000) / 10000; t.entries = multi;
+    } else { q = num(raw.contracts); entry = num(raw.entry); }
+    if (!(Number.isInteger(q) && q >= 1 && q <= LIMITS.maxContracts)) e.push(isMulti ? 'The entries add up to ' + q + ' contracts; the limit is ' + LIMITS.maxContracts + '.' : 'Contracts must be a whole number from 1 to ' + LIMITS.maxContracts + '.');
     t.contracts = q;
-
-    var entry = num(raw.entry);
-    if (!(entry > 0) || decimals(raw.entry) > 2) e.push('Entry price must be a positive number (max 2 decimals).');
+    if (!isMulti && (!(entry > 0) || decimals(raw.entry) > 2)) e.push('Entry price must be a positive number (max 2 decimals).');
     t.entry = entry;
 
     if (isBlank(raw.stop)) t.stop = null;
     else {
       var stop = num(raw.stop);
+      var lo = isMulti ? Math.min.apply(null, multi.map(function (x) { return x.price; })) : entry, hi = isMulti ? Math.max.apply(null, multi.map(function (x) { return x.price; })) : entry;
       if (!(stop > 0) || decimals(raw.stop) > 2) e.push('Stop price must be a positive number (max 2 decimals), or left blank.');
-      else if (stop === entry) e.push('Stop cannot equal entry.');
-      else if (t.side === 'long' && stop > entry) e.push('For a long, the stop belongs below entry.');
-      else if (t.side === 'short' && stop < entry) e.push('For a short, the stop belongs above entry.');
+      else if (multi.some(function (x) { return x.price === stop; }) || (!isMulti && stop === entry)) e.push('Stop cannot equal an entry price.');
+      else if (t.side === 'long' && stop > lo) e.push(isMulti ? 'For a long, the stop belongs below every entry.' : 'For a long, the stop belongs below entry.');
+      else if (t.side === 'short' && stop < hi) e.push(isMulti ? 'For a short, the stop belongs above every entry.' : 'For a short, the stop belongs above entry.');
       t.stop = stop;
     }
 
-    t.exits = []; var sum = 0, exits = Array.isArray(raw.exits) ? raw.exits : [];
+    t.exits = []; var sum = 0, exits = Array.isArray(raw.exits) ? raw.exits.slice(0, 400) : [];
     exits.forEach(function (x, i) {
       if (!x || (isBlank(x.qty) && isBlank(x.price))) return;       // empty row: ignore
-      var xq = num(x.qty), xp = num(x.price);
+      var xq = num(x.qty), xp = num(x.price), xt = isBlank(x.time) ? '' : str(x.time).trim(), xd = isBlank(x.date) ? '' : str(x.date).trim();
       if (!(Number.isInteger(xq) && xq >= 1)) { e.push('Exit ' + (i + 1) + ': quantity must be a whole number of 1 or more.'); return; }
       if (!(xp > 0) || decimals(x.price) > 2) { e.push('Exit ' + (i + 1) + ': price must be a positive number (max 2 decimals).'); return; }
-      sum += xq; t.exits.push({ qty: xq, price: xp });
+      if (xt && !validHM(xt)) { e.push('Exit ' + (i + 1) + ': time must look like 15:30.'); return; }
+      if (xd && !validDate(xd)) { e.push('Exit ' + (i + 1) + ': date is not a real date.'); return; }
+      sum += xq; var ex = { qty: xq, price: xp }; if (xt) ex.time = xt; if (xd) ex.date = xd; t.exits.push(ex);
     });
     if (Number.isInteger(q) && sum > q) e.push('Exit quantities (' + sum + ') add up to more than the position (' + q + ').');
 
@@ -100,6 +119,9 @@
     else { var r = num(raw.rating); if (Number.isInteger(r) && r >= 1 && r <= 5) t.rating = r; else { t.rating = null; e.push('Rating must be 1 to 5.'); } }
 
     t.accountId = (typeof raw.accountId === 'string' && raw.accountId.trim()) ? raw.accountId.trim().slice(0, 64) : 'acct-default';
+    // Provenance for imported trades (used for duplicate detection and rollback). Ignored if malformed, never an error.
+    if (Array.isArray(raw.srcKeys) && raw.srcKeys.length && raw.srcKeys.length <= 400 && raw.srcKeys.every(function (k) { return typeof k === 'string' && k.length > 0 && k.length <= 160; })) t.srcKeys = raw.srcKeys.slice();
+    if (typeof raw.importBatch === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(raw.importBatch)) t.importBatch = raw.importBatch;
 
     return e.length ? { ok: false, errors: e } : { ok: true, trade: t };
   }
@@ -109,9 +131,17 @@
   function compute(t) {
     var cpp = INST.byId[t.contract].centsPerPoint, dir = t.side === 'long' ? 1 : -1;
     var exited = 0, hundredths = 0, notional = 0;
+    // Each exit is matched against the oldest entry quantity still open (first-in-first-out). With a single entry this is
+    // exactly (exit - entry) x qty, as before.
+    var lots = (t.entries && t.entries.length ? t.entries : [{ qty: t.contracts, price: t.entry }]).map(function (l) { return { qty: l.qty, price: l.price }; }), li = 0;
     t.exits.forEach(function (x) {
       exited += x.qty; notional += x.price * x.qty;
-      hundredths += dir * Math.round((x.price - t.entry) * 100) * x.qty;   // integer, avoids float drift
+      var left = x.qty;
+      while (left > 0 && li < lots.length) {
+        var take = Math.min(left, lots[li].qty);
+        hundredths += dir * Math.round((x.price - lots[li].price) * 100) * take;
+        lots[li].qty -= take; left -= take; if (lots[li].qty === 0) li++;
+      }
     });
     var status = exited === 0 ? 'open' : exited < t.contracts ? 'partial' : 'closed';
     var gross = exited ? Math.round(hundredths * cpp / 100) : null;         // realized gross on exited contracts
@@ -119,7 +149,12 @@
     var closed = status === 'closed';
     // Net needs BOTH a closed trade and recorded fees. Missing fees are unknown, not zero, so net stays null.
     var net = closed && feesKnown ? gross - t.feesCents : null;
-    var risk = t.stop != null ? Math.round(Math.abs(t.entry - t.stop) * 100 * cpp * t.contracts / 100) : null;
+    var risk = null;
+    if (t.stop != null) {
+      var fills = t.entries && t.entries.length ? t.entries : [{ qty: t.contracts, price: t.entry }], rh = 0;
+      fills.forEach(function (l) { rh += Math.round(Math.abs(l.price - t.stop) * 100) * l.qty; });
+      risk = Math.round(rh * cpp / 100);
+    }
     var R = closed && risk ? Math.round((gross / risk) * 100) / 100 : null;     // realized R uses gross (before fees)
     // The figure shown on a trade: net when fees are known, otherwise gross (always labelled by shownKind).
     var shown = !closed ? gross : (net != null ? net : gross);
@@ -266,7 +301,7 @@
   }
   var CSV_COLS = ['id', 'date', 'time', 'contract', 'side', 'session', 'strategy', 'contracts', 'entry', 'stop', 'exits', 'avg_exit', 'status',
     'gross_pnl', 'fees', 'net_pnl', 'planned_risk', 'r_multiple', 'rules_followed', 'rating', 'entry_reason', 'exit_reason', 'mistakes', 'lessons', 'notes',
-    'account', 'account_id'];   // appended in Batch 2: existing columns keep their positions, so older exports and readers stay compatible
+    'account', 'account_id', 'entries'];   // appended in Batch 2: existing columns keep their positions, so older exports and readers stay compatible
   function toCsv(rows, accountNames) {
     accountNames = accountNames || {};
     var lines = [CSV_COLS.join(',')];
@@ -279,7 +314,8 @@
         cell(money(c.plannedRiskCents)), cell(c.rMultiple == null ? '' : c.rMultiple),
         cell(t.followedRules === true ? 'yes' : t.followedRules === false ? 'no' : ''), cell(t.rating == null ? '' : t.rating),
         cell(t.entryReason, true), cell(t.exitReason, true), cell(t.mistakes, true), cell(t.lessons, true), cell(t.notes, true),
-        cell(accountNames[t.accountId || 'acct-default'] || '', true), cell(t.accountId || 'acct-default', true)
+        cell(accountNames[t.accountId || 'acct-default'] || '', true), cell(t.accountId || 'acct-default', true),
+        cell((t.entries && t.entries.length ? t.entries : [{ qty: t.contracts, price: t.entry }]).map(function (x) { return x.qty + '@' + x.price; }).join(' | '))
       ].join(','));
     });
     return lines.join('\r\n') + '\r\n';
@@ -385,7 +421,7 @@
 
   var api = { SESSIONS: SESSIONS, STORE_KEY: STORE_KEY, normalizeTrade: normalizeTrade, compute: compute, analyze: analyze, plOf: plOf,
     stats: stats, breakdown: breakdown, dailyMap: dailyMap, summaryForDate: summaryForDate, todaySummary: todaySummary,
-    filterRows: filterRows, toCsv: toCsv, CSV_COLS: CSV_COLS, serializeBackup: serializeBackup, parseBackup: parseBackup, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
+    filterRows: filterRows, toCsv: toCsv, CSV_COLS: CSV_COLS, INST_LIST_TEXT: INST.list.map(function (i) { return i.id; }).join(', '), serializeBackup: serializeBackup, parseBackup: parseBackup, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
     parseStored: parseStored, serializeStored: serializeStored, mergeTrades: mergeTrades, fmtMoney: fmtMoney, fmtCompact: fmtCompact,
     order: order, num: num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

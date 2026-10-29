@@ -54,11 +54,16 @@
     if (r.rejected.length) { try { localStorage.setItem(C.STORE_KEY + '.rejected', JSON.stringify(r.rejected)); } catch (e) {} }
   }
   // Saves the whole journal. Resolves true only once it is really stored. IndexedDB (atomic: all trades or none); localStorage only if IndexedDB is unavailable.
-  function persist() {
+  // `full` = replace the whole store (used only by "delete everything" and "replace on restore").
+  // Otherwise only this journal's own changes are written: trades it holds are saved, trades it removed are deleted, and anything it does
+  // not know about (for example just imported from a CSV) or could not read is left exactly as it is, so a stale screen can never erase data.
+  function persist(full) {
     if (S.dbOk) {
-      var ops = [{ store: 'trades', type: 'clear' }];
-      S.trades.forEach(function (t) { ops.push({ store: 'trades', type: 'put', value: t }); });
-      return window.TTDB.batch(ops).then(function () { S.saveFail = false; return true; }).catch(function () { S.saveFail = true; return false; });
+      var ops = [], keep = {};
+      if (full) ops.push({ store: 'trades', type: 'clear' });
+      S.trades.forEach(function (t) { keep[t.id] = 1; ops.push({ store: 'trades', type: 'put', value: t }); });
+      if (!full) Object.keys(S.known || {}).forEach(function (id) { if (!keep[id]) ops.push({ store: 'trades', type: 'del', key: id }); });
+      return window.TTDB.batch(ops).then(function () { S.saveFail = false; S.known = keep; return true; }).catch(function () { S.saveFail = true; return false; });
     }
     try { localStorage.setItem(C.STORE_KEY, C.serializeStored(S.trades)); S.saveFail = false; return Promise.resolve(true); } catch (e) { S.saveFail = true; return Promise.resolve(false); }
   }
@@ -231,8 +236,8 @@
   function detailHtml(r) {
     var t = r.t, c = r.c, m = C.fmtMoney;
     var facts = [
-      ['Entry', t.entry], ['Initial stop', t.stop != null ? t.stop : DASH + ' not set'],
-      ['Exits', t.exits.length ? t.exits.map(function (x) { return x.qty + ' @ ' + x.price; }).join(', ') : DASH + ' none yet'],
+      t.entries ? ['Entries', t.entries.map(function (x) { return x.qty + ' @ ' + x.price + (x.time ? ' (' + x.time + ')' : ''); }).join(', ') + ' · avg ' + t.entry] : ['Entry', t.entry], ['Initial stop', t.stop != null ? t.stop : DASH + ' not set'],
+      ['Exits', t.exits.length ? t.exits.map(function (x) { return x.qty + ' @ ' + x.price + (x.time ? ' (' + x.time + ')' : ''); }).join(', ') : DASH + ' none yet'],
       ['Average exit', c.avgExit != null ? c.avgExit : DASH],
       ['Gross P&L', c.grossCents != null ? m(c.grossCents, true) + (c.isClosed ? '' : ' (so far)') : DASH],
       ['Fees', c.feesCents != null ? m(c.feesCents) : 'Not entered'],
@@ -405,10 +410,22 @@
   /* ================= FORM ================= */
   function distinctStrategies() { var m = strategyLabels(); return Object.keys(m).sort().map(function (k) { return m[k]; }); }
   function fld(label, id, inner, hint) { return '<div class="field"><label for="' + id + '">' + label + '</label>' + inner + (hint ? '<p class="hint">' + hint + '</p>' : '') + '</div>'; }
-  function exRow(qty, price, auto) {
-    return '<div class="exrow"><input class="ex-qty" type="text" inputmode="numeric" placeholder="Qty" aria-label="Exit quantity" value="' + esc(qty) + '"' + (auto ? ' data-auto="1"' : '') + '>' +
+  function exRow(qty, price, auto, time, date) {
+    return '<div class="exrow"' + (date ? ' data-date="' + esc(date) + '"' : '') + '><input class="ex-qty" type="text" inputmode="numeric" placeholder="Qty" aria-label="Exit quantity" value="' + esc(qty) + '"' + (auto ? ' data-auto="1"' : '') + '>' +
       '<input class="ex-price" type="text" inputmode="decimal" placeholder="Exit price" aria-label="Exit price" value="' + esc(price) + '">' +
-      '<button type="button" class="xbtn" data-act="ex-del" aria-label="Remove this exit">✕</button></div>';
+      '<button type="button" class="xbtn" data-act="ex-del" aria-label="Remove this exit">✕</button>' +
+      '<input class="ex-time fill-time" type="time" aria-label="Exit time (optional)" value="' + esc(time || '') + '"></div>';
+  }
+  // A scale-in: extra contracts added to the position after the first entry.
+  function scRow(qty, price, time, date) {
+    return '<div class="scrow"' + (date ? ' data-date="' + esc(date) + '"' : '') + '><input class="sc-qty" type="text" inputmode="numeric" placeholder="Qty" aria-label="Added quantity" value="' + esc(qty) + '">' +
+      '<input class="sc-price" type="text" inputmode="decimal" placeholder="Entry price" aria-label="Added entry price" value="' + esc(price) + '">' +
+      '<button type="button" class="xbtn" data-act="sc-del" aria-label="Remove this scale-in">✕</button>' +
+      '<input class="sc-time fill-time" type="time" aria-label="Scale-in time (optional)" value="' + esc(time || '') + '"></div>';
+  }
+  function anyFillTime(t) { return !!((t.entries || []).some(function (x) { return x.time; }) || (t.exits || []).some(function (x) { return x.time; })); }
+  function totalQtyNow() {
+    var n = parseInt(($('#f-qty') || {}).value, 10) || 0; $$('.scrow .sc-qty').forEach(function (e) { n += parseInt(e.value, 10) || 0; }); return n;
   }
   var DEFACCT = 'acct-default';
   // Accounts you can pick: all active ones, plus the trade's own account even if archived (so editing never silently moves a trade).
@@ -416,12 +433,13 @@
   function formHtml() {
     var E = S.editing, t = E.trade || {}, p = loadPrefs(), isNew = !E.id;
     var v = { date: t.date || todayKey(), time: t.time || '', contract: t.contract || p.contract || INST.defaultId, side: t.side || p.side || 'long',
-      qty: t.contracts != null ? t.contracts : '', session: t.session || '', strategy: t.strategy || '', entry: t.entry != null ? t.entry : '', stop: t.stop != null ? t.stop : '',
+      qty: t.entries ? t.entries[0].qty : (t.contracts != null ? t.contracts : ''), session: t.session || '', strategy: t.strategy || '', entry: t.entries ? t.entries[0].price : (t.entry != null ? t.entry : ''), stop: t.stop != null ? t.stop : '',
       fees: t.feesCents != null ? (t.feesCents / 100).toFixed(2) : '' };
-    var exits = (t.exits && t.exits.length) ? t.exits.map(function (x) { return exRow(x.qty, x.price, false); }).join('') : exRow('', '', true);
+    var exits = (t.exits && t.exits.length) ? t.exits.map(function (x) { return exRow(x.qty, x.price, false, x.time, x.date); }).join('') : exRow('', '', true);
+    var scales = t.entries ? t.entries.slice(1).map(function (x) { return scRow(x.qty, x.price, x.time, x.date); }).join('') : '';
     var rules = t.followedRules === true ? 'yes' : t.followedRules === false ? 'no' : '';
     function radio(name, val, label, cur) { return '<label class="seg-i"><input type="radio" name="' + name + '" value="' + val + '"' + (cur === val ? ' checked' : '') + '><span>' + label + '</span></label>'; }
-    var h = '<div class="formtop"><button type="button" class="chip" data-act="cancel">‹ BACK</button><h2 class="calt">' + (isNew ? 'New trade' : 'Edit trade') + '</h2></div>' +
+    var h = '<div class="jform' + (anyFillTime(t) ? ' times-on' : '') + '" id="jForm"><div class="formtop"><button type="button" class="chip" data-act="cancel">‹ BACK</button><h2 class="calt">' + (isNew ? 'New trade' : 'Edit trade') + '</h2></div>' +
       '<div class="errs" id="fErrs" role="alert" hidden></div>' +
       '<div class="panel"><h2>Trade</h2><div class="fgrid">' +
       fld('Trade date', 'f-date', '<input id="f-date" type="date" value="' + esc(v.date) + '">') +
@@ -437,6 +455,9 @@
       '<div class="panel"><h2>Prices &amp; fees</h2><div class="fgrid">' +
       fld('Entry price', 'f-entry', '<input id="f-entry" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 21050.25" value="' + esc(v.entry) + '">') +
       fld('Initial stop (optional)', 'f-stop', '<input id="f-stop" type="text" inputmode="decimal" autocomplete="off" placeholder="price" value="' + esc(v.stop) + '">', 'Needed for R multiples.') + '</div>' +
+      '<div class="field"><label>Scale-ins <span class="lh">(optional: contracts added after the first entry)</span></label><div id="scList">' + scales + '</div><button type="button" class="chip" data-act="sc-add">+ ADD TO POSITION</button>' +
+      '<p class="hint">The first entry above is your initial size. Each scale-in has its own price; exits are matched to the oldest contracts first (first in, first out). The stop must be beyond every entry.</p></div>' +
+      '<div class="field"><button type="button" class="chip" data-act="fill-times" aria-pressed="' + anyFillTime(t) + '">FILL TIMES</button> <span class="lh">show an optional time for each scale-in and exit</span></div>' +
       '<div class="field"><label>Exits <span class="lh">(add a row per partial exit)</span></label><div id="exList">' + exits + '</div><button type="button" class="chip" data-act="ex-add">+ ADD PARTIAL EXIT</button>' +
       '<p class="hint">Leave exits empty while the trade is open. Quantities must add up to your contracts for the trade to count in statistics.</p></div>' +
       fld('Total fees &amp; commissions, $ (optional)', 'f-fees', '<div class="input-wrap"><span class="prefix">$</span><input id="f-fees" class="money" type="text" inputmode="decimal" autocomplete="off" placeholder="blank = not entered" value="' + esc(v.fees) + '"></div>',
@@ -456,7 +477,7 @@
           '<div class="row-inline"><label class="btn small filebtn" id="shotbtn-' + s + '">ADD<input type="file" accept="image/*" class="vh" data-slot="' + s + '"></label><button type="button" class="btn small danger" data-act="shot-remove" data-slot="' + s + '" hidden>REMOVE</button></div></div>'; }).join('') +
       '</div><p class="hint">Saved on this device only, shrunk to save space.</p>') + '</div>' +
       '<div class="formact"><button type="button" class="btn big" data-act="save">' + (isNew ? 'SAVE TRADE' : 'SAVE CHANGES') + '</button><button type="button" class="btn wide" data-act="cancel">CANCEL</button>' +
-      (isNew ? '' : '<button type="button" class="btn danger wide" data-act="delete" data-id="' + esc(E.id) + '">DELETE TRADE</button>') + '</div>';
+      (isNew ? '' : '<button type="button" class="btn danger wide" data-act="delete" data-id="' + esc(E.id) + '">DELETE TRADE</button>') + '</div></div>';
     return h;
   }
   function afterForm() {
@@ -480,12 +501,17 @@
     var exits = $$('.exrow').map(function (r) {
       var q = $('.ex-qty', r), pr = $('.ex-price', r).value, qv = q.value;
       if (String(pr).trim() === '' && q.getAttribute('data-auto') === '1') qv = '';          // untouched auto-filled qty with no price = empty row
-      return { qty: qv, price: pr };
+      return { qty: qv, price: pr, time: $('.ex-time', r).value, date: r.getAttribute('data-date') || '' };
     });
-    return { id: E.id || undefined, createdAt: E.trade ? E.trade.createdAt : undefined, date: g('f-date'), time: g('f-time'), accountId: g('f-account') || (E.trade ? E.trade.accountId : undefined), contract: g('f-contract'), side: side,
+    var adds = $$('.scrow').map(function (r) { return { qty: $('.sc-qty', r).value, price: $('.sc-price', r).value, time: $('.sc-time', r).value, date: r.getAttribute('data-date') || '' }; })
+      .filter(function (x) { return String(x.qty).trim() !== '' || String(x.price).trim() !== ''; });
+    var entries = adds.length ? [{ qty: g('f-qty'), price: g('f-entry'), time: g('f-time'), date: E.trade && E.trade.entries && E.trade.entries[0] ? (E.trade.entries[0].date || '') : '' }].concat(adds) : undefined;
+    return { id: E.id || undefined, createdAt: E.trade ? E.trade.createdAt : undefined, srcKeys: E.trade ? E.trade.srcKeys : undefined, importBatch: E.trade ? E.trade.importBatch : undefined, entries: entries, date: g('f-date'), time: g('f-time'), accountId: g('f-account') || (E.trade ? E.trade.accountId : undefined), contract: g('f-contract'), side: side,
       contracts: g('f-qty'), session: g('f-session'), strategy: g('f-strategy'), entry: g('f-entry'), stop: g('f-stop'), exits: exits, fees: g('f-fees'),
       entryReason: g('f-entryReason'), exitReason: g('f-exitReason'), followedRules: rules, rating: g('f-rating'), mistakes: g('f-mistakes'), lessons: g('f-lessons'), notes: g('f-notes') };
   }
+  // A lone, untouched exit row follows the total position size (first entry plus scale-ins).
+  function syncAutoExit() { var rs = $$('.exrow'); if (rs.length === 1) { var q = $('.ex-qty', rs[0]); if (q.getAttribute('data-auto') === '1') q.value = totalQtyNow() || ''; } }
   function updatePreview() {
     var el = $('#fPreview'); if (!el) return;
     var r = C.normalizeTrade(readForm());
@@ -610,7 +636,7 @@
       if (r.skipped.length) msg += '\n\n' + plural(r.skipped.length, 'row') + ' in the file could not be read and will be skipped.';
       if (!window.confirm(msg)) return;
       var before = S.trades.slice(); S.trades = res.trades;
-      persist().then(function (ok) {
+      persist(mode === 'replace').then(function (ok) {
       if (!ok) { S.trades = before; toast('Could not save the restored journal (storage full or blocked).', true); return; }
       var addIds = {}; (mode === 'replace' ? r.trades : r.trades.filter(function (t) { return before.every(function (b) { return b.id !== t.id; }); })).forEach(function (t) { addIds[t.id] = 1; });
       var chain = Promise.resolve();
@@ -631,7 +657,7 @@
     var a = window.prompt('This permanently deletes ' + plural(S.trades.length, 'trade') + ' and all screenshots from this device.\n\nType DELETE to confirm.');
     if (a !== 'DELETE') { if (a !== null) toast('Nothing was deleted.'); return; }
     var before = S.trades; S.trades = [];
-    persist().then(function (ok) {
+    persist(true).then(function (ok) {
       if (!ok) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
       if (S.imgOk !== false) IMG.clear().catch(function () {});
       S.expanded = null; changed(); render(); toast('Journal cleared.');
@@ -662,6 +688,9 @@
       case 'clear-filters': S.filters = {}; S.limit = 30; render(); break;
       case 'clear-date': delete S.filters.date; render(); break;
       case 'ex-add': var l = $('#exList'); l.insertAdjacentHTML('beforeend', exRow('', '', false)); $('.exrow:last-child .ex-qty', l).focus(); break;
+      case 'sc-add': $('#scList').insertAdjacentHTML('beforeend', scRow('', '', '')); $('.scrow:last-child .sc-qty', $('#scList')).focus(); updatePreview(); break;
+      case 'sc-del': el.closest('.scrow').remove(); syncAutoExit(); updatePreview(); break;
+      case 'fill-times': var fm = $('#jForm'); fm.classList.toggle('times-on'); el.setAttribute('aria-pressed', fm.classList.contains('times-on')); break;
       case 'ex-del': var row = el.closest('.exrow'); if ($$('.exrow').length > 1) row.remove(); else { $('.ex-qty', row).value = ''; $('.ex-price', row).value = ''; } updatePreview(); break;
       case 'shot-remove': var sh = S.editing.shots[el.getAttribute('data-slot')]; sh.dataUrl = null; sh.changed = false; sh.removed = !!S.editing.id || sh.removed; renderShot(el.getAttribute('data-slot')); break;
       case 'basis': S.basis = el.getAttribute('data-b'); render(); break;
@@ -686,7 +715,7 @@
       S.limit = 30; renderList(); return;
     }
     if (!S.editing) return;
-    if (t.id === 'f-qty') { var rs = $$('.exrow'); if (rs.length === 1) { var q = $('.ex-qty', rs[0]); if (q.getAttribute('data-auto') === '1') q.value = t.value; } }
+    if (t.id === 'f-qty' || (t.classList && t.classList.contains('sc-qty'))) syncAutoExit();
     if (t.classList && t.classList.contains('ex-qty')) t.removeAttribute('data-auto');
     updatePreview();
   }
@@ -709,7 +738,7 @@
     return window.TTDB.getAll('trades').then(function (list) {
       var ok = [], bad = 0;
       list.forEach(function (raw) { var r = C.normalizeTrade(raw); if (r.ok) ok.push(r.trade); else bad++; });
-      S.trades = ok; S.rejected = bad;
+      S.trades = ok; S.rejected = bad; S.known = {}; ok.forEach(function (t) { S.known[t.id] = 1; });
     }).then(function () { return window.TTDB.getAll('quarantine'); }).then(function (q) {
       // Unreadable earlier data was kept aside (never deleted). Keep telling the person until they dismiss it via backup/restore.
       S.corrupt = q.some(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; });
@@ -724,5 +753,5 @@
       .then(function () { S.loaded = true; render(); changed(); });
   }
   boot();
-  window.TTJournal = { reload: function () { (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { render(); }); } };
+  window.TTJournal = { hasShots: function (id) { if (S.imgOk === false) return Promise.resolve(false); return Promise.all(SLOTS.map(function (sl) { return IMG.get(id + ':' + sl).catch(function () { return null; }); })).then(function (r) { return r.some(Boolean); }); }, reload: function () { (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { render(); }); } };
 })();
