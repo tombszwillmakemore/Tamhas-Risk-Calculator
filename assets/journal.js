@@ -42,7 +42,7 @@
   /* ---------- state ---------- */
   var now0 = new Date();
   var S = { trades: [], corrupt: false, rejected: 0, tab: 'entries', editing: null, filters: {}, filtersOpen: false, expanded: null, limit: 30,
-    basis: null, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null };
+    basis: null, dbOk: false, loaded: false, range: 'all', cal: { y: now0.getFullYear(), m: now0.getMonth() }, imgOk: null, saveFail: false, restoreMode: 'merge', backupBlob: null };
 
   function loadTrades() {
     var raw = null; try { raw = localStorage.getItem(C.STORE_KEY); } catch (e) {}
@@ -52,8 +52,14 @@
     if (r.corrupt && raw) { try { localStorage.setItem(C.STORE_KEY + '.corrupt', raw); } catch (e) {} }
     if (r.rejected.length) { try { localStorage.setItem(C.STORE_KEY + '.rejected', JSON.stringify(r.rejected)); } catch (e) {} }
   }
+  // Saves the whole journal. Resolves true only once it is really stored. IndexedDB (atomic: all trades or none); localStorage only if IndexedDB is unavailable.
   function persist() {
-    try { localStorage.setItem(C.STORE_KEY, C.serializeStored(S.trades)); S.saveFail = false; return true; } catch (e) { S.saveFail = true; return false; }
+    if (S.dbOk) {
+      var ops = [{ store: 'trades', type: 'clear' }];
+      S.trades.forEach(function (t) { ops.push({ store: 'trades', type: 'put', value: t }); });
+      return window.TTDB.batch(ops).then(function () { S.saveFail = false; return true; }).catch(function () { S.saveFail = true; return false; });
+    }
+    try { localStorage.setItem(C.STORE_KEY, C.serializeStored(S.trades)); S.saveFail = false; return Promise.resolve(true); } catch (e) { S.saveFail = true; return Promise.resolve(false); }
   }
   function changed() { try { window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} }
   function rows() { return C.analyze(S.trades); }
@@ -506,7 +512,8 @@
     if (!r.ok) { showErrors(r.errors); return; }
     var t = r.trade, before = S.trades.slice(), idx = S.trades.findIndex(function (x) { return x.id === t.id; });
     if (idx >= 0) S.trades[idx] = t; else S.trades.push(t);
-    if (!persist()) { S.trades = before; showErrors(['Your browser would not save this trade (storage full or blocked). Export a backup, free some space, then try again.']); return; }
+    persist().then(function (ok) {
+    if (!ok) { S.trades = before; showErrors(['Your browser would not save this trade (storage full or blocked). Export a backup, free some space, then try again.']); return; }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
     savePrefs({ contract: t.contract, side: t.side });
     var ops = [];
@@ -516,14 +523,17 @@
     });
     Promise.all(ops).then(function () { toast('Trade saved.'); }).catch(function () { toast('Trade saved, but a screenshot could not be stored.', true); }).then(function () { if (S.tab === 'entries') renderList(); });
     S.editing = null; S.tab = 'entries'; S.expanded = t.id; changed(); render(); window.scrollTo(0, 0);
+    });
   }
   function deleteTrade(id) {
     var t = S.trades.filter(function (x) { return x.id === id; })[0]; if (!t) return;
     if (!window.confirm('Delete this ' + t.contract + ' trade from ' + t.date + '? This cannot be undone.')) return;
     var before = S.trades.slice(); S.trades = S.trades.filter(function (x) { return x.id !== id; });
-    if (!persist()) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
-    if (S.imgOk !== false) SLOTS.forEach(function (s) { IMG.del(id + ':' + s).catch(function () {}); });
-    S.editing = null; S.expanded = null; changed(); render(); toast('Trade deleted.');
+    persist().then(function (ok) {
+      if (!ok) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
+      if (S.imgOk !== false) SLOTS.forEach(function (s) { IMG.del(id + ':' + s).catch(function () {}); });
+      S.editing = null; S.expanded = null; changed(); render(); toast('Trade deleted.');
+    });
   }
 
   /* ---------- tab setup ---------- */
@@ -568,7 +578,8 @@
       if (r.skipped.length) msg += '\n\n' + plural(r.skipped.length, 'row') + ' in the file could not be read and will be skipped.';
       if (!window.confirm(msg)) return;
       var before = S.trades.slice(); S.trades = res.trades;
-      if (!persist()) { S.trades = before; toast('Could not save the restored journal (storage full or blocked).', true); return; }
+      persist().then(function (ok) {
+      if (!ok) { S.trades = before; toast('Could not save the restored journal (storage full or blocked).', true); return; }
       var addIds = {}; (mode === 'replace' ? r.trades : r.trades.filter(function (t) { return before.every(function (b) { return b.id !== t.id; }); })).forEach(function (t) { addIds[t.id] = 1; });
       var chain = Promise.resolve();
       if (S.imgOk !== false) {
@@ -576,7 +587,9 @@
         Object.keys(r.shots).forEach(function (k) { if (addIds[k.split(':')[0]]) chain = chain.then(function () { return IMG.put(k, r.shots[k]); }); });
       }
       chain.catch(function () { toast('Trades restored, but some screenshots could not be stored.', true); }).then(function () { changed(); render(); });
+      if (S.dbOk) window.TTDB.getAll('quarantine').then(function (q) { return window.TTDB.batch(q.filter(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; }).map(function (x) { x.resolved = true; return { store: 'quarantine', type: 'put', value: x }; })); }).catch(function () {}); // kept, just marked handled
       S.corrupt = false; S.rejected = 0; toast('Restored ' + plural(res.added, 'trade') + '.');
+      });
     };
     rd.readAsText(file);
   }
@@ -585,9 +598,11 @@
     var a = window.prompt('This permanently deletes ' + plural(S.trades.length, 'trade') + ' and all screenshots from this device.\n\nType DELETE to confirm.');
     if (a !== 'DELETE') { if (a !== null) toast('Nothing was deleted.'); return; }
     var before = S.trades; S.trades = [];
-    if (!persist()) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
-    if (S.imgOk !== false) IMG.clear().catch(function () {});
-    S.expanded = null; changed(); render(); toast('Journal cleared.');
+    persist().then(function (ok) {
+      if (!ok) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
+      if (S.imgOk !== false) IMG.clear().catch(function () {});
+      S.expanded = null; changed(); render(); toast('Journal cleared.');
+    });
   }
 
   /* ---------- lightbox ---------- */
@@ -657,7 +672,22 @@
     if (S.editing) updatePreview();
   });
 
-  loadTrades();
-  render();
-  window.TTJournal = { reload: function () { loadTrades(); render(); } };
+  function loadFromDb() {
+    return window.TTDB.getAll('trades').then(function (list) {
+      var ok = [], bad = 0;
+      list.forEach(function (raw) { var r = C.normalizeTrade(raw); if (r.ok) ok.push(r.trade); else bad++; });
+      S.trades = ok; S.rejected = bad;
+    }).then(function () { return window.TTDB.getAll('quarantine'); }).then(function (q) {
+      // Unreadable earlier data was kept aside (never deleted). Keep telling the person until they dismiss it via backup/restore.
+      S.corrupt = q.some(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; });
+    });
+  }
+  function boot() {
+    if (!window.TTDB || !window.indexedDB) { loadTrades(); S.loaded = true; render(); changed(); return; }
+    window.TTDB.ready().then(function () { S.dbOk = true; return loadFromDb(); })
+      .catch(function () { S.dbOk = false; loadTrades(); })       // database unusable: fall back to the old localStorage journal
+      .then(function () { S.loaded = true; render(); changed(); });
+  }
+  boot();
+  window.TTJournal = { reload: function () { (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { render(); }); } };
 })();

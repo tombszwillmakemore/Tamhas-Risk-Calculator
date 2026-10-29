@@ -8,6 +8,10 @@
 <meta name="apple-mobile-web-app-title" content="Tamhas">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#03050c">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <title>Tamhas Trading</title>
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/journal.css">
@@ -75,8 +79,8 @@
 
       <div class="panel">
         <h2>Coming next</h2>
-        <p class="note" style="margin-top:0">Briefing, checklist &amp; notifications<span class="soon">STAGE 5</span></p>
-        <p class="note">Tradovate connection<span class="soon">STAGE 6</span></p>
+        <p class="note" style="margin-top:0">Prop firm accounts, drawdown &amp; payout tracking<span class="soon">PLANNED</span></p>
+        <p class="note">CSV import from your broker (Tradovate)<span class="soon">PLANNED</span></p>
       </div>
     </section>
 
@@ -180,7 +184,9 @@
 <script src="assets/intel-data.js"></script>
 <script src="assets/intel.js"></script>
 <script src="assets/journal-core.js"></script>
+<script src="assets/db.js"></script>
 <script src="assets/app.js"></script>
 <script src="assets/journal.js"></script>
+<script src="assets/pwa.js"></script>
 </body>
 </html>

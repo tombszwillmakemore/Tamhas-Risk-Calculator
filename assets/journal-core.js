@@ -99,6 +99,8 @@
     if (isBlank(raw.rating)) t.rating = null;
     else { var r = num(raw.rating); if (Number.isInteger(r) && r >= 1 && r <= 5) t.rating = r; else { t.rating = null; e.push('Rating must be 1 to 5.'); } }
 
+    t.accountId = (typeof raw.accountId === 'string' && raw.accountId.trim()) ? raw.accountId.trim().slice(0, 64) : 'acct-default';
+
     return e.length ? { ok: false, errors: e } : { ok: true, trade: t };
   }
 

@@ -58,10 +58,18 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
   function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
-  function renderPnl() {
+  // Reads trades from the on-device database; falls back to the old localStorage journal only if the database is unusable.
+  function readTrades() {
+    var C = window.TTJournalCore;
+    var legacy = function () { var raw = null; try { raw = localStorage.getItem(JOURNAL_KEY); } catch (e) {} return C ? C.parseStored(raw) : { trades: [], corrupt: false }; };
+    if (!window.TTDB || !window.indexedDB || !C) return Promise.resolve(legacy());
+    return window.TTDB.ready().then(function () { return window.TTDB.getAll('trades'); })
+      .then(function (list) { return window.TTDB.getAll('quarantine').then(function (q) { var ok = []; list.forEach(function (r) { var n = C.normalizeTrade(r); if (n.ok) ok.push(n.trade); }); return { trades: ok, corrupt: q.some(function (x) { return x.kind === 'legacy-journal-unreadable'; }) }; }); })
+      .catch(function () { return legacy(); });
+  }
+  function renderPnl() { readTrades().then(drawPnl); }
+  function drawPnl(res) {
     var C = window.TTJournalCore, el = document.getElementById('pnlValue'), note = document.getElementById('pnlNote');
-    var raw = null; try { raw = localStorage.getItem(JOURNAL_KEY); } catch (e) {}
-    var res = C ? C.parseStored(raw) : { trades: [], corrupt: false };
     var s = C ? C.todaySummary(C.analyze(res.trades), todayKey(new Date())) : { closed: 0, open: 0, basis: null, cents: null, feesMissing: 0 };
     var openNote = s.open ? ' ' + plural(s.open, 'open or partly closed trade') + ' not counted until fully exited.' : '';
     if (res.corrupt) {
