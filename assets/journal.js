@@ -562,11 +562,11 @@
     var shots = {}, jobs = [];
     if (incl && S.imgOk !== false) S.trades.forEach(function (t) { SLOTS.forEach(function (s) { jobs.push(IMG.get(t.id + ':' + s).then(function (u) { if (u) shots[t.id + ':' + s] = u; }).catch(function () {})); }); });
     Promise.all(jobs).then(function () {
-      return S.dbOk ? Promise.all([window.TTDB.getAll('accounts'), window.TTDB.getAll('ledger')]) : [[], []];
+      return S.dbOk ? Promise.all([window.TTDB.getAll('accounts'), window.TTDB.getAll('ledger'), window.TTDB.getAll('docs')]) : [[], [], []];
     }).then(function (ex) {
-      var json = C.serializeBackup(S.trades, shots, { accounts: ex[0], ledger: ex[1] }), n = Object.keys(shots).length;
+      var json = C.serializeBackup(S.trades, shots, { accounts: ex[0], ledger: ex[1], docs: ex[2] }), n = Object.keys(shots).length;
       S.backupBlob = { name: 'tamhas-journal-backup-' + stamp() + '.json', json: json };
-      ready.innerHTML = '<p class="note">Backup ready: ' + plural(S.trades.length, 'trade') + (incl ? ', ' + plural(n, 'screenshot') : '') + ', ' + plural(ex[0].length, 'account') + ', ' + plural(ex[1].length, 'account record') + ', ' + (json.length / 1024).toFixed(0) + ' KB.</p><button type="button" class="btn wide" data-act="bk-save">SAVE / SHARE FILE</button>';
+      ready.innerHTML = '<p class="note">Backup ready: ' + plural(S.trades.length, 'trade') + (incl ? ', ' + plural(n, 'screenshot') : '') + ', ' + plural(ex[0].length, 'account') + ', ' + plural(ex[1].length, 'account record') + ', ' + plural(ex[2].length, 'saved item') + ', ' + (json.length / 1024).toFixed(0) + ' KB.</p><button type="button" class="btn wide" data-act="bk-save">SAVE / SHARE FILE</button>';
     });
   }
   function saveBackupFile() {
@@ -578,13 +578,16 @@
     if (!S.dbOk) return Promise.resolve();
     var T = window.TTDB, DEF = T.DEFAULT_ACCOUNT_ID;
     if (!r.hasExtras) mode = 'merge';   // an older (version 1) backup has no accounts or records, so it must never erase yours
-    return Promise.all([T.getAll('accounts'), T.getAll('ledger')]).then(function (cur) {
-      var haveA = {}, haveL = {}, ops = [];
+    return Promise.all([T.getAll('accounts'), T.getAll('ledger'), T.getAll('docs')]).then(function (cur) {
+      var haveA = {}, haveL = {}, haveD = {}, ops = [];
+      cur[2].forEach(function (d) { haveD[d.id] = 1; });
       cur[0].forEach(function (a) { haveA[a.id] = 1; }); cur[1].forEach(function (l) { haveL[l.id] = 1; });
       if (mode === 'replace') {
         cur[0].forEach(function (a) { if (a.id !== DEF) { ops.push({ store: 'accounts', type: 'del', key: a.id }); delete haveA[a.id]; } });
         ops.push({ store: 'ledger', type: 'clear' }); haveL = {};
+        if (r.hasDocs) { ops.push({ store: 'docs', type: 'clear' }); haveD = {}; }   // only when the backup actually carries saved items
       }
+      (r.docs || []).forEach(function (d) { if (!haveD[d.id]) { ops.push({ store: 'docs', type: 'put', value: d }); haveD[d.id] = 1; } });
       (r.accounts || []).forEach(function (a) { if (!haveA[a.id]) { ops.push({ store: 'accounts', type: 'put', value: a }); haveA[a.id] = 1; } });
       (r.ledger || []).forEach(function (l) { if (!haveL[l.id]) { ops.push({ store: 'ledger', type: 'put', value: l }); haveL[l.id] = 1; } });
       // A restored trade must never point at a missing account: add a clearly named placeholder instead of silently re-assigning it.

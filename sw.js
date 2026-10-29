@@ -2,9 +2,9 @@
    Network-first for this site's own files: you always get the newest version when online, and the last
    cached copy when offline. It ignores non-GET and cross-origin requests and never sees your trading data
    (that lives in IndexedDB / localStorage, not in the network layer). */
-var CACHE = 'tt-app-v1';
+var CACHE = 'tt-app-v2';
 var PRECACHE = ['./', 'index.html', 'manifest.webmanifest',
-  'assets/app.css', 'assets/journal.css', 'assets/accounts.css', 'assets/app.js', 'assets/calculator.js', 'assets/instruments.js', 'assets/sessions.js',
+  'assets/app.css', 'assets/journal.css', 'assets/ui.css', 'assets/ui.js', 'assets/store.js', 'assets/theme-boot.js', 'assets/accounts.css', 'assets/app.js', 'assets/calculator.js', 'assets/instruments.js', 'assets/sessions.js',
   'assets/intel-data.js', 'assets/intel.js', 'assets/journal-core.js', 'assets/db.js', 'assets/accounts-core.js', 'assets/propfirm-data.js', 'assets/dd-core.js', 'assets/tracker.js', 'assets/tracker.css', 'assets/accounts.js', 'assets/pwa.js', 'assets/journal.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 

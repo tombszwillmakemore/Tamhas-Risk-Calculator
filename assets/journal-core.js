@@ -289,7 +289,7 @@
   // Version 2 adds accounts and the account ledger (fees, payouts, transfers, firm snapshots). Version 1 files still restore.
   function serializeBackup(trades, shots, extra) {
     extra = extra || {};
-    return JSON.stringify({ app: 'tamhas-trading', kind: 'journal-backup', version: 2, exportedAt: new Date().toISOString(), trades: trades, shots: shots || {}, accounts: extra.accounts || [], ledger: extra.ledger || [] });
+    return JSON.stringify({ app: 'tamhas-trading', kind: 'journal-backup', version: 3, exportedAt: new Date().toISOString(), trades: trades, shots: shots || {}, accounts: extra.accounts || [], ledger: extra.ledger || [], docs: extra.docs || [] });
   }
   var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
   function cleanAccounts(list) {
@@ -307,6 +307,18 @@
       if (ok && l.type !== 'snapshot') ok = Number.isInteger(l.amountCents) && l.amountCents > 0;
       if (ok && l.type === 'snapshot') ok = ['balanceCents', 'equityCents', 'thresholdCents', 'hwmCents'].every(function (k) { return l[k] == null || Number.isInteger(l[k]); });
       if (!ok) { skipped++; return; } seen[l.id] = 1; out.push(l);
+    });
+    return { list: out, skipped: skipped };
+  }
+  // Generic documents (expenses, strategies, plans, goals, templates, preferences...). Unknown kinds are skipped, not guessed at.
+  var DOC_KINDS = ['expense', 'recurring', 'strategy', 'backtest', 'plan', 'checklist', 'reflection', 'goal', 'template', 'review', 'import', 'pref', 'filter', 'field', 'tagdef', 'dashboard', 'routine', 'payoutplan', 'note'];
+  function cleanDocs(list) {
+    var out = [], skipped = 0, seen = {};
+    (Array.isArray(list) ? list : []).slice(0, 50000).forEach(function (d) {
+      var ok = d && typeof d === 'object' && typeof d.id === 'string' && d.id && d.id.length <= 80 && !seen[d.id] && DOC_KINDS.indexOf(d.kind) >= 0;
+      if (ok) { try { ok = JSON.stringify(d).length < 1500000; } catch (e) { ok = false; } }
+      if (!ok) { skipped++; return; }
+      seen[d.id] = 1; out.push(d);
     });
     return { list: out, skipped: skipped };
   }
@@ -328,10 +340,11 @@
         if (/^[A-Za-z0-9_-]{1,40}:(before|after)$/.test(k) && seen[id] && typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(v) && v.length < 4000000) shots[k] = v;
       });
     }
-    var ca = cleanAccounts(data && data.accounts), cl = cleanLedger(data && data.ledger);
+    var ca = cleanAccounts(data && data.accounts), cl = cleanLedger(data && data.ledger), cd = cleanDocs(data && data.docs);
     if (ca.skipped) skipped.push(ca.skipped + ' account record(s) could not be read');
     if (cl.skipped) skipped.push(cl.skipped + ' account ledger record(s) could not be read');
-    return { ok: true, trades: trades, skipped: skipped, shots: shots, accounts: ca.list, ledger: cl.list, hasExtras: !!(data && !Array.isArray(data) && Array.isArray(data.accounts) && Array.isArray(data.ledger)) };
+    if (cd.skipped) skipped.push(cd.skipped + ' saved item(s) (expenses, strategies, plans...) could not be read');
+    return { ok: true, trades: trades, skipped: skipped, shots: shots, accounts: ca.list, ledger: cl.list, docs: cd.list, hasDocs: !!(data && !Array.isArray(data) && Array.isArray(data.docs)), hasExtras: !!(data && !Array.isArray(data) && Array.isArray(data.accounts) && Array.isArray(data.ledger)) };
   }
 
   /* ---------- storage / merge / formatting ---------- */
@@ -372,7 +385,7 @@
 
   var api = { SESSIONS: SESSIONS, STORE_KEY: STORE_KEY, normalizeTrade: normalizeTrade, compute: compute, analyze: analyze, plOf: plOf,
     stats: stats, breakdown: breakdown, dailyMap: dailyMap, summaryForDate: summaryForDate, todaySummary: todaySummary,
-    filterRows: filterRows, toCsv: toCsv, CSV_COLS: CSV_COLS, serializeBackup: serializeBackup, parseBackup: parseBackup,
+    filterRows: filterRows, toCsv: toCsv, CSV_COLS: CSV_COLS, serializeBackup: serializeBackup, parseBackup: parseBackup, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
     parseStored: parseStored, serializeStored: serializeStored, mergeTrades: mergeTrades, fmtMoney: fmtMoney, fmtCompact: fmtCompact,
     order: order, num: num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
