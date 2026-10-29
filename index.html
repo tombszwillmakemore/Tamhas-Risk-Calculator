@@ -58,6 +58,11 @@
       </div>
 
       <div class="panel">
+        <h2>Next event</h2>
+        <button class="tile nxtile" data-go="intel" type="button"><div id="homeNext" class="nx"></div></button>
+      </div>
+
+      <div class="panel">
         <h2>Quick access</h2>
         <div class="grid2">
           <button class="tile" data-go="calc"><b>Risk Calculator</b><span>Contract size within your risk range</span></button>
@@ -67,8 +72,7 @@
 
       <div class="panel">
         <h2>Coming next</h2>
-        <p class="note" style="margin-top:0">Tamhas Intel calendar<span class="soon">STAGE 3</span></p>
-        <p class="note">Trade journal &amp; analytics<span class="soon">STAGE 4</span></p>
+        <p class="note" style="margin-top:0">Trade journal &amp; analytics<span class="soon">STAGE 4</span></p>
         <p class="note">Briefing, checklist &amp; notifications<span class="soon">STAGE 5</span></p>
         <p class="note">Tradovate connection<span class="soon">STAGE 6</span></p>
       </div>
@@ -105,7 +109,29 @@
     <!-- PLACEHOLDERS -->
     <section class="view" id="view-intel">
       <div class="welcome" style="padding-bottom:12px"><small>TAMHAS</small><h1 style="font-size:26px">Intel</h1></div>
-      <div class="panel"><h2>Economic calendar</h2><p class="note" style="margin-top:0">TITAN · SURGE · PULSE · BRIEFING categories arrive in Stage 3.</p></div>
+      <div class="panel"><h2>Next event</h2><div id="intelNext" class="nx"></div></div>
+      <div class="panel">
+        <h2>Economic calendar</h2>
+        <div class="chips" id="intelChips"></div>
+        <div id="intelList"></div>
+        <p class="note" id="intelAsOf"></p>
+      </div>
+      <div class="panel"><h2>Categories</h2><div id="intelLegend"></div></div>
+      <div class="panel">
+        <h2>Add your own event</h2>
+        <div class="field"><label for="evTitle">Title</label><input id="evTitle" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Fed speaker, earnings, news"></div>
+        <div class="field"><label for="evDate">Date and time</label>
+          <div class="row-inline"><input id="evDate" type="date" aria-label="Date"><input id="evTime" type="time" value="08:30" aria-label="Time"></div></div>
+        <div class="field"><label for="evCat">Category and time zone</label>
+          <div class="row-inline"><select id="evCat" aria-label="Category"></select><select id="evTz" aria-label="Time zone"><option value="et">US Eastern</option><option value="local">My local time</option></select></div></div>
+        <div class="field"><label for="evNote">Note (optional)</label><input id="evNote" type="text" maxlength="300" autocomplete="off" placeholder="Why it matters to you"></div>
+        <button class="btn" id="evAdd" type="button">ADD EVENT</button>
+        <div class="saved" id="evMsg" aria-live="polite"></div>
+        <details class="io"><summary>Backup / import my events</summary>
+          <textarea id="evIO" rows="5" spellcheck="false" placeholder="Paste a JSON list of events here to import"></textarea>
+          <div class="row-inline"><button class="btn" id="evExport" type="button">EXPORT</button><button class="btn" id="evImport" type="button">IMPORT</button></div>
+        </details>
+      </div>
     </section>
     <section class="view" id="view-journal">
       <div class="welcome" style="padding-bottom:12px"><small>TRADE</small><h1 style="font-size:26px">Journal</h1></div>
@@ -143,6 +169,8 @@
 </div>
 <script src="assets/calculator.js"></script>
 <script src="assets/sessions.js"></script>
+<script src="assets/intel-data.js"></script>
+<script src="assets/intel.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
