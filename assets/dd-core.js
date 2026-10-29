@@ -110,6 +110,10 @@
     } else if (LEDGER_TYPES.indexOf(f.type) >= 0) {
       var amt = parseMoney(f.amount); if (amt == null) e.push('Amount must be a positive dollar amount.'); r.amountCents = amt;
       if (f.type === 'fee') r.feeKind = FEE_KINDS.indexOf(f.feeKind) >= 0 ? f.feeKind : (e.push('Choose a fee type.'), null);
+      if (f.type === 'payout' && f.received != null && String(f.received).trim() !== '') {   // optional: what actually reached you after the firm's split (never guessed)
+        var rc = parseMoney(f.received, { allowZero: true });
+        if (rc == null) e.push('Amount received must be a dollar amount (or leave it blank).'); else if (amt != null && rc > amt) e.push('Amount received cannot be more than the amount withdrawn.'); else r.receivedCents = rc;
+      }
     }
     r.note = String(f.note || '').trim().slice(0, 200); r.ref = String(f.ref || '').trim().slice(0, 80);
     if (f.transferId) r.transferId = String(f.transferId).slice(0, 60);

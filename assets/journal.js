@@ -34,6 +34,7 @@
 
   var toastEl, toastT;
   function toast(msg, bad) {
+    if (window.TTUI) { window.TTUI.toast(msg, bad); return; }   // one shared toast for the whole app
     if (!toastEl) { toastEl = document.createElement('div'); toastEl.setAttribute('role', 'status'); document.body.appendChild(toastEl); }
     toastEl.textContent = msg; toastEl.className = 'toast show' + (bad ? ' bad' : '');
     clearTimeout(toastT); toastT = setTimeout(function () { toastEl.className = 'toast'; }, bad ? 7000 : 3500);

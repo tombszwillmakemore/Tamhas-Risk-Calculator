@@ -8,12 +8,13 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
-**Stage B - money tools** (next). Stage A (foundation) is complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
+**Stage C - scale-in fills + CSV import** (next). Stages A (foundation) and B (money) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
 
 ## Completed features
 - Batch 0: IndexedDB platform, non-destructive legacy migration, PWA (manifest, offline service worker, icons), CSP.
 - Batch 1: Accounts, editable prop-firm templates (17 researched firms with sources, 21 listed only), firm directory.
 - Batch 2: Drawdown engine (static / EOD trailing / intraday trailing), evaluation tracker, rule versions + confirmation, ledger (fees, payouts, deposits, transfers, firm snapshots), CSV account columns, backup v2.
+- Stage B: money core (`money-core.js`) + Money screen (overview, payout center, expense tracker, recurring costs with confirm-to-post, cost analysis by account and firm), optional 'received after split' on payouts, per-account payout readiness (only from numbers you enter), one shared toast.
 - Stage A (partial): DB schema v3 (`docs` store), `TTStore`, shared UI kit (`TTUI`: dialogs, tooltips, SVG charts), light/dark/system theme, "More" hub with deep links + Back button, backup v3 (includes saved items).
 
 ## Remaining features
@@ -41,7 +42,9 @@ Recorded per stage below (only tests that were actually run).
 - GC/MGC contract specs not yet verified against CME (Stage F verifies before adding).
 
 ## Next steps
-Finish Stage A tests, commit, then Stage B.
+Stage C: multi-fill trades (scale-ins, partial exits with times) and a generic CSV import engine with duplicate detection, import history and rollback.
 
 ## Test log
 - Stage A (run): stageA.js 24 passed; regression: engine 230, tracker e2e 54, backup/CSV 15, upgrade, migration, journal e2e, audit (XSS + 3,000 trades) all passed after updating assertions for the intentional changes (5-button nav, schema v3, backup v3). A flaky test (async waitForFunction does not await) was fixed with a polling helper.
+- Stage B (run): bmoney.js 79 passed (costs, payouts, economics, recurring, readiness, validation); bmoney_e2e.js 38 passed (UI flows: add/void/duplicate prompts, ledger-vs-expense routing, post-once recurring, readiness section); full regression rerun: all green.
+- Known test-infrastructure note: tests currently live outside the repo (scratchpad) and use absolute paths; they are moved into `tests/` with a runner in Stage I so the release candidate is self-contained.
