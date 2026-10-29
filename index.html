@@ -51,6 +51,13 @@
       </div>
 
       <div class="panel">
+        <h2>Market sessions</h2>
+        <div class="yourtime"><span>YOUR TIME</span><b id="localClock">--:--:--</b></div>
+        <div id="sessionList"></div>
+        <p class="note">Windows are approximate and editable in Settings. Futures trade nearly around the clock, so these mark typical regional activity, not exchange hours.</p>
+      </div>
+
+      <div class="panel">
         <h2>Quick access</h2>
         <div class="grid2">
           <button class="tile" data-go="calc"><b>Risk Calculator</b><span>Contract size within your risk range</span></button>
@@ -60,8 +67,7 @@
 
       <div class="panel">
         <h2>Coming next</h2>
-        <p class="note" style="margin-top:0">Session clock<span class="soon">STAGE 2</span></p>
-        <p class="note">Tamhas Intel calendar<span class="soon">STAGE 3</span></p>
+        <p class="note" style="margin-top:0">Tamhas Intel calendar<span class="soon">STAGE 3</span></p>
         <p class="note">Trade journal &amp; analytics<span class="soon">STAGE 4</span></p>
         <p class="note">Briefing, checklist &amp; notifications<span class="soon">STAGE 5</span></p>
         <p class="note">Tradovate connection<span class="soon">STAGE 6</span></p>
@@ -119,6 +125,16 @@
         <div class="saved" id="nameSaved" aria-live="polite"></div>
       </div>
       <div class="panel">
+        <h2>Session windows</h2>
+        <p class="note" style="margin-top:0">Start and end times are in each session's own local time and adjust automatically for daylight saving.</p>
+        <div id="sessionEditor" style="margin-top:14px"></div>
+        <div class="row-inline" style="margin-top:14px">
+          <button class="btn" id="saveSessions" type="button">SAVE</button>
+          <button class="btn" id="resetSessions" type="button" style="color:var(--muted);border-color:var(--line)">RESET</button>
+        </div>
+        <div class="saved" id="sessionMsg" aria-live="polite"></div>
+      </div>
+      <div class="panel">
         <h2>Privacy</h2>
         <p class="note" style="margin-top:0">Everything is stored only in this browser on this device. No accounts, no passwords, and no data is sent anywhere.</p>
       </div>
@@ -126,6 +142,7 @@
   </main>
 </div>
 <script src="assets/calculator.js"></script>
+<script src="assets/sessions.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
