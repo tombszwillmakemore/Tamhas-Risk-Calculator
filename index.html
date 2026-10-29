@@ -5,183 +5,127 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Risk Calc">
+<meta name="apple-mobile-web-app-title" content="Tamhas">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0f172a">
-<title>Futures Risk Calculator</title>
-<style>
-  :root {
-    --bg: #0f172a;
-    --card: #111c33;
-    --border: #243251;
-    --text: #e8eefc;
-    --muted: #8fa0c4;
-    --accent: #38bdf8;
-    --good: #22c55e;
-    --bad: #f87171;
-    --warn: #fbbf24;
-  }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; }
-  body { min-height: 100vh; padding: max(20px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); }
-  .wrap { max-width: 460px; margin: 0 auto; }
-  h1 { font-size: 22px; font-weight: 700; margin: 8px 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
-  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; }
-  .field { margin-bottom: 16px; }
-  .field:last-child { margin-bottom: 0; }
-  .input-wrap { position: relative; }
-  .prefix, .suffix { position: absolute; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 17px; pointer-events: none; }
-  .prefix { left: 14px; }
-  .suffix { right: 14px; font-size: 14px; }
-  input {
-    width: 100%; height: 52px; font-size: 18px; /* 16px+ prevents iOS zoom on focus */
-    color: var(--text); background: #0b1428; border: 1px solid var(--border);
-    border-radius: 12px; padding: 0 14px; outline: none; -webkit-appearance: none; appearance: none;
-  }
-  input.money { padding-left: 28px; }
-  input.pts { padding-right: 56px; }
-  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(56,189,248,.18); }
-  .result { text-align: center; }
-  .result .big { font-size: 15px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
-  .result .value { font-size: 56px; font-weight: 800; line-height: 1.05; color: var(--good); }
-  .result .value small { display: block; font-size: 16px; font-weight: 600; color: var(--muted); margin-top: 4px; }
-  .result .msg { font-size: 19px; font-weight: 700; line-height: 1.3; padding: 6px 4px; }
-  .result.warn .msg { color: var(--bad); }
-  .result.info .msg { color: var(--warn); }
-  .result.idle .msg { color: var(--muted); font-weight: 500; font-size: 16px; }
-  .rows { margin-top: 16px; border-top: 1px solid var(--border); }
-  .row { display: flex; justify-content: space-between; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--border); font-size: 16px; }
-  .row:last-child { border-bottom: 0; padding-bottom: 0; }
-  .row span:first-child { color: var(--muted); }
-  .row span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
-  .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 8px; }
-</style>
+<meta name="theme-color" content="#03050c">
+<title>Tamhas Trading</title>
+<link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
-<div class="wrap">
-  <h1>Futures Risk Calculator</h1>
-  <p class="sub">$0.20 per point per contract</p>
+<div class="app">
 
-  <div class="card">
-    <div class="field">
-      <label for="stop">Stop-loss distance</label>
-      <div class="input-wrap">
-        <input id="stop" class="pts" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 500">
-        <span class="suffix">points</span>
-      </div>
-    </div>
-    <div class="field">
-      <label for="minRisk">Minimum dollar risk</label>
-      <div class="input-wrap">
-        <span class="prefix">$</span>
-        <input id="minRisk" class="money" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 30">
-      </div>
-    </div>
-    <div class="field">
-      <label for="maxRisk">Maximum dollar risk</label>
-      <div class="input-wrap">
-        <span class="prefix">$</span>
-        <input id="maxRisk" class="money" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 35">
-      </div>
-    </div>
-  </div>
+  <nav class="nav" aria-label="Main navigation">
+    <button data-view="home" class="active"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</button>
+    <button data-view="calc"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>Risk</button>
+    <button data-view="intel"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Intel</button>
+    <button data-view="journal"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Journal</button>
+    <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>Settings</button>
+  </nav>
 
-  <div class="card result idle" id="resultCard" aria-live="polite">
-    <div class="big" id="resultLabel">Result</div>
-    <div id="resultMain"><div class="msg">Enter your stop distance and risk range.</div></div>
-    <div class="rows">
-      <div class="row"><span>Risk per contract</span><span id="perContract">—</span></div>
-      <div class="row"><span>Total planned risk</span><span id="totalRisk">—</span></div>
-    </div>
-  </div>
+  <main class="main">
+    <header class="topbar">
+      <div class="brand">
+        <!-- Original Tamhas mark: hex frame, T, rising signal line -->
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2de2ff"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+          <path d="M24 3l18 10.5v21L24 45 6 34.5v-21z" fill="rgba(10,18,44,.8)" stroke="url(#lg)" stroke-width="2"/>
+          <path d="M15 17h18M24 17v15" stroke="url(#lg)" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+          <path d="M13 31l6-5 4 3 8-9" stroke="#2de2ff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity=".85"/>
+        </svg>
+        <div class="brand-name">TAMHAS<span>TRADING</span></div>
+      </div>
+      <div class="status-chip"><i></i>LOCAL MODE</div>
+    </header>
 
-  <div class="foot">Calculated on your device. Not financial advice.</div>
+    <!-- HOME -->
+    <section class="view active" id="view-home">
+      <div class="welcome">
+        <small>WELCOME BACK,</small>
+        <h1 id="displayName">TRADER</h1>
+      </div>
+
+      <div class="panel">
+        <h2>Today's P&amp;L</h2>
+        <div class="pnl-value none" id="pnlValue">—</div>
+        <p class="note" id="pnlNote"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Quick access</h2>
+        <div class="grid2">
+          <button class="tile" data-go="calc"><b>Risk Calculator</b><span>Contract size within your risk range</span></button>
+          <button class="tile" data-go="settings"><b>Settings</b><span>Display name &amp; preferences</span></button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Coming next</h2>
+        <p class="note" style="margin-top:0">Session clock<span class="soon">STAGE 2</span></p>
+        <p class="note">Tamhas Intel calendar<span class="soon">STAGE 3</span></p>
+        <p class="note">Trade journal &amp; analytics<span class="soon">STAGE 4</span></p>
+        <p class="note">Briefing, checklist &amp; notifications<span class="soon">STAGE 5</span></p>
+        <p class="note">Tradovate connection<span class="soon">STAGE 6</span></p>
+      </div>
+    </section>
+
+    <!-- RISK CALCULATOR (logic unchanged) -->
+    <section class="view" id="view-calc">
+      <div class="welcome" style="padding-bottom:12px"><small>RISK</small><h1 style="font-size:26px">Calculator</h1></div>
+      <div class="panel">
+        <div class="field">
+          <label for="stop">Stop-loss distance</label>
+          <div class="input-wrap"><input id="stop" class="pts" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 500"><span class="suffix">points</span></div>
+        </div>
+        <div class="field">
+          <label for="minRisk">Minimum dollar risk</label>
+          <div class="input-wrap"><span class="prefix">$</span><input id="minRisk" class="money" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 30"></div>
+        </div>
+        <div class="field">
+          <label for="maxRisk">Maximum dollar risk</label>
+          <div class="input-wrap"><span class="prefix">$</span><input id="maxRisk" class="money" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 35"></div>
+        </div>
+      </div>
+      <div class="panel result idle" id="resultCard" aria-live="polite">
+        <div class="big" id="resultLabel">Result</div>
+        <div id="resultMain"><div class="msg">Enter your stop distance and risk range.</div></div>
+        <div class="rows">
+          <div class="row"><span>Risk per contract</span><span id="perContract">—</span></div>
+          <div class="row"><span>Total planned risk</span><span id="totalRisk">—</span></div>
+        </div>
+      </div>
+      <div class="foot">$0.20 per point per contract · Calculated on your device · Not financial advice</div>
+    </section>
+
+    <!-- PLACEHOLDERS -->
+    <section class="view" id="view-intel">
+      <div class="welcome" style="padding-bottom:12px"><small>TAMHAS</small><h1 style="font-size:26px">Intel</h1></div>
+      <div class="panel"><h2>Economic calendar</h2><p class="note" style="margin-top:0">TITAN · SURGE · PULSE · BRIEFING categories arrive in Stage 3.</p></div>
+    </section>
+    <section class="view" id="view-journal">
+      <div class="welcome" style="padding-bottom:12px"><small>TRADE</small><h1 style="font-size:26px">Journal</h1></div>
+      <div class="panel"><h2>Journal &amp; analytics</h2><p class="note" style="margin-top:0">Log trades and review performance. Arrives in Stage 4.</p></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <div class="welcome" style="padding-bottom:12px"><small>SYSTEM</small><h1 style="font-size:26px">Settings</h1></div>
+      <div class="panel">
+        <h2>Profile</h2>
+        <label for="nameInput">Display name</label>
+        <div class="row-inline">
+          <input id="nameInput" type="text" maxlength="24" autocomplete="off" placeholder="Your name">
+          <button class="btn" id="saveName" type="button">SAVE</button>
+        </div>
+        <div class="saved" id="nameSaved" aria-live="polite"></div>
+      </div>
+      <div class="panel">
+        <h2>Privacy</h2>
+        <p class="note" style="margin-top:0">Everything is stored only in this browser on this device. No accounts, no passwords, and no data is sent anywhere.</p>
+      </div>
+    </section>
+  </main>
 </div>
-
-<script>
-(function () {
-  // Fixed contract value: $0.20 per point per contract = 20 cents.
-  // All math is done in whole cents to avoid floating-point rounding errors.
-  var CENTS_PER_POINT = 20;
-
-  var stopEl = document.getElementById('stop');
-  var minEl = document.getElementById('minRisk');
-  var maxEl = document.getElementById('maxRisk');
-  var card = document.getElementById('resultCard');
-  var label = document.getElementById('resultLabel');
-  var main = document.getElementById('resultMain');
-  var perEl = document.getElementById('perContract');
-  var totEl = document.getElementById('totalRisk');
-
-  function parse(el) {
-    var s = el.value.replace(/[$,\s]/g, '');
-    if (s === '' || !/^\d*\.?\d+$|^\d+\.$/.test(s)) return NaN;
-    return parseFloat(s);
-  }
-  function fmt(cents) {
-    return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-  function show(kind, labelText, html, per, tot) {
-    card.className = 'card result ' + kind;
-    label.textContent = labelText;
-    main.innerHTML = html;
-    perEl.textContent = per;
-    totEl.textContent = tot;
-  }
-  function msg(t) { return '<div class="msg">' + t + '</div>'; }
-
-  function calculate() {
-    var stop = parse(stopEl), min = parse(minEl), max = parse(maxEl);
-
-    if (isNaN(stop) || isNaN(min) || isNaN(max)) {
-      show('idle', 'Result', msg('Enter your stop distance and risk range.'), '—', '—');
-      return;
-    }
-    if (stop <= 0 || max <= 0) {
-      show('idle', 'Result', msg('Stop distance and maximum risk must be greater than zero.'), '—', '—');
-      return;
-    }
-    if (min > max) {
-      show('idle', 'Result', msg('Minimum risk cannot be greater than maximum risk.'), '—', '—');
-      return;
-    }
-
-    var perCents = Math.round(stop * CENTS_PER_POINT);   // risk per contract in cents
-    var minCents = Math.round(min * 100);
-    var maxCents = Math.round(max * 100);
-
-    if (perCents > maxCents) {
-      show('warn', 'Warning',
-        msg('Stop too large, even one contract exceeds your maximum risk.'),
-        fmt(perCents), '—');
-      return;
-    }
-
-    var contracts = Math.floor(maxCents / perCents);      // largest whole number within max (never rounds up)
-    var totalCents = contracts * perCents;
-
-    if (contracts < 1 || totalCents < minCents || totalCents > maxCents) {
-      show('info', 'Warning',
-        msg('No contract size fits your risk range.'),
-        fmt(perCents), '—');
-      return;
-    }
-
-    show('', 'Recommended contracts',
-      '<div class="value">' + contracts + '<small>contract' + (contracts === 1 ? '' : 's') + '</small></div>',
-      fmt(perCents), fmt(totalCents));
-  }
-
-  ['input', 'change', 'keyup'].forEach(function (ev) {
-    stopEl.addEventListener(ev, calculate);
-    minEl.addEventListener(ev, calculate);
-    maxEl.addEventListener(ev, calculate);
-  });
-  calculate();
-})();
-</script>
+<script src="assets/calculator.js"></script>
+<script src="assets/app.js"></script>
 </body>
 </html>
