@@ -14,7 +14,7 @@
   var DEF_PREF = { fileTz: 'as-is', dateOrder: 'mdy', accountMap: {}, noAcct: '', feeTemplate: {}, applyFees: true, autoSession: true, defaults: { strategy: '', tags: '' }, keepCopy: false, remember: true };
   var COPY_LIMIT = 1500000;
   var S = { step: 'file', loaded: false, err: null, accounts: [], history: [], templates: [], fileName: '', fileSize: 0, parsed: null, mode: 'fills', mapping: {}, opts: { dateOrder: 'mdy', fileTz: 'as-is', feesPerContract: false }, accountId: 'acct-default', accountMap: {}, plan: null, tplName: '', usedTemplate: null, busy: false, msg: '',
-    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, nearMiss: null };
+    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, guideOpen: false, nearMiss: null };
 
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), ST.list('import'), ST.list('template'), ST.getPref('tvImport', null)]); }).then(function (r) {
@@ -42,7 +42,7 @@
       (S.retry ? '<div class="ui-row"><button type="button" class="btn" data-act="im-ocr-retry">TRY AGAIN</button></div>' : '') +
       (S.msg ? '<div class="ui-banner bad" role="alert">' + esc(S.msg) + '</div>' : '') +
       (S.nearMiss ? '<div class="ui-banner warn">' + esc(S.nearMiss) + '</div>' : '') + '</div>';
-    h += settingsPanel() + guidePanel(false) + historyPanel();
+    h += settingsPanel() + guidePanel(S.guideOpen) + historyPanel();
     return h;
   }
   function settingsPanel() {
@@ -412,7 +412,7 @@
     else if (a === 'im-paste-toggle') { S.pasteOpen = !S.pasteOpen; render(); if (S.pasteOpen) { var ta = $('#im-paste'); if (ta) ta.focus(); } }
     else if (a === 'im-paste-read') { var txt = ($('#im-paste') || {}).value || ''; if (!txt.trim()) { S.msg = 'Paste something first.'; render(); return; } intake([{ text: txt, name: 'pasted text' }]); }
     else if (a === 'im-clip') clipboard();
-    else if (a === 'im-guide') { var g = $('#im-guide'); if (g) { g.open = true; g.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
+    else if (a === 'im-guide') { S.guideOpen = true; var g = $('#im-guide'); if (g) { g.open = true; g.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }
     else if (a === 'im-save-settings') saveSettings();
     else if (a === 'im-forget') { delete S.pref.accountMap[b.getAttribute('data-raw')]; savePref().then(function () { S.settingsOpen = true; render(); }); }
     else if (a === 'im-review-ok') { reviewCollect(); var r = S.review, parsed = { ok: true, headers: r.headers, rows: r.rows.filter(function (x) { return x.some(function (v) { return v; }); }), delimiter: 'ocr' }; S.sources.push({ id: 's' + S.sources.length, name: r.name, size: 0, text: null, parsed: parsed, det: TV.detect(r.headers), kind: 'image' }); URL.revokeObjectURL(r.url); S.review = null; route(); }
@@ -427,6 +427,7 @@
     else if (a === 'im-reopen') reopen(b.getAttribute('data-id'));
     else if (a === 'im-view-sum') viewSummary(b.getAttribute('data-id'));
   });
+  root.addEventListener('toggle', function (e) { if (e.target.id === 'im-settings') S.settingsOpen = e.target.open; else if (e.target.id === 'im-guide') S.guideOpen = e.target.open; }, true);
   root.addEventListener('keydown', function (e) { if (e.target.id === 'im-drop' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); $('#im-file').click(); } });
   function saveSettings() {
     var p = S.pref, bad = null;
@@ -461,5 +462,7 @@
   ['dragleave', 'drop'].forEach(function (ev) { root.addEventListener(ev, function (e) { var d = e.target.closest && e.target.closest('#im-drop'); if (!d) return; e.preventDefault(); d.classList.remove('over'); if (ev === 'drop' && e.dataTransfer && e.dataTransfer.files.length) intake(Array.prototype.slice.call(e.dataTransfer.files).map(function (f) { return { file: f }; })); }); });
   window.addEventListener('tt:view', function (e) { if (e.detail.name === 'import' && (S.step === 'file' || S.step === 'done')) load().then(render); });
   if (window.TTNav) window.TTNav.addHub({ id: 'import', title: 'Import trades', text: 'Tradovate reports, screenshots, pasted tables or any CSV, with preview and rollback.', icon: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/>' });
-  window.TTImportUI = { state: S, reload: function () { return load().then(render); }, intake: intake, reset: reset };
+  // Open a section of the start screen (used by search, Help and Copilot). Survives the screen's own re-render after loading.
+  function openSection(k) { if (k === 'settings') S.settingsOpen = true; else S.guideOpen = true; if (S.step !== 'file') reset(); return load().then(render).then(function () { var el = document.getElementById(k === 'settings' ? 'im-settings' : 'im-guide'); if (el) { el.open = true; el.scrollIntoView({ block: 'start' }); var sm = el.querySelector('summary'); if (sm) sm.focus({ preventScroll: true }); } }); }
+  window.TTImportUI = { state: S, reload: function () { return load().then(render); }, intake: intake, reset: reset, open: openSection };
 })();

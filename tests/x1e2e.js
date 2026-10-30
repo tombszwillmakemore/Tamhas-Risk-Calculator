@@ -1,115 +1,119 @@
-// Completeness features in a real browser: TRC install naming, startup screen, animation settings, search, voice grammar,
-// help centre, tour, feedback, diagnostics, update safety, offline start, backup reminder, keyboard and reduced motion.
-const { chromium } = require('playwright'); const fs = require('fs'), path = require('path');
-const OUT = path.join(__dirname, 'out'); fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true });
-const BASE = process.env.TT_BASE || 'http://127.0.0.1:8765', URL = BASE + '/index.html';
-let fail = 0, pass = 0; const ok = (n, c, d) => { if (c) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : JSON.stringify(d).slice(0, 400)); } };
-const until = async (pg, fn, arg, ms = 8000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await pg.evaluate(fn, arg)) return true; await pg.waitForTimeout(40); } return false; };
+const REGV = require(require('path').join(__dirname, '..', 'assets', 'registry-core.js')); const VRX = new RegExp(REGV.APP_VERSION.replace(/\./g, '\\.'));
+/* Experience layer: welcome, tour, search, personal dashboard, favorites, settings, help, shortcuts. Uses the real playwright
+   module (no pre-seeded profile) so the first-run flow is genuinely first-run. */
+const { chromium } = require('playwright'); const path = require('path'), fs = require('fs'); const out = path.join(__dirname, 'out', 'shots'); fs.mkdirSync(out, { recursive: true });
+const URL = ((process.env.TT_BASE || 'http://127.0.0.1:8765') + '/index.html'); let fail = 0, pass = 0; const ok = (n, c, d) => { if (c) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : JSON.stringify(d)); } };
+const until = async (pg, fn, arg, ms = 6000) => { const t = Date.now(); while (Date.now() - t < ms) { if (await pg.evaluate(fn, arg)) return true; await pg.waitForTimeout(40); } return false; };
+const seed = async (p, list) => { await p.evaluate(async (list) => { const C = TTJournalCore; const d = new Date(); const t0 = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); await TTDB.clear('trades'); await TTStore.invalidate(); for (const o of list) { const r = C.normalizeTrade(Object.assign({ contract: 'NQ', side: 'long', contracts: 1, entry: 100, stop: 95, fees: '0', createdAt: 1, date: t0 }, o)); if (!r.ok) throw new Error(JSON.stringify(r.errors)); await TTDB.put('trades', r.trade); } }, list); };
+const prof = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('tt.profile.v1') || 'null'));
+const view = (p) => p.evaluate(() => (document.querySelector('.view.active') || {}).id);
 (async () => {
   const browser = await chromium.launch();
-  // ---- naming (TRC on the Home Screen, Tamhas Trading on the site)
-  {
-    const p = await browser.newPage(); await p.goto(URL);
-    const man = await (await p.request.get(BASE + '/manifest.webmanifest')).json();
-    ok('manifest name and short_name are TRC', man.name === 'TRC' && man.short_name === 'TRC', man);
-    ok('icons preserved in manifest', man.icons.length === 3 && man.icons.some(i => i.purpose === 'maskable'));
-    ok('apple home-screen title is TRC', await p.evaluate(() => document.querySelector('meta[name=apple-mobile-web-app-title]').content === 'TRC'));
-    ok('website title stays Tamhas Trading', /Tamhas Trading/.test(await p.title())); ok('brand in header stays TAMHAS TRADING', /TAMHAS/.test(await p.innerText('.brand')));
-    await p.close();
-  }
-  for (const [theme, width] of [['dark', 390], ['light', 1280]]) {
-    const T = theme + '@' + width + ': ';
-    const ctx = await browser.newContext({ viewport: { width, height: 860 } }); const p = await ctx.newPage(); const errors = [];
+  for (const theme of ['dark', 'light']) {
+    const T = theme + ': '; const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, permissions: ['clipboard-read', 'clipboard-write'] }); const p = await ctx.newPage(); const errors = [];
     p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push('console:' + m.text()); });
-    if (theme === 'light') await ctx.addInitScript(() => localStorage.setItem('tt.theme', 'light'));
-    const t0 = Date.now(); await p.goto(URL);
-    // startup screen: gone as soon as the app is ready, never an artificial wait
-    await until(p, () => !document.getElementById('splash'), null, 6000); const gone = Date.now() - t0;
-    ok(T + 'startup screen removed once ready (' + gone + ' ms, no forced delay)', gone < 3000, gone);
-    ok(T + 'startup screen follows theme', await p.evaluate(t => document.documentElement.getAttribute('data-theme') === t, theme));
-    ok(T + 'no false "new version" banner on first visit', !(await p.$('#updBanner')));
-    await p.evaluate(() => TTDB.ready());
-    // install guide
-    await p.evaluate(() => TTNav.go('install')); await p.waitForSelector('#installRoot [data-inst]');
-    let t = await p.innerText('#installRoot');
-    ok(T + 'install guide: TRC name and icon preview', /TRC/.test(t) && await p.isVisible('#installRoot img[alt="TRC app icon"]'));
-    for (const k of ['ios', 'android', 'samsung']) { await p.click('[data-inst=' + k + ']'); const s = await p.innerText('#installRoot'); ok(T + 'install tab ' + k + ' tells to name it TRC', /name|Name/.test(s) && /TRC/.test(s) && /(Add to Home Screen|Install app|Add page to)/.test(s)); }
-    ok(T + 'install guide explains who controls the label', /final label/.test(t) && /could not be tested on real phones/.test(t));
-    // onboarding: install is the first, optional step
-    await p.evaluate(() => TTNav.go('home')); await p.waitForSelector('#homeStart .panel');
-    t = await p.innerText('#homeStart'); ok(T + 'onboarding: install first (optional), import second', t.indexOf('Home Screen') >= 0 && t.indexOf('Home Screen') < t.indexOf('Import your trades'), t);
-    // search: keyboard
-    await p.keyboard.press('/'); await p.waitForSelector('#srchQ'); ok(T + '/ opens search with focus', await p.evaluate(() => document.activeElement.id === 'srchQ'));
-    await p.fill('#srchQ', 'commission'); await p.waitForTimeout(50); ok(T + 'search finds import settings', /commissions/i.test(await p.innerText('#srchList')));
-    await p.keyboard.press('Enter'); await until(p, () => location.hash === '#import' && document.getElementById('im-settings') && document.getElementById('im-settings').open); ok(T + 'Enter opens the result (import settings opened)', await p.evaluate(() => location.hash === '#import' && document.getElementById('im-settings').open));
-    await p.keyboard.press('Control+k'); await p.waitForSelector('#srchQ'); await p.keyboard.press('Escape'); ok(T + 'Ctrl+K opens, Esc closes', !(await p.$('.srch-back')));
-    await p.click('#searchBtn'); await p.fill('#srchQ', 'drawdown'); await p.waitForTimeout(50); ok(T + 'search also finds education', /What is drawdown/.test(await p.innerText('#srchList'))); await p.click('#srchClose');
-    // voice (the command grammar the microphone feeds; microphones are not available in automated browsers)
-    await p.evaluate(() => TTVoice.act('open journal')); await until(p, () => location.hash === '#journal', null, 3000); ok(T + 'voice: "open journal" navigates', await p.evaluate(() => location.hash === '#journal'));
-    await p.evaluate(() => TTVoice.act('risk MNQ stop 20 points risk 100 to 200')); await until(p, () => location.hash === '#calc');
-    await p.waitForTimeout(200); const calc = await p.evaluate(() => ({ i: document.getElementById('instrument').value, s: document.getElementById('stop').value, a: document.getElementById('minRisk').value, b: document.getElementById('maxRisk').value }));
-    ok(T + 'voice: fills the risk calculator', calc.i === 'MNQ' && calc.s === '20' && calc.a === '100' && calc.b === '200', calc);
-    await p.evaluate(() => TTNav.go('settings')); await p.waitForSelector('#voiceSettings h2');
-    ok(T + 'voice settings: off by default, privacy notice shown', /Google or Apple/.test(await p.innerText('#voiceSettings')) && await p.evaluate(() => !localStorage.getItem('tt.voice')));
-    // animation preferences
-    await p.click('[data-anim-set=reduced]'); ok(T + 'reduced animations applied and saved', await p.evaluate(() => document.documentElement.getAttribute('data-anim') === 'reduced' && localStorage.getItem('tt.anim') === 'reduced'));
-    await p.click('[data-anim-set=off]'); await p.reload(); ok(T + 'startup screen off: hidden immediately', await p.evaluate(() => { const s = document.getElementById('splash'); return !s || getComputedStyle(s).display === 'none'; }));
-    await p.click('[data-anim-set=standard]').catch(() => {}); await p.evaluate(() => { localStorage.setItem('tt.anim', 'standard'); });
-    // help centre + tour
-    await p.evaluate(() => TTNav.go('help')); await p.waitForSelector('#helpRoot [data-hgo]');
-    t = await p.innerText('#helpRoot'); ok(T + 'help covers import, install, backup, psychology', /Import trades/.test(t) && /Install TRC/.test(t) && /Backup/.test(t) && /Revenge trading/.test(t));
-    ok(T + 'help lists limits honestly', /Limits:/.test(t)); await p.click('[data-hgo=backup]'); await until(p, () => location.hash === '#journal'); ok(T + 'help OPEN goes to the feature', await p.evaluate(() => location.hash === '#journal'));
-    await p.evaluate(() => TTNav.go('help')); await p.click('[data-hact=tour]'); await p.waitForSelector('.tour-pop'); ok(T + 'tour starts on Import Trades', /Import trades/.test(await p.innerText('.tour-pop')) && !!(await p.$('.tour-hl')));
-    for (let i = 0; i < 8 && await p.$('#tourNext'); i++) await p.click('#tourNext'); ok(T + 'tour finishes and cleans up', !(await p.$('.tour-pop')) && !(await p.$('.tour-hl')));
-    // feedback: nothing personal, prefilled issue link
-    await p.evaluate(async () => { await TTDB.put('trades', { id: 'secret1', date: '2026-10-21', contract: 'MNQ', side: 'long', contracts: 1, entry: 100, exits: [], accountId: 'acct-default', notes: 'MY SECRET NOTE', createdAt: Date.now() }); });
-    await p.evaluate(() => TTNav.go('feedback')); await p.waitForSelector('#fbTitle'); await p.click('[data-fb=preview]'); ok(T + 'feedback validation message', /short summary/.test(await p.innerText('#fbOut')));
-    await p.fill('#fbTitle', 'Import button'); await p.fill('#fbBody', 'It did something unexpected on my phone'); await p.click('[data-fb=preview]'); await p.waitForSelector('#fbText');
-    const fb = await p.inputValue('#fbText'); ok(T + 'feedback has app details but no trade data', /Version: 2\./.test(fb) && /1 trades/.test(fb) && !/SECRET/.test(fb) && !/acct-default/.test(fb), fb);
-    ok(T + 'GitHub issue link prefilled', /issues\/new\?title=%5BBug%5D%20Import%20button&body=/.test(await p.getAttribute('#fbGh', 'href')));
-    // diagnostics
-    await p.evaluate(() => TTNav.go('health')); await p.waitForSelector('#diagRoot h2');
-    t = await p.innerText('#diagRoot'); ok(T + 'diagnostics: version, offline support, last backup, storage note, repair', /App version\s*2\./.test(t) && /Offline support/.test(t) && /Last backup/.test(t) && /does not sync/.test(t) && /REPAIR APP FILES/i.test(t), t);
-    // backup reminder (we added a trade and never backed up)
-    await p.evaluate(() => TTNav.go('home')); await p.waitForSelector('#backupNag'); ok(T + 'backup reminder shows when trades exist and no backup', /not downloaded a backup/.test(await p.innerText('#backupNag')));
-    await p.click('#backupNag [data-hact=backup-snooze]'); ok(T + 'backup reminder can be snoozed', !(await p.$('#backupNag')));
-    ok(T + 'no horizontal scroll (help/install/feedback)', await p.evaluate(async () => { for (const v of ['help', 'install', 'feedback', 'settings']) { TTNav.go(v); await new Promise(r => setTimeout(r, 60)); if (document.documentElement.scrollWidth > innerWidth + 1) return v; } return true; }) === true);
-    ok(T + 'every visible button has a name', await p.evaluate(() => Array.from(document.querySelectorAll('button')).filter(b => b.offsetParent).every(b => (b.innerText || b.getAttribute('aria-label') || '').trim())));
-    await p.screenshot({ path: path.join(OUT, 'shots', 'x1-' + theme + '-' + width + '.png') });
-    ok(T + 'no page errors', !errors.length, errors);
-    await ctx.close();
+    await p.addInitScript((th) => { try { if (th === 'light' && !localStorage.getItem('tt.theme')) localStorage.setItem('tt.theme', 'light'); } catch (e) {} }, theme);
+    await p.goto(URL); await p.waitForSelector('.xo .xcard');
+    // ---- welcome
+    ok(T + 'first visit shows welcome dialog', (await p.getAttribute('.xcard', 'role')) === 'dialog' && /Tamhas Trading/.test(await p.innerText('.xcard')) && /No account needed/.test(await p.innerText('.xcard')));
+    ok(T + 'name field focused', await p.evaluate(() => document.activeElement && document.activeElement.id === 'obName'));
+    await p.screenshot({ path: path.join(out, 'X-welcome-' + theme + '.png') });
+    // focus trap: tab many times, focus never leaves the dialog
+    let trapped = true; for (let i = 0; i < 6; i++) { await p.keyboard.press('Tab'); if (!(await p.evaluate(() => !!document.activeElement.closest('.xcard')))) trapped = false; } ok(T + 'focus stays inside the welcome dialog', trapped);
+    await p.fill('#obName', '<i onclick=1>Alex</i>'); await p.keyboard.press('Enter'); await p.waitForSelector('.xlist');
+    ok(T + 'intro step explains what it does', /What you can do here/.test(await p.innerText('.xcard')) && /stays on your device|on your device/.test(await p.innerText('.xcard')));
+    await p.click('#obNext'); await p.waitForSelector('[data-pick]'); await p.click('[data-pick=risk]'); await p.click('[data-pick=prop]'); ok(T + 'interests toggle with aria-pressed', (await p.getAttribute('[data-pick=risk]', 'aria-pressed')) === 'true');
+    await p.click('#obNext'); await p.waitForSelector('#obTour'); ok(T + 'last step offers tour or explore, greets by name', /1-minute tour/.test(await p.innerText('.xcard')) && /ALEX/i.test(await p.innerText('.xcard')));
+    await p.click('#obTour'); await p.waitForSelector('.coach');
+    let pr = await prof(p); ok(T + 'profile saved locally: sanitized name, interests, onboarded', pr && pr.onboarded === true && !/[<>]/.test(pr.name) && /Alex/.test(pr.name) && pr.interests.join() === 'risk,prop', pr);
+    ok(T + 'name stored as plain text', pr.name === 'Alex', pr.name);
+    // ---- tour
+    ok(T + 'tour step 1 on dashboard', /STEP 1 OF 6/.test(await p.innerText('.coach')) && (await view(p)) === 'view-home');
+    await p.click('#tNext'); ok(T + 'tour step 2 opens the calculator and highlights nav', (await view(p)) === 'view-calc' && (await p.evaluate(() => !!document.querySelector('.nav [data-view=calc].tour-ring'))));
+    await p.click('#tNext'); await p.click('#tBack'); ok(T + 'tour back works', /STEP 2/.test(await p.innerText('.coach')));
+    await p.click('#tSkip'); ok(T + 'skip closes the tour and remembers it', (await p.$('.coach')) === null && (await prof(p)).tourSeen === true);
+    await p.evaluate(() => TTNav.go('home')); await p.waitForTimeout(200);
+    ok(T + 'dashboard greets by name (first visit wording)', /^Welcome, Alex!$/.test(await p.innerText('#displayName')), await p.innerText('#displayName'));
+    await p.reload(); await p.waitForSelector('#homeWidgets'); await p.waitForTimeout(500);
+    ok(T + 'no welcome again; "Welcome back, Alex!"', (await p.$('.xo')) === null && /^Welcome back, Alex!$/.test(await p.innerText('#displayName')), await p.innerText('#displayName'));
+    // ---- real data only
+    let dash = await p.innerText('#homeWidgets'); ok(T + 'empty dashboard invents nothing: no P&L number, empty states', /No closed trades this week yet/.test(dash) && /No trades yet/.test(dash) && !/\$\d/.test(await p.innerText('[data-widget=week]')));
+    await seed(p, [{ id: 'a', exits: [{ qty: 1, price: 110 }] }, { id: 'b', exits: [{ qty: 1, price: 95 }] }, { id: 'c' }]); await p.evaluate(() => { TTNav.go('journal'); TTNav.go('home'); }); await p.waitForTimeout(400);
+    dash = await p.innerText('[data-widget=week]'); ok(T + 'week widget shows real figures (2 closed, $0.00 net of +$200 and -$100? gross +$100)', /CLOSED\s*2/i.test(dash) && /\+\$100\.00/.test(dash) && /50%/.test(dash), dash);
+    ok(T + 'recent trades lists 3 incl. open', (await p.$$eval('[data-widget=recentTrades] li', l => l.length)) === 3 && /Open/.test(await p.innerText('[data-widget=recentTrades]')));
+    ok(T + 'today widget counts 3 trades', /TRADES\s*3/i.test(await p.innerText('[data-widget=today]')));
+    // focus note
+    await p.fill('#focusIn', 'Only A setups'); await p.dispatchEvent('#focusIn', 'change'); pr = await prof(p); ok(T + "today's focus saved with today's date", pr.goalNote === 'Only A setups' && /^\d{4}-\d\d-\d\d$/.test(pr.goalDate));
+    // quick risk
+    await p.selectOption('#qrInst', 'NQ'); await p.fill('#qrStop', '10'); await p.fill('#qrRisk', '500'); let qr = await p.innerText('#qrOut'); ok(T + 'quick risk: NQ 10pt, $500 -> 2 contracts, $400', /2 contracts/.test(qr) && /\$400\.00/.test(qr) && /\$200\.00 per contract/.test(qr), qr);
+    await p.fill('#qrRisk', '100'); ok(T + 'quick risk explains when nothing fits', /No contracts fit/.test(await p.innerText('#qrOut'))); await p.fill('#qrRisk', '500'); await p.fill('#qrStop', 'abc'); ok(T + 'quick risk bad input message', /plain numbers/.test(await p.innerText('#qrOut'))); await p.fill('#qrStop', '10');
+    await p.click('[data-copy]'); ok(T + 'copy result puts text on the clipboard', (await p.evaluate(() => navigator.clipboard.readText())) === '2 NQ · stop 10 pts · risk $400.00', await p.evaluate(() => navigator.clipboard.readText()));
+    pr = await prof(p); ok(T + 'quick risk remembers last settings', pr.recentCalc && pr.recentCalc.inst === 'NQ' && pr.recentCalc.stop === '10' && pr.recentCalc.risk === '500');
+    await p.screenshot({ path: path.join(out, 'X-home-' + theme + '.png'), fullPage: true });
+    // ---- search
+    await p.keyboard.press('Control+k'); await p.waitForSelector('.xs'); ok(T + 'Ctrl+K opens search with suggestions', (await p.$$('.xs li')).length >= 5 && (await p.getAttribute('#xsIn', 'role')) === 'combobox' && await p.evaluate(() => document.activeElement.id === 'xsIn'));
+    await p.keyboard.type('risk'); ok(T + 'search "risk" ranks calculator or risk center first', /Risk (calculator|center)/.test(await p.innerText('.xs li[aria-selected=true]')));
+    await p.keyboard.press('ArrowDown'); const sel2 = await p.innerText('.xs li[aria-selected=true]'); ok(T + 'arrow moves selection', /Risk (calculator|center)/.test(sel2));
+    await p.keyboard.press('Enter'); await p.waitForTimeout(150); ok(T + 'Enter opens it and closes search', ['view-calc', 'view-risk'].includes(await view(p)) && (await p.$('.xs')) === null);
+    await p.keyboard.press('Control+k'); await p.keyboard.type('change name'); await p.keyboard.press('Enter'); await p.waitForTimeout(300); ok(T + '"change name" goes to Settings and focuses the name box', (await view(p)) === 'view-settings' && await p.evaluate(() => document.activeElement.id === 'nameInput'));
+    await p.keyboard.press('Control+k'); await p.keyboard.type('qqqzzz'); ok(T + 'no match explains instead of blank', /Nothing matches/.test(await p.innerText('.xs')));
+    await p.keyboard.press('Escape'); ok(T + 'Esc closes search', (await p.$('.xs')) === null);
+    await p.evaluate(() => { TTNav.go('home'); document.activeElement.blur(); }); await p.keyboard.press('/'); await p.waitForSelector('.xs'); await p.keyboard.press('Escape'); ok(T + '"/" opens search when not typing', true);
+    await p.click('#searchBtn'); await p.waitForSelector('.xs'); await p.keyboard.type('backtest'); await p.keyboard.press('Enter'); await p.waitForTimeout(200); ok(T + 'search button + "backtest" -> Strategy lab', (await view(p)) === 'view-strategy');
+    await p.keyboard.press('Control+k'); await p.keyboard.type('new trade'); await p.keyboard.press('Enter'); await p.waitForTimeout(500); await p.waitForSelector('#view-journal #f-entry, #view-journal [id^=f-]', { timeout: 4000 }).catch(() => {}); ok(T + '"new trade" action opens the trade form', (await view(p)) === 'view-journal' && (await p.$$('#view-journal [id^=f-]')).length > 3);
+    await p.keyboard.press('Escape'); await p.evaluate(() => TTNav.go('home'));
+    // ---- hub, favorites, back bar
+    await p.evaluate(() => TTNav.go('more')); await p.waitForSelector('.cat-h'); const hub = await p.innerText('#hubRoot'); ok(T + 'More hub grouped with search entry', /Search everything/.test(hub) && /TRADE/i.test(hub) && /REVIEW AND IMPROVE/i.test(hub) && /MONEY/i.test(hub));
+    ok(T + 'every tool still reachable from More', await p.evaluate(() => ['analytics', 'risk', 'discipline', 'strategy', 'insights', 'health', 'import', 'money', 'intel', 'settings', 'help'].every(id => document.querySelector('#hubRoot [data-go=' + id + ']'))));
+    await p.click('#hubRoot [data-fav=analytics]'); await p.waitForFunction(() => /Pinned Analytics/.test(document.querySelector('.ui-toast').innerText)); ok(T + 'star pins with a toast and UNDO', /UNDO/.test(await p.innerText('.ui-toast')) && (await prof(p)).favorites.join() === 'analytics');
+    await p.click('.ui-toast-act'); ok(T + 'UNDO unpins', (await prof(p)).favorites.length === 0); await p.click('#hubRoot [data-fav=analytics]'); await p.click('#hubRoot [data-fav=strategy]');
+    await p.evaluate(() => TTNav.go('home')); await p.waitForTimeout(300); ok(T + 'favorites show on dashboard', await p.evaluate(() => ['analytics', 'strategy'].every(id => document.querySelector('[data-widget=favorites] [data-go=' + id + ']'))));
+    await p.evaluate(() => TTNav.go('risk')); ok(T + 'every tool screen has Dashboard back link + pin', await p.evaluate(() => !!document.querySelector('#view-risk .backbar [data-go=home]') && !!document.querySelector('#view-risk .starbtn')));
+    await p.click('#view-risk .starbtn'); ok(T + 'pin from screen header', (await prof(p)).favorites.includes('risk') && (await p.getAttribute('#view-risk .starbtn', 'aria-pressed')) === 'true'); await p.click('#view-risk .backbar [data-go=home]'); ok(T + 'Back to Dashboard', (await view(p)) === 'view-home');
+    // limit of 8
+    await p.evaluate(() => { const P = TTExperience.prefs(); }); for (const id of ['journal', 'import', 'insights', 'discipline', 'accounts', 'money']) { await p.evaluate(i => TTNav.go('more'), id); await p.click('#hubRoot [data-fav=' + id + ']'); } await p.evaluate(() => TTNav.go('more')); await p.click('#hubRoot [data-fav=intel]'); ok(T + '9th pin refused with message', (await prof(p)).favorites.length === 8 && /up to 8/.test(await p.innerText('.ui-toast')));
+    // recents + continue
+    await p.evaluate(() => { TTNav.go('analytics'); TTNav.go('health'); TTNav.go('home'); }); await p.waitForTimeout(300); ok(T + 'recents newest first', (await prof(p)).recents.slice(0, 2).join() === 'health,analytics', (await prof(p)).recents); ok(T + 'continue where you left off -> Health', /System health/.test(await p.innerText('[data-widget=continue]'))); ok(T + 'recently used chips shown', /SYSTEM HEALTH/i.test(await p.innerText('[data-widget=recents]')));
+    // ---- customize
+    await p.click('#customizeBtn'); await p.waitForSelector('#customPanel:not([hidden])'); ok(T + 'customize lists all sections', (await p.$$('[data-wvis]')).length === 13);
+    await p.uncheck('[data-wvis=week]'); await p.click('[data-wmove=favorites][data-d="-1"]'); ok(T + 'hidden section disappears from dashboard', await p.evaluate(() => document.querySelector('[data-widget=week]').hidden === true));
+    pr = await prof(p); ok(T + 'layout saved (week hidden, favorites moved up)', pr.widgets.find(w => w.id === 'week').visible === false && pr.widgets.findIndex(w => w.id === 'favorites') < 4, pr.widgets.map(w => w.id + (w.visible ? '' : '-')).join());
+    await p.click('[data-xact=reset-layout]'); ok(T + 'reset to default restores', (await prof(p)).widgets.every(w => w.visible)); await p.click('.ui-toast-act'); ok(T + 'UNDO brings my layout back', (await prof(p)).widgets.find(w => w.id === 'week').visible === false);
+    await p.click('#customPanel [data-xact=customize]'); ok(T + 'DONE closes panel', await p.evaluate(() => document.getElementById('customPanel').hidden)); await p.reload(); await p.waitForSelector('#homeWidgets'); await p.waitForTimeout(400); ok(T + 'layout survives reload', await p.evaluate(() => document.querySelector('[data-widget=week]').hidden === true));
+    // ---- settings
+    await p.evaluate(() => TTNav.go('settings')); await p.waitForSelector('#personalizePanel .chip'); ok(T + 'settings has Personalize panel with local-only note', /on this device only/i.test(await p.innerText('#personalizePanel')) && /No account/.test(await p.innerText('#personalizePanel')));
+    ok(T + 'name box prefilled', (await p.inputValue('#nameInput')) === (await prof(p)).name); await p.fill('#nameInput', 'Sam'); await p.click('#saveName'); await p.evaluate(() => TTNav.go('home')); ok(T + 'rename updates greeting', /Sam!$/.test(await p.innerText('#displayName')));
+    await p.evaluate(() => TTNav.go('settings')); await p.click('[data-dens=compact]'); ok(T + 'compact mode applied + remembered', (await p.getAttribute('html', 'data-density')) === 'compact' && (await prof(p)).density === 'compact'); await p.reload(); ok(T + 'compact survives reload before paint', (await p.getAttribute('html', 'data-density')) === 'compact');
+    await p.evaluate(() => TTNav.go('settings')); await p.click('[data-dens=comfortable]'); await p.selectOption('#startSel', 'journal'); await p.goto(URL); await p.waitForTimeout(700); ok(T + 'start page respected', (await view(p)) === 'view-journal', await view(p));
+    await p.goto(URL + '#analytics'); await p.waitForTimeout(500); ok(T + 'deep link beats start page', (await view(p)) === 'view-analytics');
+    await p.evaluate(() => TTNav.go('settings')); await p.selectOption('#startSel', 'home');
+    await p.click('[data-int=news]'); ok(T + 'interests editable in settings', (await prof(p)).interests.includes('news'));
+    const beforeReset = await prof(p); await p.click('[data-xact=reset-all]'); await p.click('[data-r=ok]'); await until(p, () => JSON.parse(localStorage.getItem('tt.profile.v1')).name === ''); ok(T + 'reset clears name/favorites but keeps onboarded', (await prof(p)).favorites.length === 0 && (await prof(p)).onboarded === true); await p.click('.ui-toast-act'); await until(p, () => JSON.parse(localStorage.getItem('tt.profile.v1')).name !== ''); ok(T + 'UNDO restores personalization', (await prof(p)).name === beforeReset.name && (await prof(p)).favorites.length === 8);
+    ok(T + 'trades untouched by all personalization', (await p.evaluate(() => TTDB.count('trades'))) === 3);
+    // mirrored for backup
+    await p.waitForTimeout(700); ok(T + 'profile mirrored into the database (backups)', (await p.evaluate(() => TTStore.getPref('profile', null))) && (await p.evaluate(() => TTStore.getPref('profile', null))).name === (await prof(p)).name);
+    // ---- help
+    await p.evaluate(() => TTNav.go('help')); await p.waitForSelector('.gl details'); ok(T + 'help: glossary, shortcuts, what is new', (await p.$$('.gl details')).length >= 10 && /Ctrl/.test(await p.innerText('#hpKeys')) && /A more personal dashboard/.test(await p.innerText('#hpNew')));
+    await p.click('.gl summary >> nth=0'); ok(T + 'glossary entry opens', await p.evaluate(() => document.querySelector('.gl details').open)); await p.screenshot({ path: path.join(out, 'X-help-' + theme + '.png'), fullPage: false });
+    await p.waitForTimeout(1800); ok(T + 'opening help marks what\'s new as seen', (await prof(p)).whatsNewSeen === REGV.LATEST);
+    // ---- keyboard shortcuts
+    await p.evaluate(() => { TTNav.go('home'); document.activeElement.blur(); }); await p.keyboard.press('g'); await p.keyboard.press('j'); ok(T + 'g then j -> journal', (await view(p)) === 'view-journal'); await p.keyboard.press('g'); await p.keyboard.press('h'); ok(T + 'g then h -> dashboard', (await view(p)) === 'view-home'); await p.keyboard.press('?'); ok(T + '? -> help', (await view(p)) === 'view-help');
+    await p.evaluate(() => TTNav.go('settings')); await p.focus('#nameInput'); await p.keyboard.type('gj'); ok(T + 'shortcuts ignored while typing', (await view(p)) === 'view-settings');
+    // ---- calculator niceties
+    await p.evaluate(() => TTNav.go('calc')); await p.fill('#stop', '20'); await p.fill('#minRisk', '30'); await p.fill('#maxRisk', '35'); await p.waitForTimeout(100); await p.click('#calcCopy'); ok(T + 'calculator copy button copies the result', /stop 20 pts/.test(await p.evaluate(() => navigator.clipboard.readText())), await p.evaluate(() => navigator.clipboard.readText()));
+    await p.reload(); await p.waitForTimeout(300); await p.evaluate(() => TTNav.go('calc')); ok(T + 'calculator remembers last inputs', (await p.inputValue('#stop')) === '20' && (await p.inputValue('#maxRisk')) === '35');
+    await p.click('#calcReset'); ok(T + 'clear inputs', (await p.inputValue('#stop')) === ''); await p.click('.ui-toast-act'); ok(T + 'clear can be undone', (await p.inputValue('#stop')) === '20'); ok(T + 'calculator help hints exist', (await p.$$('#view-calc [data-tip]')).length === 3);
+    ok(T + 'no horizontal overflow', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)); ok(T + 'skip link exists and targets main', await p.evaluate(() => document.querySelector('.skip-link').getAttribute('href') === '#main' && !!document.getElementById('main')));
+    ok(T + 'no js errors', errors.length === 0, errors); await ctx.close();
   }
-  // ---- slow start: database never answers -> startup screen still goes away, no infinite loader
-  {
-    const ctx = await browser.newContext(); await ctx.addInitScript(() => { const o = indexedDB.open.bind(indexedDB); indexedDB.open = function () { return { set onsuccess(f) {}, set onerror(f) {}, set onupgradeneeded(f) {}, set onblocked(f) {}, addEventListener() {} }; }; });
-    const p = await ctx.newPage(); await p.goto(URL); const gone = await until(p, () => !document.getElementById('splash'), null, 7000);
-    ok('stuck database: startup screen still removed (failsafe)', gone); await ctx.close();
-  }
-  // ---- reduced motion from the operating system
-  {
-    const ctx = await browser.newContext({ reducedMotion: 'reduce' }); const p = await ctx.newPage(); await p.goto(URL); await p.evaluate(() => TTDB.ready());
-    ok('OS reduced motion: no long animations', await p.evaluate(() => { const v = document.querySelector('.view.active'); const d = parseFloat(getComputedStyle(v).animationDuration) || 0; return d <= 0.01; }));
-    await ctx.close();
-  }
-  // ---- offline start after first visit (service worker) and update safety
-  {
-    const ctx = await browser.newContext(); const p = await ctx.newPage(); await p.goto(URL);
-    await until(p, async () => { const r = await navigator.serviceWorker.getRegistration(); return !!(r && r.active); }, null, 10000);
-    await p.reload(); await until(p, () => !!navigator.serviceWorker.controller, null, 5000);
-    const ver = await p.evaluate(() => new Promise(res => { navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'version') res(e.data); }); navigator.serviceWorker.controller.postMessage({ type: 'version' }); setTimeout(() => res(null), 3000); }));
-    ok('service worker reports the app version and versioned cache', ver && ver.version === (await p.evaluate(() => TT_VERSION)) && ver.cache === 'tt-app-' + ver.version, ver);
-    ok('new modules are precached', await p.evaluate(async () => { const c = await caches.open('tt-app-' + TT_VERSION); return !!(await c.match('assets/tradovate-core.js')) && !!(await c.match('assets/help.js')) && !!(await c.match('assets/version.js')); }));
-    await ctx.setOffline(true); await p.reload(); await p.evaluate(() => TTDB.ready());
-    ok('offline: app starts from cache', await p.evaluate(() => typeof TTTradovate === 'object' && typeof TTHelp === 'object'));
-    ok('offline: connection chip says offline', /OFFLINE/.test(await p.innerText('#netChip')));
-    await p.evaluate(() => TTNav.go('import')); await p.waitForSelector('#im-drop'); ok('offline: import screen works', true);
-    await ctx.setOffline(false);
-    // simulate an older version having been used: the update toast appears once and data stays
-    await p.evaluate(() => localStorage.setItem('tt.version', '1.0.0')); await p.reload(); await until(p, () => /Updated to version/.test(document.body.innerText), null, 4000);
-    ok('after an update the user is told and data is kept', /Updated to version/.test(await p.innerText('body')));
-    ok('version is recorded after update', await p.evaluate(() => localStorage.getItem('tt.version') === TT_VERSION));
-    await ctx.close();
-  }
-  await browser.close();
-  console.log((fail ? 'FAILED ' + fail + ' / passed ' + pass : 'ALL PASSED ' + pass)); process.exit(fail ? 1 : 0);
-})().catch(e => { console.log('FAIL crashed', e.message); process.exit(1); });
+  // ---- escape = skip, existing user, desktop
+  { const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const p = await ctx.newPage(); const errors = []; p.on('pageerror', e => errors.push(e.message)); await p.goto(URL); await p.waitForSelector('.xo .xcard'); await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+    ok('Esc skips welcome, marks onboarded, no name -> "Welcome!"', (await p.$('.xo')) === null && (await prof(p)).onboarded === true && /^Welcome!$/.test(await p.innerText('#displayName')));
+    await p.evaluate(() => TTNav.go('more')); await p.waitForSelector('.cat-h'); await p.screenshot({ path: path.join(out, 'X-more-desktop.png') }); await p.evaluate(() => TTNav.go('home')); await p.waitForTimeout(300); await p.screenshot({ path: path.join(out, 'X-home-desktop.png'), fullPage: true });
+    ok('desktop: no overflow', await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)); ok('desktop: no errors', errors.length === 0, errors); await ctx.close(); }
+  { const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const p = await ctx.newPage(); await p.goto(URL); await p.evaluate(() => TTDB.ready()); await seed(p, [{ id: 'q', exits: [{ qty: 1, price: 105 }] }]); await p.evaluate(() => localStorage.removeItem('tt.profile.v1')); await p.reload(); await p.waitForTimeout(900);
+    ok('existing user with trades: no welcome modal, tour offered by toast', (await p.$('.xo')) === null && /1-minute tour/.test(await p.innerText('.ui-toast')) && (await prof(p)).onboarded === true); await ctx.close(); }
+  { const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); const p = await ctx.newPage(); await p.addInitScript(() => { try { localStorage.setItem('tt.settings.v1', JSON.stringify({ displayName: 'Jordan' })); } catch (e) {} }); await p.goto(URL); await p.waitForTimeout(900);
+    ok('existing saved name is kept and used', (await p.$('.xo')) === null && /Jordan/.test(await p.innerText('#displayName'))); await ctx.close(); }
+  await browser.close(); console.log(`x1e2e: ${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0);
+})();

@@ -1,4 +1,4 @@
-const { chromium, devices } = require('playwright');
+const { chromium, devices } = require('./_pw');
 const until=async(pg,fn,ms=8000)=>{const t=Date.now(); while(Date.now()-t<ms){ if(await pg.evaluate(fn)) return true; await pg.waitForTimeout(30);} return false;};
 const fs=require('fs'); const S=(function(){var d=require('path').join(__dirname,'out');require('fs').mkdirSync(require('path').join(d,'shots'),{recursive:true});return d+'/';})();
 const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html');
@@ -194,7 +194,7 @@ const txt=async(page,sel)=>((await page.locator(sel).first().innerText())||'').r
   ok('sessions: each shows OPEN/CLOSED + countdown', (await page.locator('.session .s-count').allInnerTexts()).every(t=>/(Opens|Closes) in/.test(t)));
   await page.evaluate(()=>TTNav.go('intel')); ok('intel: calendar events render', await page.locator('#intelList .ev').count()>3);
   await page.evaluate(()=>TTNav.go('settings')); await page.fill('#nameInput','Tamhas'); await page.click('#saveName'); await page.click('.nav button[data-view=home]');
-  ok('settings: display name applied', (await txt(page,'#displayName'))==='TAMHAS');
+  ok('settings: display name applied (greeting uses it)', /^Welcome(?: back)?, Tamhas!$/i.test(await txt(page,'#displayName')), await txt(page,'#displayName'));
   ok('NO console/page errors on desktop run', errors.length===0, errors.join('\n     '));
   await ctx.close();
 

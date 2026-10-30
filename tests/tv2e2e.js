@@ -1,6 +1,6 @@
 // Tradovate Smart Import - full user journeys in a real browser (Chromium), phone and desktop widths, dark and light themes.
 // All report files are SYNTHETIC (tests/fixtures). The screenshot is a synthetic Orders-style table rendered by the test itself.
-const { chromium } = require('playwright'); const fs = require('fs'), path = require('path');
+const { chromium } = require('./_pw'); const fs = require('fs'), path = require('path');
 const OUT = path.join(__dirname, 'out'); fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true }); const FX = path.join(__dirname, 'fixtures') + '/';
 const URL = (process.env.TT_BASE || 'http://127.0.0.1:8765') + '/index.html';
 let fail = 0, pass = 0; const ok = (n, c, d) => { if (c) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : JSON.stringify(d).slice(0, 400)); } };

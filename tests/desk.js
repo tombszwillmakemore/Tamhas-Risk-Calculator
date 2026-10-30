@@ -1,5 +1,5 @@
 /* Desktop-width layout check: opens every screen at 1280x800 and 768x1024, fails on horizontal overflow or JS errors; saves screenshots to tests/out/shots. */
-const { chromium } = require('playwright'); const path=require('path'), fs=require('fs'); const out=path.join(__dirname,'out','shots'); fs.mkdirSync(out,{recursive:true});
+const { chromium } = require('./_pw'); const path=require('path'), fs=require('fs'); const out=path.join(__dirname,'out','shots'); fs.mkdirSync(out,{recursive:true});
 const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html'); let fail=0,pass=0; const ok=(n,c,d)=>{ if(c) pass++; else { fail++; console.log('FAIL',n,d===undefined?'':JSON.stringify(d)); } };
 (async()=>{ const b=await chromium.launch();
  for (const [w,h] of [[1280,800],[768,1024],[360,740]]) { const ctx=await b.newContext({viewport:{width:w,height:h}}); const p=await ctx.newPage(); const errs=[]; p.on('pageerror',e=>errs.push(e.message)); await p.goto(URL); await p.evaluate(()=>TTDB.ready());

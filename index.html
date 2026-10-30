@@ -37,6 +37,8 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
 <link rel="stylesheet" href="assets/tracker.css">
 <link rel="stylesheet" href="assets/ui.css">
 <link rel="stylesheet" href="assets/money.css">
+<link rel="stylesheet" href="assets/experience.css">
+<link rel="stylesheet" href="assets/copilot.css">
 </head>
 <body>
 <div id="splash" role="status" aria-label="TRC is loading">
@@ -51,6 +53,7 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
     <div class="sp-bar"><i></i></div>
   </div>
 </div>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="app">
 
   <nav class="nav" aria-label="Main navigation">
@@ -61,7 +64,7 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
     <button data-view="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
   </nav>
 
-  <main class="main">
+  <main class="main" id="main" tabindex="-1">
     <header class="topbar">
       <div class="brand">
         <!-- Original Tamhas mark: hex frame, T, rising signal line -->
@@ -73,7 +76,7 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
         </svg>
         <div class="brand-name">TAMHAS<span>TRADING</span></div>
       </div>
-      <div class="topbar-r"><button type="button" class="iconbtn" id="searchBtn" aria-label="Search features and help (press /)" title="Search (/)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button><div class="status-chip" id="netChip"><i></i>LOCAL MODE</div></div>
+      <div class="topbar-r"><button type="button" class="iconbtn" id="searchBtn" aria-label="Search tools and settings (Ctrl or Cmd + K)" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button><div class="status-chip" id="netChip"><i></i>LOCAL MODE</div></div>
     </header>
 
     <!-- HOME -->
@@ -88,25 +91,23 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
       <button type="button" class="btn wide big import-cta" data-go="import" id="homeImport"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>IMPORT TRADES</button>
       <p class="note" style="margin:-6px 0 14px;text-align:center">Drop a Tradovate report or screenshot and your journal fills itself in.</p>
 
-      <div class="panel">
+      <div id="homeWidgets">
+      <div class="panel" data-widget="pnl">
         <h2>Today's P&amp;L</h2>
         <div class="pnl-value none" id="pnlValue">—</div>
         <p class="note" id="pnlNote"></p>
       </div>
-
-      <div class="panel">
+      <div class="panel" data-widget="sessions">
         <h2>Market sessions</h2>
         <div class="yourtime"><span>YOUR TIME</span><b id="localClock">--:--:--</b></div>
         <div id="sessionList"></div>
         <p class="note">Windows are approximate and editable in Settings. Futures trade nearly around the clock, so these mark typical regional activity, not exchange hours.</p>
       </div>
-
-      <div class="panel">
+      <div class="panel" data-widget="next">
         <h2>Next event</h2>
         <button class="tile nxtile" data-go="intel" type="button"><div id="homeNext" class="nx"></div></button>
       </div>
-
-      <div class="panel">
+      <div class="panel" data-widget="tools">
         <h2>Quick access</h2>
         <div class="grid2">
           <button class="tile" data-go="calc"><b>Risk Calculator</b><span>Contract size within your risk range</span></button>
@@ -116,7 +117,7 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
           <button class="tile" data-go="settings"><b>Settings</b><span>Display name &amp; sessions</span></button>
         </div>
       </div>
-
+      </div>
     </section>
 
     <!-- RISK CALCULATOR (logic unchanged) -->
@@ -181,13 +182,13 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
     </section>
     <section class="view" id="view-journal">
       <div class="welcome" style="padding-bottom:12px"><small>TRADE</small><h1 style="font-size:26px">Journal</h1></div>
-      <div id="jRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="jRoot"><p class="note">Loading journal…</p></div>
     </section>
 
     <!-- SETTINGS -->
     <section class="view" id="view-accounts">
       <div class="welcome" style="padding-bottom:12px"><small>FUNDING</small><h1 style="font-size:26px">Accounts</h1></div>
-      <div id="aRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="aRoot"><p class="note">Loading accounts…</p></div>
     </section>
 
     <!-- MORE hub -->
@@ -198,43 +199,43 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
 
     <section class="view" id="view-import">
       <div class="welcome" style="padding-bottom:12px"><small>DATA</small><h1 style="font-size:26px">Import trades</h1></div>
-      <div id="iRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="iRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-analytics">
       <div class="welcome" style="padding-bottom:12px"><small>PERFORMANCE</small><h1 style="font-size:26px">Analytics</h1></div>
-      <div id="anRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="anRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-risk">
       <div class="welcome" style="padding-bottom:12px"><small>PROTECTION</small><h1 style="font-size:26px">Risk center</h1></div>
-      <div id="rkRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="rkRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-discipline">
       <div class="welcome" style="padding-bottom:12px"><small>PROCESS</small><h1 style="font-size:26px">Discipline</h1></div>
-      <div id="dsRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="dsRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-strategy">
       <div class="welcome" style="padding-bottom:12px"><small>LAB</small><h1 style="font-size:26px">Strategy lab</h1></div>
-      <div id="stRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="stRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-insights">
       <div class="welcome" style="padding-bottom:12px"><small>OBSERVATIONS</small><h1 style="font-size:26px">Insights</h1></div>
-      <div id="inRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="inRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-health">
       <div class="welcome" style="padding-bottom:12px"><small>YOUR DATA</small><h1 style="font-size:26px">System health</h1></div>
-      <div id="hlRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
+      <div id="hlRoot"><p class="note ui-loading" role="status">Loading…</p></div>
       <div id="diagRoot"></div>
     </section>
 
     <section class="view" id="view-help">
-      <div class="welcome" style="padding-bottom:12px"><small>SUPPORT</small><h1 style="font-size:26px">Help</h1></div>
-      <div id="helpRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
+      <div class="welcome" style="padding-bottom:12px"><small>LEARN</small><h1 style="font-size:26px">Help and glossary</h1></div>
+      <div id="hpRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-install">
@@ -242,14 +243,9 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
       <div id="installRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
     </section>
 
-    <section class="view" id="view-feedback">
-      <div class="welcome" style="padding-bottom:12px"><small>SUPPORT</small><h1 style="font-size:26px">Feedback</h1></div>
-      <div id="feedbackRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
-    </section>
-
     <section class="view" id="view-money">
       <div class="welcome" style="padding-bottom:12px"><small>FINANCES</small><h1 style="font-size:26px">Money</h1></div>
-      <div id="mRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div><span class="vh">Loading…</span></div>
+      <div id="mRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-settings">
@@ -291,16 +287,6 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
         </div>
         <p class="note" style="margin-top:0">The startup screen only appears while the app is actually loading, never as a delay. If your device asks for reduced motion, animations are reduced automatically.</p>
       </div>
-      <div class="panel" id="voiceSettings"></div>
-      <div class="panel">
-        <h2>Help &amp; support</h2>
-        <div class="grid2">
-          <button class="tile" data-go="help"><b>Help centre</b><span>Guides, search, tour</span></button>
-          <button class="tile" data-go="install"><b>Install TRC</b><span>Add to your Home Screen</span></button>
-          <button class="tile" data-go="feedback"><b>Feedback</b><span>Report a bug or idea</span></button>
-          <button class="tile" data-go="health"><b>System health</b><span>Storage, version, repair</span></button>
-        </div>
-      </div>
       <div class="panel">
         <h2>Privacy</h2>
         <p class="note" style="margin-top:0">Everything is stored only in this browser on this device. No accounts, no passwords, and no data is sent anywhere.</p>
@@ -341,12 +327,15 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
 <script src="assets/insights-core.js"></script>
 <script src="assets/health-core.js"></script>
 <script src="assets/insights.js"></script>
+<script src="assets/registry-core.js"></script>
+<script src="assets/experience-core.js"></script>
+<script src="assets/experience.js"></script>
+<script src="assets/support.js"></script>
+<script src="assets/copilot-boot.js"></script>
 <script src="assets/analytics.js"></script>
 <script src="assets/import.js"></script>
-<script src="assets/version.js"></script>
-<script src="assets/help-data.js"></script>
-<script src="assets/help-core.js"></script>
-<script src="assets/help.js"></script>
+<script src="assets/platform-core.js"></script>
+<script src="assets/platform.js"></script>
 <script src="assets/pwa.js"></script>
 </body>
 </html>

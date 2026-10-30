@@ -141,25 +141,12 @@ figure.ch { margin: 6px 0 10px; } figure.ch svg { width: 100%; height: auto; dis
 html[data-anim=reduced] *, html[data-anim=reduced] *::before, html[data-anim=reduced] *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 @media (prefers-reduced-motion: reduce) { .ui-skel i, .ui-prog.ind i, .ui-spin { animation: none !important; } .ui-prog.ind i { width: 100%; opacity: .5; } }
 
-/* ---------- search, help, tour, banners ---------- */
-.topbar-r { display: flex; align-items: center; gap: 8px; }
-.iconbtn { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; border: 1px solid var(--line); background: var(--tile); color: var(--text); cursor: pointer; }
-.iconbtn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.iconbtn:focus-visible, .btn:focus-visible, .tile:focus-visible, .chip:focus-visible { outline: 2px solid var(--line-hot); outline-offset: 2px; }
-.iconbtn.on { border-color: var(--good); color: var(--good); }
-.srch-back { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, .55); display: flex; align-items: flex-start; justify-content: center; padding: max(12px, env(safe-area-inset-top)) 12px 12px; }
-.srch { width: 100%; max-width: 620px; margin-top: 6vh; background: var(--navy); border: 1px solid var(--line-hot); border-radius: 18px; padding: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
-[data-theme=light] .srch { background: #fff; }
-.srch-row { display: flex; gap: 8px; } .srch-row input { flex: 1; font-size: 17px; min-height: 48px; }
-.srch ul { list-style: none; margin: 10px 0 0; padding: 0; max-height: 60vh; overflow: auto; }
-.srch li button { width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: 12px; color: var(--text); padding: 10px 12px; cursor: pointer; font: inherit; }
-.srch li button b { display: block; font-size: 15px; } .srch li button span { color: var(--muted); font-size: 13px; }
-.srch li button[aria-selected=true], .srch li button:hover { border-color: var(--line-hot); background: var(--tile); }
-.srch .voice-out { margin: 10px 2px 0; font-size: 14px; }
-.tour-pop { position: fixed; z-index: 1001; max-width: 300px; background: var(--navy); border: 1px solid var(--line-hot); border-radius: 14px; padding: 14px; color: var(--text); box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
-[data-theme=light] .tour-pop { background: #fff; }
-.tour-hl { position: relative; z-index: 1000; box-shadow: 0 0 0 3px var(--good), 0 0 0 9999px rgba(0, 0, 0, .45) !important; border-radius: 12px; }
+/* ---------- install guide ---------- */
 .inst-tabs { flex-wrap: wrap; } .inst-preview { display: flex; align-items: center; gap: 12px; margin: 10px 0; } .inst-preview img { width: 60px; height: 60px; border-radius: 14px; } .inst-preview b { font-size: 13px; display: block; text-align: center; margin-top: 4px; }
-.help-art { scroll-margin-top: 80px; } .help-art h3 { margin: 0 0 4px; font-size: 15px; }
 .im-busy { display: flex; gap: 10px; align-items: center; } .im-busy > div:first-child, .im-busy .ui-prog { flex: 1; }
 .dropzone, .dropzone b, .dropzone span { text-transform: none; letter-spacing: normal; } .dropzone b { font-weight: 700; }
+/* update-ready bar (pwa.js): small, dismissible, never blocks input */
+.upd-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + 74px + env(safe-area-inset-bottom)); z-index: 59; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 99px; background: var(--glass-strong); border: 1px solid var(--line-hot); backdrop-filter: blur(12px); font-size: 13px; max-width: calc(100vw - 32px); }
+.upd-bar button { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .12em; border: 0; border-radius: 99px; padding: 8px 12px; cursor: pointer; min-height: 32px; }
+.upd-go { background: var(--cyan); color: #03050c; } .upd-x { background: transparent; color: var(--muted); font-size: 18px !important; padding: 4px 10px !important; }
+@media (min-width: 900px) { .upd-bar { bottom: 24px; left: calc(50% + var(--side-w) / 2); } }

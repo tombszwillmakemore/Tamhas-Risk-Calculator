@@ -25,11 +25,13 @@
 
   /* ---------- toast ---------- */
   var toastEl = null, toastT = null;
-  function toast(msg, isErr) {
+  // Optional third argument: {label, fn} adds an action button (used for UNDO). The toast stays longer so it can be used.
+  function toast(msg, isErr, action) {
     if (!doc) return;
     if (!toastEl) { toastEl = doc.createElement('div'); toastEl.className = 'ui-toast'; toastEl.setAttribute('role', 'status'); toastEl.setAttribute('aria-live', 'polite'); doc.body.appendChild(toastEl); }
-    toastEl.textContent = msg; toastEl.className = 'ui-toast show' + (isErr ? ' err' : '');
-    clearTimeout(toastT); toastT = setTimeout(function () { toastEl.className = 'ui-toast'; }, isErr ? 6000 : 3200);
+    toastEl.textContent = msg; toastEl.className = 'ui-toast show' + (isErr ? ' err' : '') + (action ? ' has-act' : '');
+    if (action && action.fn) { var b = doc.createElement('button'); b.type = 'button'; b.className = 'ui-toast-act'; b.textContent = action.label || 'UNDO'; b.addEventListener('click', function () { clearTimeout(toastT); toastEl.className = 'ui-toast'; try { action.fn(); } catch (e) { /* the action reports its own errors */ } }); toastEl.appendChild(b); }
+    clearTimeout(toastT); toastT = setTimeout(function () { toastEl.className = 'ui-toast'; }, action ? 8000 : isErr ? 6000 : 3200);
   }
 
   /* ---------- dialogs (replace window.confirm/prompt: focus-trapped, keyboard friendly) ---------- */

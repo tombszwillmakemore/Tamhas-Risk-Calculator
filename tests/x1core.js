@@ -1,35 +1,49 @@
-// Search, voice grammar, feedback text, backup reminder, feature registry integrity.
-const path = require('path'), fs = require('fs'), R = path.join(__dirname, '..', 'assets') + '/';
-global.TTInstruments = require(R + 'instruments.js'); global.TTHelpData = require(R + 'help-data.js'); const H = require(R + 'help-core.js'), D = global.TTHelpData;
-let pass = 0, fail = 0; const ok = (n, c, d) => { if (c) pass++; else { fail++; console.log('FAIL', n, d === undefined ? '' : JSON.stringify(d)); } }; const eq = (n, a, b) => ok(n, JSON.stringify(a) === JSON.stringify(b), { got: a, want: b });
-const top = q => (H.search(q)[0] || {}).id;
-ok('search: tradovate -> import in top 2', H.search('tradovate').slice(0, 2).some(x => x.id === 'import')); eq('search: screenshot -> import', top('screenshot'), 'import');
-eq('search: export csv -> tradovate guide', top('export tradovate report'), 'tradovate-guide'); eq('search: commission -> import settings', top('commission'), 'import-settings');
-eq('search: install iphone -> install', top('install iphone'), 'install'); eq('search: backup', top('backup'), 'backup'); eq('search: drawdown -> learn first', H.search('drawdown')[0].kind, 'learn');
-eq('search: dark mode -> settings', top('dark theme'), 'settings'); eq('search: nonsense -> nothing', H.search('zzqx').length, 0); eq('search: stop words only', H.search('show me the').length, 0);
-eq('search: prefix "anal" -> analytics', top('anal'), 'analytics');
-// voice
-eq('voice: open journal', H.parseVoice('Open journal').id, 'journal'); eq('voice: import trades', H.parseVoice('import trades').id, 'import');
-eq('voice: go to risk calculator', H.parseVoice('go to the risk calculator').id, 'calc');
-eq('voice: calc with range', H.parseVoice('risk MNQ stop 20 points risk 100 to 200'), { type: 'calc', instrument: 'MNQ', stop: 20, min: 100, max: 200 });
-eq('voice: calc spoken numbers + micro gold', H.parseVoice('calculate micro gold stop ten risk fifty to hundred'), { type: 'calc', instrument: 'MGC', stop: 10, min: 50, max: 100 });
-eq('voice: calc single risk', H.parseVoice('position size NQ stop 15 risking 300 dollars'), { type: 'calc', instrument: 'NQ', stop: 15, min: 300, max: 300 });
-eq('voice: calc swapped range', H.parseVoice('risk ES stop 4 between 400 and 200').min, 200);
-eq('voice: explain drawdown', H.parseVoice('explain drawdown').id, 'drawdown'); eq('voice: what is fomo', H.parseVoice("what's FOMO").id, 'fomo');
-eq('voice: search', H.parseVoice('search for fees'), { type: 'search', q: 'fees' }); eq('voice: stop', H.parseVoice('stop').type, 'stop');
-eq('voice: unknown', H.parseVoice('blorp the snargle').type, 'unknown'); eq('voice: empty', H.parseVoice('').type, 'unknown');
-// feedback
-const fb = H.feedbackText({ type: 'bug', title: 'Import fails', body: 'It shows an error on my file', steps: '1. drop file' }, { version: '1.2.0', ua: 'X', screen: '390x844', standalone: true, online: true, theme: 'dark', counts: '12 trades', errors: '' });
-ok('feedback has summary and steps', /Summary: Import fails/.test(fb) && /Steps to reproduce/.test(fb)); ok('feedback diag present and says no trades', /no trades, no account names/.test(fb) && /Version: 1.2.0/.test(fb));
-ok('feedback without diag has no app details', !/App details/.test(H.feedbackText({ type: 'feature', title: 't', body: 'long enough text' }, null)));
-eq('feedback validation', [H.feedbackValid({ title: '', body: 'xxxxxxxxxxxx' }), H.feedbackValid({ title: 'a', body: 'short' }), H.feedbackValid({ title: 'a', body: 'long enough body' })], ['Give it a short summary.', 'Describe it in a sentence or two.', null]);
-// backup reminder
-const now = Date.UTC(2026, 9, 30);
-eq('backup: no trades -> not due', H.backupDue({ trades: 0, now }).due, false); eq('backup: never -> due', H.backupDue({ trades: 3, now }), { due: true, reason: 'never' });
-eq('backup: 8 days old -> due', H.backupDue({ trades: 3, now, lastBackup: now - 8 * 864e5 }).days, 8); eq('backup: 2 days -> not due', H.backupDue({ trades: 3, now, lastBackup: now - 2 * 864e5 }).due, false);
-eq('backup: snoozed', H.backupDue({ trades: 3, now, snoozeUntil: now + 1 }).due, false);
-// registry integrity: every feature points to a real section, and listed tests exist
-const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-D.features.forEach(f => { ok('section exists for ' + f.id, html.indexOf('id="view-' + f.view + '"') >= 0, f.view); (f.tests || []).forEach(t => ok('test file exists ' + t + ' (' + f.id + ')', fs.existsSync(path.join(__dirname, t)))); ok('has how-to ' + f.id, f.how && f.how.length > 30); });
-eq('feature ids unique', new Set(D.features.map(f => f.id)).size, D.features.length);
-console.log((fail ? 'FAILED ' : 'ALL PASSED ') + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0);
+const X=require(require('path').join(__dirname,'..','assets','experience-core.js'));
+let f=0,p=0; const ok=(n,c,d)=>{ if(c) p++; else { f++; console.log('FAIL',n,d===undefined?'':JSON.stringify(d)); } };
+// defaults + cleaning
+const d=X.defaults(); ok('defaults not onboarded, comfortable, home',!d.onboarded&&d.density==='comfortable'&&d.startPage==='home'&&d.name==='');
+ok('widgets default: all present and visible',d.widgets.length===X.WIDGETS.length&&d.widgets.every(w=>w.visible));
+ok('daily focus keeps its date only when text exists',X.cleanPrefs({goalNote:'Stick to plan',goalDate:'2026-10-29'}).goalDate==='2026-10-29'&&X.cleanPrefs({goalNote:'',goalDate:'2026-10-29'}).goalDate===''&&X.cleanPrefs({goalNote:'x',goalDate:'bad'}).goalDate==='');
+ok('cleanPrefs(garbage) is safe',JSON.stringify(X.cleanPrefs(null))===JSON.stringify(X.cleanPrefs(undefined))&&X.cleanPrefs('x').name===''&&X.cleanPrefs([1]).density==='comfortable');
+ok('name: tags removed, control chars stripped, clipped to 24, spaces collapsed',X.cleanName('  Al<b>ex</b>\n  Smith ')==='Alex Smith'&&X.cleanName('<script>x</script>')==='x'&&!/[<>]/.test(X.cleanName('a < b > c'))&&X.cleanName('a'.repeat(50)).length===24&&X.cleanName('  Alex   B ')==='Alex B'&&X.cleanName('<img src=x onerror=1>Alex')==='Alex');
+ok('name null -> empty',X.cleanName(null)===''&&X.cleanName(undefined)==='');
+let c=X.cleanPrefs({name:'Alex',interests:['risk','zzz','risk','news'],density:'tiny',startPage:'nope',favorites:['calc','calc','home','bogus','journal'],recents:['risk','home','x'],onboarded:'yes',whatsNewSeen:-3,lastView:'zzz',lastSeen:'a'});
+ok('interests filtered and unique',c.interests.join()==='risk,news'); ok('bad density/startPage fall back',c.density==='comfortable'&&c.startPage==='home'); ok('favorites: unique, valid, no home',c.favorites.join()==='calc,journal'); ok('recents valid',c.recents.join()==='risk');
+ok('onboarded only true when boolean true',c.onboarded===false); ok('numbers sanitized',c.whatsNewSeen===0&&c.lastSeen===0&&c.lastView==='home');
+ok('startPage "last" allowed',X.cleanPrefs({startPage:'last'}).startPage==='last'&&X.cleanPrefs({startPage:'journal'}).startPage==='journal');
+ok('favorites capped at 8',X.cleanPrefs({favorites:X.CATALOG.filter(c=>c.id!=='home').map(c=>c.id)}).favorites.length===8);
+// widgets: missing ones re-added, unknown dropped, order kept
+let w=X.cleanWidgets([{id:'pnl',visible:false},{id:'bogus'},{id:'today'},{id:'pnl'}]); ok('widgets: order kept, unknown dropped, dup dropped, missing appended',w[0].id==='pnl'&&w[0].visible===false&&w[1].id==='today'&&w.length===X.WIDGETS.length&&!w.some(x=>x.id==='bogus')&&new Set(w.map(x=>x.id)).size===w.length);
+ok('widgets: nothing disappears when saved list is old/short',X.cleanWidgets([{id:'pnl',visible:true}]).length===X.WIDGETS.length);
+let mv=X.moveWidget(d.widgets,'today',-1); ok('moveWidget up swaps',mv[1].id==='today'&&mv.length===d.widgets.length); ok('moveWidget at edge no-op',X.moveWidget(d.widgets,d.widgets[0].id,-1)[0].id===d.widgets[0].id&&X.moveWidget(d.widgets,'nope',1).length===d.widgets.length);
+// recents
+let r=[]; for(const i of ['calc','journal','risk','analytics','insights','strategy','health']) r=X.pushRecent(r,i); ok('recents newest first, capped at 6',r[0]==='health'&&r.length===6&&!r.includes('calc'),r); r=X.pushRecent(r,'risk'); ok('re-opening moves to front without duplicate',r[0]==='risk'&&r.filter(x=>x==='risk').length===1&&r.length===6); ok('home and unknown never recorded',X.pushRecent(r,'home').join()===r.join()&&X.pushRecent(r,'zzz').join()===r.join());
+// favorites
+let fv=X.toggleFavorite([],'calc'); ok('favorite added',fv.added&&fv.list.join()==='calc'); fv=X.toggleFavorite(fv.list,'calc'); ok('favorite removed',fv.added===false&&fv.list.length===0);
+let full=[]; for(const i of ['calc','journal','risk','analytics','insights','strategy','health','money']) full=X.toggleFavorite(full,i).list; ok('8 favorites ok',full.length===8); const over=X.toggleFavorite(full,'accounts'); ok('9th refused with full flag, list unchanged',over.full&&over.list.length===8&&!over.changed); ok('removing when full still works',X.toggleFavorite(full,'calc').list.length===7);
+ok('cannot favorite home/unknown',!X.toggleFavorite([],'home').changed&&!X.toggleFavorite([],'zz').changed);
+// prioritize
+let pr=X.prioritize(Object.assign(X.defaults(),{favorites:['strategy'],interests:['risk','prop']})); ok('favorites first, then interest tools, then rest',pr[0]==='strategy'&&pr[1]==='calc'&&pr[2]==='risk'&&pr[3]==='accounts'&&pr[4]==='money',pr.slice(0,6));
+ok('prioritize includes every tool exactly once, none dropped',new Set(pr).size===pr.length&&X.CATALOG.filter(c=>!['home','settings','help'].includes(c.id)).every(c=>pr.includes(c.id)));
+ok('no interests -> still all tools',X.prioritize(X.defaults()).length===X.CATALOG.length-3);
+// search
+const top=(q)=>X.search(q).map(i=>i.id);
+ok('"risk" finds calculator and risk center first',['calc','risk'].includes(top('risk')[0])&&top('risk').includes('calc')&&top('risk').includes('risk'),top('risk'));
+ok('"journal" -> Trade journal first',top('journal')[0]==='journal'); ok('"analytics" first',top('analytics')[0]==='analytics'); ok('prefix "anal"',top('anal')[0]==='analytics');
+ok('synonym via keywords: "csv" -> import',top('csv').includes('import')); ok('"prop firm" -> accounts',top('prop firm')[0]==='accounts',top('prop firm')); ok('"drawdown" finds accounts/analytics',top('drawdown').includes('accounts')&&top('drawdown').includes('analytics'));
+ok('"change name" -> settings action',top('change name')[0]==='x-name',top('change name')); ok('"dark mode" -> theme action',top('dark mode')[0]==='x-theme',top('dark mode')); ok('"new trade" -> log trade action first',top('new trade')[0]==='x-newtrade',top('new trade'));
+ok('"backtest" -> strategy lab',top('backtest')[0]==='strategy'); ok('"fomc" -> intel',top('fomc')[0]==='intel'); ok('"shortcuts" -> help action',top('shortcuts').some(i=>/x-shortcuts|help/.test(i)));
+ok('all words must match: "risk zebra" -> nothing',top('risk zebra').length===0); ok('gibberish -> nothing',top('qqqxxz').length===0); ok('case/space/punct insensitive',top('  RISK!! ')[0]===top('risk')[0]);
+ok('empty query -> suggestions, favorites first',X.search('',8,['strategy'])[0].id==='strategy'&&X.search('',8,[]).length===8&&X.search('',8,[]).every(i=>i.kind==='screen'));
+ok('results capped',X.search('a',5).length<=5); ok('screens carry view, actions carry act',X.search('change name')[0].act==='focus-name'&&X.search('journal')[0].view==='journal');
+ok('every extra points at a real screen',X.EXTRAS.every(e=>X.CATALOG.some(c=>c.id===e.view))); ok('catalog ids unique',new Set(X.CATALOG.map(c=>c.id)).size===X.CATALOG.length);
+ok('every catalog category is in CATS',X.CATALOG.every(c=>X.CATS.some(k=>k[0]===c.cat)));
+ok('search with HTML is just text, never throws',Array.isArray(X.search('<img onerror=1>')));
+// greeting
+const at=(h)=>new Date(2026,9,29,h,0); let g=X.greeting('Alex',at(9),0); ok('first visit: Welcome, Alex!',g.line==='Welcome, Alex!'&&/Good morning/.test(g.sub)&&/stays on this device/.test(g.sub),g);
+g=X.greeting('Alex',at(14),123); ok('returning: Welcome back, Alex!',g.line==='Welcome back, Alex!'&&/Good afternoon/.test(g.sub)); ok('evening',/Good evening/.test(X.greeting('A',at(19),1).sub)); ok('late night',/Late night/.test(X.greeting('A',at(2),1).sub)&&/Late night/.test(X.greeting('A',at(23),1).sub));
+ok('no name -> no dangling comma',X.greeting('',at(9),1).line==='Welcome back!'&&X.greeting(null,at(9),0).line==='Welcome!'); ok('name sanitized in greeting',!/[<>]/.test(X.greeting('<b>x',at(9),1).line));
+// content
+ok('what\'s new has ids descending and non-empty',X.WHATS_NEW.every((w,i,a)=>w.title&&w.items.length&&(i===0||a[i-1].id>w.id))); ok('glossary entries complete',X.GLOSSARY.length>=10&&X.GLOSSARY.every(g=>g.term&&g.text.length>20)); ok('tour steps point at real views',X.TOUR.every(t=>t.view==='more'||X.CATALOG.some(c=>c.id===t.view))&&X.TOUR.length>=4);
+ok('shortcuts listed',X.SHORTCUTS.some(s=>/Ctrl/.test(s[0])));
+console.log(`x1core: ${p} passed, ${f} failed`); process.exit(f?1:0);

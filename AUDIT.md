@@ -1,42 +1,48 @@
 # TRC / Tamhas Trading — feature inventory and audit
 
 Branch `dev-free-platform`, version 2.0.0 (2026-10-30). Every row below was checked by an automated test that was actually run
-(`node tests/run.js`: **39 of 39 suites passed**, about 2,700 checks). The table is generated from `assets/help-data.js`, the same
-registry that drives search, the help centre and voice navigation, and `tests/x1core.js` fails if a listed section or test file is missing.
+(`node scripts/predeploy.js`: **46 of 46 suites passed, SAFE TO DEPLOY**, about 3,500 checks). The table is generated from `assets/registry-core.js`,
+the registry that drives search, Help, tours, What's New and Copilot; `tests/registry.js` fails if any feature is registered half-way.
 
-## Inventory
+## Inventory (generated from `assets/registry-core.js`)
 
-| Feature | Status | Where (deep link) | Docs | Tests | Known limits |
+| Feature | Status | Where | Docs | Tests | Known limits |
 |---|---|---|---|---|---|
-| Home dashboard | Working | #home | Help centre, search | e2e.js, i1e2e.js | — |
-| Import trades (Smart Import) | Working | #import | Help centre, search | tv1core.js, tv2e2e.js, c2core.js, c3e2e.js | Report layouts follow headers published by journal vendors, not a real account file. Screenshot reading was tested on synthetic tables. Orders filled at several prices need the Performance report. No commissions in Tradovate reports unless you set your own. |
-| How to export from Tradovate | Working, with limits | #import › im-guide | Help centre, search | tv2e2e.js | Menu names come from published guides; Tradovate screens could not be checked without a login. |
-| Import settings and commissions | Working | #import › im-settings | Help centre, search | tv2e2e.js | — |
-| Install TRC on your Home Screen | Working | #install | Help centre, search | x1e2e.js | The browser or phone decides the final icon label in some cases; this cannot be tested on a real phone from here. |
-| Guided tour | Working | #help | Help centre, search | x1e2e.js | — |
-| Help centre | Working | #help | Help centre, search | x1e2e.js | — |
-| Universal search | Working | #help | Help centre, search | x1e2e.js | — |
-| Voice commands | Working, with limits | #help | Help centre, search | x1core.js, x1e2e.js | Uses your browser's speech service (not available in every browser; in Chrome and Safari the audio may be processed by Google or Apple). Fixed commands only, not an AI. |
-| Report a bug or request a feature | Working | #feedback | Help centre, search | x1e2e.js | — |
-| Trade journal | Working | #journal | Help centre, search | e2e.js, c1e2e.js, d1e2e.js | — |
-| Quick and advanced journaling | Working | #journal | Help centre, search | d1e2e.js | — |
-| Calendar and reviews | Working | #journal | Help centre, search | d1e2e.js | — |
-| Backup and restore | Working | #journal › backup tab | Help centre, search | b2backup.js, d1e2e.js | — |
-| Analytics | Working | #analytics | Help centre, search | e1core.js, e1e2e.js | — |
-| Insights | Working | #insights | Help centre, search | i1core.js, i1e2e.js | — |
-| Strategy lab | Working | #strategy | Help centre, search | h1core.js, h1e2e.js | — |
-| Risk calculator | Working | #calc | Help centre, search | s2test.js, f1core.js | — |
-| Risk centre | Working | #risk | Help centre, search | f1core.js, f1e2e.js | — |
-| Accounts and prop firms | Working | #accounts | Help centre, search | b1e2e.js, b2e2e.js | — |
-| Money | Working | #money | Help centre, search | bmoney.js, bmoney_e2e.js | — |
-| Discipline | Working | #discipline | Help centre, search | g1core.js, g1e2e.js | — |
-| Intel calendar | Working, with limits | #intel | Help centre, search | s4test.js | No free verified events feed; events are entered or imported. |
-| Settings | Working | #settings | Help centre, search | e2e.js, x1e2e.js | — |
-| Animations and startup screen | Working | #settings › animPick | Help centre, search | x1e2e.js | — |
-| System health and diagnostics | Working | #health | Help centre, search | i1e2e.js, x1e2e.js | — |
-| Repair app files (update problems) | Working | #health › diagRoot | Help centre, search | x1e2e.js | — |
+| Dashboard | Working | #home | Help: Your starting point: today's trading, favorites, recent tools and a qu… | x1e2e, integration | — |
+| Risk calculator | Working | #calc | Help: Enter your stop distance in points and the dollar range you are willin… | s2test, f1core, copilot2e | — |
+| Trade journal | Working | #journal | Help: Record every trade with entry, stop, exits, fees, notes, tags and scre… | e2e, d1e2e | — |
+| Import trades | Working | #import | Help: Drop a Tradovate Orders or Performance report, paste a copied table, o… | tv1core, tv2e2e, c2core, c3e2e, copilot1 | Tradovate layouts from published headers, not a real export; screenshots tested on synthetic tables; no commissions in Tradovate reports unless you set yours; no live sync. |
+| Risk center | Working | #risk | Help: Size positions from prices, see your open exposure against limits you … | f1core, f1e2e | — |
+| Analytics | Working | #analytics | Help: Statistics, equity curve, drawdown, breakdowns by day, hour, strategy,… | e1core, e1e2e | Closed trades only; drawdown from zero peak. |
+| Insights | Working | #insights | Help: Fixed rules look for patterns in your trades, such as repeated mistake… | i1core, i1e2e | — |
+| Discipline | Working | #discipline | Help: Write your trading plan, build checklists and routines, reflect daily,… | g1core, g1e2e | — |
+| Strategy lab | Working | #strategy | Help: Describe strategies, enter backtest results by hand, compare them with… | h1core, h1e2e | Backtests entered in R; no market data. |
+| Accounts | Working | #accounts | Help: Track each account: firm rules, drawdown room, balance snapshots and p… | b1e2e, b2e2e | — |
+| Money | Working | #money | Help: Record fees, subscriptions, payouts and deposits to see profit after r… | bmoney, bmoney_e2e | — |
+| Market intel | Working | #intel | Help: A calendar of market-moving events you can import or edit, plus sessio… | s4test | No free verified events feed. |
+| System health | Working | #health | Help: A read-only check of your saved data. Any repair is a separate, confir… | i1e2e, p1e2e | — |
+| Help and glossary | Working | #help | Help: Glossary, feature guides with tours, keyboard shortcuts, what is new a… | x1e2e | — |
+| Settings | Working | #settings | Help: Your name, theme, layout density, start page, market session windows a… | x1e2e, p1e2e | — |
+| Install TRC | Working | #install | Help: Step-by-step instructions for adding TRC to your Home Screen on iPhone… | p1e2e, p1core | Final icon label is the editable box on iOS/Samsung; not tested on real phones. |
+| TRC Copilot | Working | floating button | Help: A built-in assistant you can speak to or type to. It runs commands on … | copilot1, copilot2e | Rule-based, not an AI; voice depends on browser speech service. |
+| ↳ Log a new trade | Working | #journal | search, Copilot | registry, integration | — |
+| ↳ Change my name | Working | #settings | search, Copilot | registry, integration | — |
+| ↳ Switch light or dark theme | Working | #settings | search, Copilot | registry, integration | — |
+| ↳ Compact or comfortable layout | Working | #settings | search, Copilot | registry, integration | — |
+| ↳ Replay the welcome tour | Working | #home | search, Copilot | registry, integration | — |
+| ↳ Choose my start page | Working | #settings | search, Copilot | registry, integration | — |
+| ↳ Customize my dashboard | Working | #home | search, Copilot | registry, integration | — |
+| ↳ Download a backup | Working | #journal | search, Copilot | registry, integration | — |
+| ↳ Edit market session windows | Working | #settings | search, Copilot | registry, integration | — |
+| ↳ What's new | Working | #help | search, Copilot | registry, integration | — |
+| ↳ Keyboard shortcuts | Working | #help | search, Copilot | registry, integration | — |
+| ↳ Report a problem | Working | #help | search, Copilot | registry, integration | — |
+| ↳ Import settings and commissions | Working | #import | search, Copilot | registry, integration | — |
+| ↳ How to export from Tradovate | Working | #import | search, Copilot | registry, integration | — |
+| ↳ Animations and startup screen | Working | #settings | search, Copilot | registry, integration | — |
+| ↳ Repair app files | Working | #health | search, Copilot | registry, integration | — |
 
-Older features not in the search registry but still present and tested: legacy classic calculator page (`calculator-classic.html`, s3test), session clock (s5core), prop-firm templates (b1core), drawdown engine (b2core), migrations from DB v1–v3 (mig1e2e), XSS/accessibility/offline/performance checks (qa1e2e, audit), desk layout (desk.js).
+Also present and tested: legacy classic calculator page (`calculator-classic.html`, s3test), session clock (s5core), prop-firm templates (b1core), drawdown engine (b2core), migrations from DB v1–v3 (mig1e2e), XSS/accessibility/offline/performance checks (qa1e2e, audit), desk layout (desk.js).
 
 ## Tradovate Smart Import — what is verified and what is not
 | Item | Status |
@@ -56,13 +62,13 @@ Older features not in the search registry but still present and tested: legacy c
 | Requirement | Result |
 |---|---|
 | Import Trades primary in Journal, prominent on Home, More hub, onboarding, tour, help, search | Done (tv2e2e, x1e2e) |
-| Installed app named TRC (manifest name/short_name, Apple title), site stays Tamhas Trading | Done (x1e2e, b0test). Final label on iOS/Samsung is the editable box; not testable on real phones here. |
-| Install instructions: iPhone, iPad, Android/Pixel, Samsung; first optional onboarding step | Done, wording verified against current guides 2026-10-30 |
+| Installed app named TRC (manifest name/short_name, Apple title), site stays Tamhas Trading | Done (p1e2e, b0test). Final label on iOS/Samsung is the editable box; not testable on real phones here. |
+| Install instructions: iPhone, iPad, Android/Pixel, Samsung; first optional onboarding step | Done (welcome final step + getting-started list), wording verified against current guides 2026-10-30 |
 | Data safety: backup reminder, rollback, duplicates, quarantine, storage explanation | Done |
-| Update safety: versioned cache, version detection, update banner (only on real updates), repair app files | Done (x1e2e; a false banner on first visit was found and fixed) |
-| Universal search (/ and Ctrl+K) | Done |
-| Voice | Done with limits: browser speech service, off by default, fixed commands, privacy notice, text fallback |
-| Feedback | Done: copy / download / prefilled GitHub issue; no trades or account names |
+| Update safety | Update bar from 1.8.0 (never auto-reloads); cache bumped to tt-app-v5 with all new files; repair app files under System health |
+| Universal search (/ and Ctrl+K) | Provided by release 1.8.0 (experience layer); Smart Import and Install TRC are registered so search finds them |
+| Voice | Provided by TRC Copilot (1.8.0): rule-based, consent notice, text fallback. Taught: "import my tradovate report", "install the app" |
+| Feedback | Provided by support.js (1.8.0): copy or prefilled GitHub issue, no trading data |
 | Diagnostics | Done: version, offline support, connection, last import/backup, recent errors, repair |
 | Startup screen + loading system | Done: removed as soon as the database is ready (no forced delay), 5 s failsafe, theme-aware, reduced/off settings, OS reduced motion; skeletons, indeterminate progress (never invented %), button spinners, cancel/timeout/retry for screenshot reading |
 | Accessibility | Automated only: names on buttons, labels, keyboard search/tour, focus return, no horizontal scroll at 360–1280 px, reduced motion |

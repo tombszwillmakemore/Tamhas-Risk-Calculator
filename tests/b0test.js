@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_pw');
 const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html');
 let fail=0; const ok=(n,c,d)=>{ if(!c) fail++; console.log(c?'ok  ':'FAIL',n, c?'':'\n     '+(d===undefined?'':JSON.stringify(d))); };
 (async()=>{

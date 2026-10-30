@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_pw');
 const S=(function(){var d=require('path').join(__dirname,'out');require('fs').mkdirSync(require('path').join(d,'shots'),{recursive:true});return d+'/';})(); const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html');
 let fail=0,pass=0; const ok=(n,c,d)=>{ if(c) pass++; else { fail++; console.log('FAIL',n,d===undefined?'':JSON.stringify(d)); } };
 const seed=async(p,list)=>{ await p.evaluate(async(list)=>{ const C=TTJournalCore; for (const s of ['trades','docs']) await TTDB.clear(s); for (const o of list){ const r=C.normalizeTrade(Object.assign({contract:'NQ',side:'long',contracts:1,entry:100,stop:95,fees:'0',createdAt:1},o,{exits:o.exits||[{qty:1,price:o.x}]})); if(!r.ok) throw new Error(JSON.stringify(r.errors)); await TTDB.put('trades',r.trade);} },list); };
