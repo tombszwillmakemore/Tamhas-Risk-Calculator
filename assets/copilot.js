@@ -16,7 +16,8 @@
   function loadPrefs() {
     try { var raw = localStorage.getItem(KEY); if (raw) P = CP.cleanPrefs(JSON.parse(raw)); } catch (e) {}
     try { hist = JSON.parse(localStorage.getItem(HKEY) || '[]'); if (!Array.isArray(hist)) hist = []; hist = hist.filter(function (h) { return h && typeof h.t === 'string'; }).slice(-MAXH); } catch (e) { hist = []; }
-    if (ST && !localStorage.getItem(KEY)) ST.getPref('copilot', null).then(function (v) { if (v) { P = CP.cleanPrefs(v); savePrefs(true); } }).catch(function () {});
+    var had = false; try { had = !!localStorage.getItem(KEY); } catch (e) {}
+    if (ST && !had) ST.getPref('copilot', null).then(function (v) { if (v) { P = CP.cleanPrefs(v); savePrefs(true); } }).catch(function () {});
   }
   var mt = null;
   function savePrefs(noMirror) { P = CP.cleanPrefs(P); try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} if (!noMirror && ST) { clearTimeout(mt); mt = setTimeout(function () { ST.setPref('copilot', P).catch(function () {}); }, 400); } }
@@ -66,7 +67,7 @@
     var chain = Promise.resolve({ ok: true });
     if (a.act && X && X.act) { var it = REG.byId(a.act) || REG.FEATURES.filter(function (f) { return f.act === a.act; })[0]; if (it) X.act({ view: a.view, kind: 'action', act: a.act }); }
     if (a.scroll) wait(a.scroll, function (e) { if (e) try { e.scrollIntoView({ block: 'start' }); } catch (x) {} });
-    if (a.tab) chain = new Promise(function (res) { wait('#view-' + a.view + ' [data-act=tab][data-t=' + a.tab + ']', function (b) { if (!b) { res({ ok: false }); return; } b.click(); setTimeout(function () { res({ ok: b.classList.contains('active') || b.getAttribute('aria-selected') === 'true' || true }); }, 80); }); });
+    if (a.tab) chain = new Promise(function (res) { wait('#view-' + a.view + ' [data-act=tab][data-tab=' + a.tab + ']', function (b) { if (!b) { res({ ok: false }); return; } b.click(); setTimeout(function () { var again = document.querySelector('#view-' + a.view + ' [data-act=tab][data-tab=' + a.tab + ']'); res({ ok: !!again && again.getAttribute('aria-selected') === 'true' }); }, 80); }); });
     return chain;
   }
   var DO = {
@@ -76,13 +77,13 @@
     density: function (a) { return { ok: !!(X && X.setDensity(a.value)) && document.documentElement.getAttribute('data-density') === a.value }; },
     customize: function () { return { ok: !!(X && X.customize()) && (collapse(), true) }; },
     highlight: function (a) { if (X) X.highlight(a.selector, a.text); return { ok: true }; },
-    newTrade: function () { N.go('journal'); return new Promise(function (res) { wait('#view-journal [data-act=new]', function (b) { if (!b) { res({ ok: false }); return; } b.click(); wait('#jForm', function (f) { res({ ok: !!f }); collapse(); }, 1500); }); }); },
-    backup: function () { N.go('journal'); return new Promise(function (res) { wait('#view-journal [data-act=tab][data-t=backup]', function (b) { if (!b) { res({ ok: false }); return; } b.click(); res({ ok: true }); }); }); },
+    newTrade: function () { N.go('journal'); return new Promise(function (res) { var t = document.querySelector('#view-journal [data-act=tab][data-tab=entries]'); if (t && !document.querySelector('#view-journal [data-act=new]')) t.click(); wait('#view-journal [data-act=new]', function (b) { if (!b) { res({ ok: false }); return; } b.click(); wait('#jForm', function (f) { res({ ok: !!f }); collapse(); }, 1500); }); }); },
+    backup: function () { N.go('journal'); return new Promise(function (res) { wait('#view-journal [data-act=tab][data-tab=backup]', function (b) { if (!b) { res({ ok: false }); return; } b.click(); setTimeout(function () { var again = document.querySelector('#view-journal [data-act=tab][data-tab=backup]'); res({ ok: !!again && again.getAttribute('aria-selected') === 'true' }); }, 80); }); }); },
     report: function () { if (!window.TTSupport) return { ok: false }; window.TTSupport.openReport(curView()); return { ok: true }; },
     tour: function (a) { var ok = X && X.featureTour(a.feature); if (ok) collapse(); return { ok: !!ok }; },
     openAccount: function (a) { N.go('accounts'); var ok = !!(window.TTAccounts && window.TTAccounts.open && window.TTAccounts.open(a.id)); if (ok) setTimeout(collapse, 0); return { ok: ok }; },
     stopSpeech: function () { stopSpeaking(); return { ok: true }; },
-    setVoice: function (a) { if (a.mute != null) { P.voice.mode = a.mute ? 'never' : 'voice'; if (a.mute) stopSpeaking(); } if (a.rateDelta) P.voice.rate = Math.min(1.6, Math.max(0.6, P.voice.rate + a.rateDelta)); savePrefs(); renderSettings(); return { ok: true }; },
+    setVoice: function (a) { if (a.mute != null) { P.voice.muted = !!a.mute; if (a.mute) stopSpeaking(); } if (a.rateDelta) P.voice.rate = Math.min(1.6, Math.max(0.6, P.voice.rate + a.rateDelta)); savePrefs(); renderSettings(); return { ok: true }; },
     breathe: function () { return { ok: true }; },
     remember: function (a) { P.memory[a.key] = a.value; savePrefs(); return { ok: P.memory[a.key] === a.value }; },
     forget: function () { P.memory = {}; savePrefs(); return { ok: Object.keys(P.memory).length === 0 }; },
@@ -134,10 +135,10 @@
   }
   function loadVoices() { if (!TTS) return; try { voices = TTS.getVoices() || []; } catch (e) { voices = []; } }
   function setState(s) { state = s; if (!panel) return; var orb = $('.cp-orb'); orb.className = 'cp-orb' + (s === 'listening' ? ' listen' : s === 'speaking' ? ' speak' : ''); $('.cp-wave').className = 'cp-wave' + (s === 'listening' || s === 'speaking' ? ' on' : '');
-    var label = s === 'listening' ? 'Listening…' : s === 'speaking' ? 'Speaking…' : s === 'thinking' ? 'Thinking…' : 'Ready'; $('.cp-status').textContent = label + (P.voice.mode === 'never' ? ' · voice replies off' : ''); var m = $('.cp-btn.mic'); if (m) { m.classList.toggle('on', s === 'listening'); m.setAttribute('aria-pressed', s === 'listening'); m.setAttribute('aria-label', s === 'listening' ? 'Stop listening' : 'Start voice input'); } var st = $('.cp-hb.stop'); if (st) st.hidden = s !== 'speaking'; }
+    var label = s === 'listening' ? 'Listening…' : s === 'speaking' ? 'Speaking…' : s === 'thinking' ? 'Thinking…' : 'Ready'; $('.cp-status').textContent = label + (P.voice.muted || P.voice.mode === 'never' ? ' · voice replies off' : ''); var m = $('.cp-btn.mic'); if (m) { m.classList.toggle('on', s === 'listening'); m.setAttribute('aria-pressed', s === 'listening'); m.setAttribute('aria-label', s === 'listening' ? 'Stop listening' : 'Start voice input'); } var st = $('.cp-hb.stop'); if (st) st.hidden = s !== 'speaking'; }
   function stopSpeaking() { if (TTS) try { TTS.cancel(); } catch (e) {} if (state === 'speaking') setState('idle'); }
-  function speak(text) {
-    if (!TTS || P.voice.mode === 'never' || (P.voice.mode === 'voice' && !viaVoice)) return;
+  function speak(text, spokenTurn) {
+    if (!TTS || P.voice.muted || P.voice.mode === 'never' || (P.voice.mode === 'voice' && !spokenTurn)) return;
     try {
       TTS.cancel(); var u = new SpeechSynthesisUtterance(speakable(text)); u.rate = P.voice.rate; u.lang = navigator.language || 'en-US';
       if (P.voice.uri) { var v = voices.filter(function (x) { return x.voiceURI === P.voice.uri; })[0]; if (v) { u.voice = v; u.lang = v.lang; } }
@@ -182,7 +183,7 @@
   function submit(textOverride) {
     var input = $('.cp-in'), text = (textOverride != null ? textOverride : input.value).trim(); if (!text) return; input.value = ''; autosize();
     stopSpeaking(); stopBreathe(); clearConf(); var n0 = panel.querySelector('.cp-notice'); if (n0) n0.remove();
-    say('u', text); pushHist('u', text); setState('thinking'); var voiceTurn = viaVoice; viaVoice = voiceTurn;
+    say('u', text); pushHist('u', text); setState('thinking'); var voiceTurn = viaVoice; viaVoice = false;
     P.recent = [text].concat(P.recent.filter(function (x) { return x !== text; })).slice(0, 8); savePrefs();
     getSnap().catch(function () { return { rows: [], accounts: [], limits: {}, __failed: true }; }).then(function (s) {
       var data = Object.assign({}, s, { today: todayKey(), view: curView(), prefs: P, visited: ((X && X.prefs && X.prefs().recents) || []).concat((X && X.toursSeen && X.toursSeen()) || [], P.tried || []), name: X && X.prefs ? X.prefs().name : '', calc: { run: calcRun } });
@@ -193,17 +194,16 @@
         if (r.confirm) showConfirm(bubble);
         if (r.steps) runBreathe(r.steps, bubble);
         setChips(r.chips && r.chips.length ? r.chips : (r.confirm ? [] : suggestions()));
-        if (r.kind !== 'crisis' || true) speak(out.text);
+        speak(out.text, voiceTurn);
         if (r.feature && P.tried.indexOf(r.feature) < 0) { P.tried = P.tried.concat([r.feature]); savePrefs(); }
         if (state === 'thinking') setState('idle');
       });
     }).catch(function () { say('c', 'Sorry, something went wrong and nothing was changed. Please try again, or say help.', 'bad'); setState('idle'); });
-    viaVoice = false;
   }
   function runBreathe(steps, bubble) {
     var i = 0; stopBreathe(); (function next() { if (!panel || i >= steps.length) { breatheT = null; return; } bubble.textContent = steps[i]; speakStep(steps[i]); i++; breatheT = setTimeout(next, i === 1 ? 3500 : 4600); })();
   }
-  function speakStep(t) { if (!TTS || P.voice.mode === 'never') return; try { TTS.cancel(); var u = new SpeechSynthesisUtterance(t); u.rate = Math.min(P.voice.rate, 0.9); TTS.speak(u); } catch (e) {} }
+  function speakStep(t) { if (!TTS || P.voice.muted || P.voice.mode === 'never') return; try { TTS.cancel(); var u = new SpeechSynthesisUtterance(t); u.rate = Math.min(P.voice.rate, 0.9); TTS.speak(u); } catch (e) {} }
   function stopBreathe() { if (breatheT) { clearTimeout(breatheT); breatheT = null; } }
   function autosize() { var i = $('.cp-in'); if (i) { i.style.height = 'auto'; i.style.height = Math.min(110, i.scrollHeight) + 'px'; } }
 
@@ -246,7 +246,7 @@
     var micB = $('.cp-btn.mic'); micB.addEventListener('click', function () { if (state === 'listening') { stopMic(); } else startMic(); });
     if (!SR) micB.setAttribute('aria-disabled', 'true');
   }
-  function syncMute() { var m = $('.cp-hb.mute'); if (m) { m.setAttribute('aria-pressed', P.voice.mode === 'never'); m.setAttribute('aria-label', P.voice.mode === 'never' ? 'Unmute voice replies' : 'Mute voice replies'); } }
+  function syncMute() { var m = $('.cp-hb.mute'); if (m) { var mu = P.voice.muted || P.voice.mode === 'never'; m.setAttribute('aria-pressed', mu); m.setAttribute('aria-label', mu ? 'Unmute voice replies' : 'Mute voice replies'); } }
   function searchHist(q) {
     var out = $('#cpHits'); q = String(q).trim().toLowerCase(); if (!out) return; if (!q) { out.textContent = ''; return; }
     var hits = hist.filter(function (h) { return h.t.toLowerCase().indexOf(q) >= 0; }).slice(-8).reverse(); out.innerHTML = hits.length ? hits.map(function (h) { return '<div>' + (h.r === 'u' ? 'You' : 'Copilot') + ': ' + esc(h.t.slice(0, 140)) + '</div>'; }).join('') : 'No matches.';
@@ -256,7 +256,7 @@
     var chip = e.target.closest('.cp-chip'); if (chip) { unlockSpeech(); viaVoice = false; submit(chip.getAttribute('data-q')); return; }
     var b = e.target.closest('[data-cp]'); if (!b) return; var a = b.getAttribute('data-cp');
     if (a === 'close') close(); else if (a === 'gear' || a === 'closeset') toggleSettings(); else if (a === 'size') { panel.classList.toggle('big'); }
-    else if (a === 'stopspeech') { stopSpeaking(); stopBreathe(); } else if (a === 'mute') { P.voice.mode = P.voice.mode === 'never' ? 'voice' : 'never'; if (P.voice.mode === 'never') stopSpeaking(); savePrefs(); syncMute(); setState(state); }
+    else if (a === 'stopspeech') { stopSpeaking(); stopBreathe(); } else if (a === 'mute') { P.voice.muted = !(P.voice.muted || P.voice.mode === 'never'); if (P.voice.mode === 'never' && !P.voice.muted) P.voice.mode = 'voice'; if (P.voice.muted) stopSpeaking(); savePrefs(); syncMute(); setState(state); }
     else if (a === 'yes' || a === 'no') { unlockSpeech(); viaVoice = false; submit(a); }
     else if (a === 'consent') { P.micConsent = true; savePrefs(); b.closest('.cp-notice').remove(); startMic(); } else if (a === 'noconsent') { b.closest('.cp-notice').remove(); $('.cp-in').focus(); }
     else if (a === 'revoke') { P.micConsent = false; savePrefs(); renderSettings(); } else if (a === 'forget') { DO.forget(); renderSettings(); } else if (a === 'delsc') { P.shortcuts.splice(+b.getAttribute('data-i'), 1); savePrefs(); renderSettings(); }
@@ -268,9 +268,9 @@
     build(); var fab = document.getElementById('copilotFab'); if (fab) { fab.classList.add('on'); fab.setAttribute('aria-expanded', 'true'); }
     var name = X && X.prefs ? X.prefs().name : '', first = !hist.length;
     var greet = 'Hi' + (name ? ', ' + name : '') + '. I am TRC Copilot. ' + (SR ? 'Type or tap the microphone. ' : 'Type a request. ') + 'I can open screens, size a position, review your trades, coach you through a tough moment, and teach concepts. I run on your device and can\'t place trades.';
-    if (first) say('c', greet); else { hist.slice(-6).forEach(function (h) { say(h.r === 'u' ? 'u' : 'c', h.t); }); var sep = say('c', 'Earlier conversation above. How can I help now?'); }
+    if (first) say('c', greet); else { hist.slice(-6).forEach(function (h) { say(h.r === 'u' ? 'u' : 'c', h.t); }); var sep = document.createElement('div'); sep.className = 'cp-sep note'; sep.textContent = 'Earlier conversation above. How can I help now?'; $('.cp-log').appendChild(sep); }
     setChips(P.recent.length && first ? P.recent.slice(0, 3).concat(suggestions().slice(0, 2)) : suggestions()); syncMute(); setState('idle');
-    if (P.voice.greet && first) { viaVoice = true; speak(greet); viaVoice = false; }
+    if (P.voice.greet && first) speak(greet, true);
     if (window.matchMedia && matchMedia('(pointer: fine)').matches) $('.cp-in').focus(); else $('.cp-hb[data-cp=close]').focus();
     return true;
   }
@@ -279,6 +279,7 @@
     panel.remove(); panel = null; state = 'idle'; var fab = document.getElementById('copilotFab'); if (fab) { fab.classList.remove('on'); fab.setAttribute('aria-expanded', 'false'); if (keepFocus !== true) try { fab.focus(); } catch (e) {} }
   }
   // The microphone and speech must never keep running unseen.
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel && !document.querySelector('.xo, .ui-dlg-back, .coach')) { var set = $('.cp-set'); if (set && !set.hidden) toggleSettings(); else close(); } });
   document.addEventListener('visibilitychange', function () { if (document.hidden) { stopMic(); stopSpeaking(); stopBreathe(); } });
   window.addEventListener('pagehide', function () { stopMic(); stopSpeaking(); });
   window.addEventListener('tt:view', function () { if (panel && !$('.cp-chips').children.length) setChips(suggestions()); });

@@ -153,14 +153,15 @@
   }
   function waitFor(sel, fn, ms) { var t = Date.now(); (function poll() { var el = $(sel); if (el) { fn(el); return; } if (Date.now() - t < (ms || 2500)) setTimeout(poll, 60); })(); }
   function scrollTo(sel) { waitFor(sel, function (el) { el.scrollIntoView({ block: 'center' }); if (el.focus) try { el.focus({ preventScroll: true }); } catch (e) {} }); }
+  function openNewTrade() { var t = $('#view-journal [data-act=tab][data-tab=entries]'); if (t && !$('#view-journal [data-act=new]')) t.click(); waitFor('#view-journal [data-act=new]', function (b) { b.click(); }); }
   function run(item) {
     go(item.view);
     if (item.kind !== 'action') return;
     var a = item.act;
-    if (a === 'new-trade') waitFor('#view-journal [data-act=new]', function (b) { b.click(); });
+    if (a === 'new-trade') openNewTrade();
     else if (a === 'focus-name') scrollTo('#nameInput'); else if (a === 'theme') scrollTo('#themePick'); else if (a === 'personalize') scrollTo('#personalizePanel'); else if (a === 'sessions') scrollTo('#sessionEditor');
     else if (a === 'tour') startTour(); else if (a === 'customize') { S.customizing = true; renderCustomize(); setTimeout(function () { var c = $('#customPanel'); if (c) c.scrollIntoView({ block: 'center' }); }, 50); }
-    else if (a === 'backup') waitFor('#view-journal [data-act=tab][data-t=backup], #view-journal [data-t=backup]', function (b) { b.click(); }); else if (a === 'whatsnew') scrollTo('#hpNew'); else if (a === 'shortcuts') scrollTo('#hpKeys');
+    else if (a === 'backup') waitFor('#view-journal [data-act=tab][data-tab=backup]', function (b) { b.click(); }); else if (a === 'whatsnew') scrollTo('#hpNew'); else if (a === 'shortcuts') scrollTo('#hpKeys');
     else if (a === 'report' && window.TTSupport) window.TTSupport.openReport(); else if (a === 'copilot' && window.TTCopilotBoot) window.TTCopilotBoot.open();
   }
 
@@ -297,7 +298,7 @@
     if (t.hasAttribute('data-copy')) { copyText(t.getAttribute('data-copy')); return; }
     if (t.hasAttribute('data-wmove')) { P.widgets = X.moveWidget(P.widgets, t.getAttribute('data-wmove'), +t.getAttribute('data-d')); persist(); buildWidgets(); var again = $('[data-wmove="' + t.getAttribute('data-wmove') + '"][data-d="' + t.getAttribute('data-d') + '"]'); if (again && !again.disabled) again.focus(); return; }
     var a = t.getAttribute('data-xact'); e.preventDefault();
-    if (a === 'search') openSearch(); else if (a === 'tour') { if (obOv) return; go('home'); startTour(); } else if (a === 'new-trade') { go('journal'); waitFor('#view-journal [data-act=new]', function (b) { b.click(); }); }
+    if (a === 'search') openSearch(); else if (a === 'tour') { if (obOv) return; go('home'); startTour(); } else if (a === 'new-trade') { go('journal'); openNewTrade(); }
     else if (a === 'customize') { S.customizing = !S.customizing; renderCustomize(); if (S.customizing) { var c = $('#customPanel'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'nearest' }); } }
     else if (a === 'reset-layout') { var wb = JSON.stringify(P.widgets); P.widgets = X.defaults().widgets; persist(); buildWidgets(); toast('Dashboard reset to default.', false, { label: 'UNDO', fn: function () { P.widgets = JSON.parse(wb); persist(); buildWidgets(); } }); }
     else if (a === 'dismiss-news') { P.whatsNewSeen = X.WHATS_NEW[0].id; persist(); buildWidgets(); }
@@ -317,7 +318,7 @@
     if ((e.ctrlKey || e.metaKey) && k === 'k') { e.preventDefault(); if (searchOv) searchOv.close('toggle'); else openSearch(); return; }
     if (typing || e.ctrlKey || e.metaKey || e.altKey || searchOv || obOv || document.querySelector('.ui-dlg-back')) return;
     if (k === '/') { e.preventDefault(); openSearch(); } else if (k === '?') { e.preventDefault(); go('help'); scrollTo('#hpKeys'); }
-    else if (k === 'n') { go('journal'); waitFor('#view-journal [data-act=new]', function (b) { b.click(); }); }
+    else if (k === 'n') { go('journal'); openNewTrade(); }
     else if (k === 'g') { gPending = Date.now(); }
     else if (gPending && Date.now() - gPending < 1200) { var m = { h: 'home', j: 'journal', r: 'calc', a: 'analytics', s: 'settings' }[k]; gPending = 0; if (m) go(m); }
   });
@@ -336,7 +337,7 @@
   function nudgeRelease() {
     var rel = X.WHATS_NEW[0]; if (!rel || P.whatsNewSeen >= rel.id) return; var key = 'tt.nw.nudged', last = 0;
     try { last = +localStorage.getItem(key) || 0; } catch (e) {} if (last >= rel.id) return;
-    setTimeout(function () { if (obOv || searchOv || tourEl || document.querySelector('.ui-dlg-back, .xo')) return; try { localStorage.setItem(key, String(rel.id)); } catch (e) {} toast('New in version ' + rel.version + ': ' + rel.title + '.', false, { label: 'SEE WHAT\'S NEW', fn: function () { go('help'); scrollTo('#hpNew'); } }); }, 4000);
+    var tries = 0; (function later() { setTimeout(function () { var tt = document.querySelector('.ui-toast.show'); if (obOv || searchOv || tourEl || document.getElementById('copilotPanel') || tt || document.querySelector('.ui-dlg-back, .xo')) { if (++tries < 4) later(); return; } try { localStorage.setItem(key, String(rel.id)); } catch (e) {} toast('New in version ' + rel.version + ': ' + rel.title + '.', false, { label: 'SEE WHAT\'S NEW', fn: function () { go('help'); scrollTo('#hpNew'); } }); }, tries ? 15000 : 4000); })();
   }
   function afterProfile() { syncDot(); applyDensity(); renderGreeting(); buildWidgets(); if (S.cur === 'more') renderHub(); renderSettings(); var ni = $('#nameInput'); if (ni && P.name && document.activeElement !== ni) ni.value = P.name; syncStars(); }
   function refreshAll() { buildWidgets(); renderHub(); syncStars(); }

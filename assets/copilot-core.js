@@ -176,6 +176,12 @@
         alts.forEach(function (a) { if (a.length > 3 && (' ' + n + ' ').indexOf(' ' + a + ' ') >= 0 && a.length > bl) { best = f; bl = a.length; } }); });
       return best;
     }
+    // An app action ("Change my name", "Keyboard shortcuts") is matched when every meaningful word of its title was said.
+    function actionFor(n) {
+      var words = ' ' + n + ' ', best = null, bl = 0;
+      REG.actions().forEach(function (f) { var tk = toks(norm(f.title)); if (!tk.length) return; if (tk.every(function (w) { return words.indexOf(' ' + w + ' ') >= 0; }) && tk.length >= bl) { best = f; bl = tk.length; } });
+      return best;
+    }
     var VIEWTAB = { calendar: 'calendar', analytics: 'analytics', backup: 'backup' };
     function navTo(f, extra) {
       var v = f.view; if (f.virtual) return R('You are already talking to Copilot. Ask me anything or say help.');
@@ -585,6 +591,8 @@
       var term = termFor(n); if (asksDef && term) { ctx.topic = { type: 'term', entry: term }; ctx.last = 'edu'; return R(term.term + ': ' + term.text, { chips: ['Explain that simpler', 'Give me an example', 'Quiz me on that'] }); }
       var les = lessonFor(n); if ((asksDef || les) && les && !/\b(open|go to|show me my)\b/.test(n)) { ctx.last = 'edu'; return teach(les); }
       if (asksDef) { var ff = findFeature(n); if (ff) { ctx.topic = { type: 'feature', id: ff.id }; return R(featureInfo(ff), { feature: ff.id, actions: [], chips: ['Teach me ' + ff.title, 'Open ' + ff.title] }); } }
+      if (/\b(is|are) my data (ok|okay|safe|fine|intact|saved)|check my data|data (health|integrity)/.test(n)) return navTo(REG.byId('health'));
+      var act0 = actionFor(n); if (act0) { var tf3 = REG.byId(act0.view); return R(act0.title + ': ' + act0.text, { actions: [{ type: 'navigate', view: act0.view, act: act0.act, ok: 'Opened ' + (tf3 ? tf3.title : act0.view) + '.', fail: 'I could not open it.' }] }); }
       /* navigation */
       if (/^(open|go to|go|show|take me to|switch to|launch|bring up|pull up|navigate to|view|i want to see|let me see)\b/.test(n) || /\b(open|take me to|go to)\b/.test(n)) {
         var ft = findFeature(n, true);
@@ -607,11 +615,11 @@
   }
   /* ---------- Copilot preferences (local, included in backups). Everything is validated; bad data falls back to defaults. ---------- */
   function str(v, n) { return String(v == null ? '' : v).replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n); }
-  function defaultPrefs() { return { v: 1, voice: { uri: '', rate: 1, mode: 'voice', greet: false }, micConsent: false, shortcuts: [], memory: {}, tried: [], recent: [] }; }
+  function defaultPrefs() { return { v: 1, voice: { uri: '', rate: 1, mode: 'voice', muted: false, greet: false }, micConsent: false, shortcuts: [], memory: {}, tried: [], recent: [] }; }
   function cleanPrefs(raw) {
     var d = defaultPrefs(), r = raw && typeof raw === 'object' ? raw : {}, v = r.voice && typeof r.voice === 'object' ? r.voice : {};
     d.voice.uri = str(v.uri, 200); var rate = Number(v.rate); d.voice.rate = isFinite(rate) ? Math.min(1.6, Math.max(0.6, Math.round(rate * 100) / 100)) : 1;
-    d.voice.mode = ['voice', 'always', 'never'].indexOf(v.mode) >= 0 ? v.mode : 'voice'; d.voice.greet = v.greet === true; d.micConsent = r.micConsent === true;
+    d.voice.mode = ['voice', 'always', 'never'].indexOf(v.mode) >= 0 ? v.mode : 'voice'; d.voice.greet = v.greet === true; d.voice.muted = v.muted === true; d.micConsent = r.micConsent === true;
     var seen = {}; d.shortcuts = (Array.isArray(r.shortcuts) ? r.shortcuts : []).map(function (x) { return x && { phrase: str(x.phrase, 40), command: str(x.command, 120) }; }).filter(function (x) { if (!x || x.phrase.length < 2 || !x.command || seen[norm(x.phrase)]) return false; seen[norm(x.phrase)] = 1; return true; }).slice(0, MAX_SHORTCUTS);
     var m = r.memory && typeof r.memory === 'object' ? r.memory : {};
     if (m.defaultInstrument && INST.byId[m.defaultInstrument]) d.memory.defaultInstrument = m.defaultInstrument;

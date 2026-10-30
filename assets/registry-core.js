@@ -64,7 +64,7 @@
     { id: 'help', kind: 'screen', title: 'Help and glossary', text: 'Plain-language explanations, tours, shortcuts and what is new.', cat: 'system', view: 'help', since: 7, perms: ['navigate'], keys: 'learn explain what is r multiple expectancy drawdown shortcuts keyboard guide tour faq',
       help: { summary: 'Glossary, feature guides with tours, keyboard shortcuts, what is new and a way to report a problem.', how: ['Tap a feature to read its guide or take its tour.'], faq: [] },
       tour: [{ target: '#hpRoot', title: 'Help', text: 'Guides and a tour for every feature, a glossary and shortcuts.' }],
-      copilot: { does: 'Explains features and terms.', where: 'More > Help and glossary', how: 'Ask "what does this page do".', voice: ['open help', 'what is new'], data: 'None', actions: ['navigate'], beginner: 'Start here if you are unsure what something means.' } },
+      copilot: { does: 'Explains features and terms.', where: 'More > Help and glossary', how: 'Ask "what does this page do".', voice: ['open help', 'what is new'], data: 'No personal data', actions: ['navigate'], beginner: 'Start here if you are unsure what something means.' } },
     { id: 'settings', kind: 'screen', title: 'Settings', text: 'Name, theme, layout, sessions and privacy.', cat: 'system', view: 'settings', since: 1, perms: ['navigate', 'settings'], keys: 'profile name theme dark light compact preferences privacy reset copilot voice',
       help: { summary: 'Your name, theme, layout density, start page, market session windows and Copilot options.', how: ['Change a setting; it saves instantly.'], faq: [] },
       tour: [{ target: '#themePick', title: 'Settings', text: 'Theme, name, layout, sessions and Copilot options.' }],
