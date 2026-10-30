@@ -136,4 +136,11 @@
   renderHub();
   window.addEventListener('tt:hub', renderHub);
   go((location.hash || '#home').slice(1), true);
+  // Section scripts load after this file, so they miss the first 'tt:view'. Announce the opening section again once every
+  // script has run, otherwise a deep link or refresh (e.g. #risk, #money) stays on "Loading..." forever.
+  document.addEventListener('DOMContentLoaded', function () {
+    // Running go() again also highlights "More" for sections that registered under the hub after the first call.
+    var cur = document.querySelector('.view.active');
+    go(cur ? cur.id.replace(/^view-/, '') : 'home', true);
+  });
 })();
