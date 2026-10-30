@@ -258,17 +258,21 @@
       var rt = readTrades(parsed, opts); res.problems = rt.problems; res.unsupported = rt.unsupported;
       items = rt.trades.map(function (t) { return { raw: t.raw, keys: [t.key], line: t.line, filePnlCents: t.filePnlCents }; });
     } else {
-      var rf = readFills(parsed, opts); res.problems = rf.problems; res.unsupported = rf.unsupported; res.fills = rf.fills.length;
+      var rf = opts.preRead || readFills(parsed, opts); res.problems = rf.problems; res.unsupported = rf.unsupported; res.fills = rf.fills.length;
+      var pk = opts.pnlByKey, amb = opts.ambiguousKeys;
       items = pairFills(rf.fills).map(function (p) {
         if (p.entries.length + p.exits.length > LIMITS.fillsPerTrade) { res.tooBig++; return null; }
         if (p.openAtEnd) res.openAtEnd++;
-        return { raw: toRawTrade(p, opts), keys: p.keys, line: p.lines[0] };
+        var fp = null; if (pk) { var any = false, sum = 0; p.keys.forEach(function (k) { if (pk[k] != null) { any = true; sum += pk[k]; } }); if (any) fp = sum; }
+        return { raw: toRawTrade(p, opts), keys: p.keys, line: p.lines[0], filePnlCents: fp, ambiguous: !!(amb && p.keys.some(function (k) { return amb.has ? amb.has(k) : amb[k]; })), openAtEnd: !!p.openAtEnd };
       }).filter(Boolean);
     }
+    res.possible = []; res.ambiguous = [];
     items.forEach(function (it) {
       var known = it.keys.filter(has).length;
       if (known === it.keys.length) { res.duplicates++; return; }
       if (known > 0) { res.partial.push({ line: it.line, known: known, of: it.keys.length }); return; }
+      if (opts.enrich) opts.enrich(it.raw, it.keys);
       var n = journal.normalizeTrade(it.raw);
       if (!n.ok) { res.invalid.push({ line: it.line, reason: n.errors[0] }); return; }
       var c = journal.analyze([n.trade])[0].c;
@@ -277,12 +281,23 @@
         var ok = Math.abs(c.grossCents - it.filePnlCents) <= 1 || (c.netCents != null && Math.abs(c.netCents - it.filePnlCents) <= 1);
         if (ok) res.reconcile.matched++; else if (res.reconcile.mismatched.length < 20) res.reconcile.mismatched.push({ line: it.line, file: it.filePnlCents, gross: c.grossCents, net: c.netCents });
       }
-      res.trades.push({ trade: n.trade, c: c, line: it.line });
+      var entry = { trade: n.trade, c: c, line: it.line, keys: it.keys, filePnlCents: it.filePnlCents == null ? null : it.filePnlCents, fp: fingerprint(n.trade) };
+      // Second line of defence: a trade with the same account, contract, side, time, size and prices as one already saved (for example
+      // the same trades imported from a different report, or typed in by hand) is held back as a possible duplicate - never silently added.
+      if (opts.fingerprints && (opts.fingerprints.has ? opts.fingerprints.has(entry.fp) : opts.fingerprints[entry.fp]) && !(opts.allowFp && opts.allowFp[entry.fp])) { res.possible.push(entry); return; }
+      if (it.ambiguous && !(opts.allowFp && opts.allowFp[entry.fp])) { res.ambiguous.push(entry); return; }
+      res.trades.push(entry);
     });
     return res;
   }
 
-  var api = { LIMITS: LIMITS, FIELDS: FIELDS, parseCsv: parseCsv, detectDelimiter: detectDelimiter, detectMode: detectMode, suggestMapping: suggestMapping, headerSignature: headerSignature,
+  // What a trade looks like regardless of where it came from: account, contract, side, entry time, every fill's size and price.
+  function fingerprint(t) {
+    var en = t.entries && t.entries.length ? t.entries : [{ qty: t.contracts, price: t.entry }];
+    return hash([t.accountId || '', t.contract, t.side, t.date, t.time || '', en.map(function (x) { return x.qty + '@' + Number(x.price).toFixed(2); }).join(','),
+      (t.exits || []).map(function (x) { return x.qty + '@' + Number(x.price).toFixed(2); }).join(',')].join('|'));
+  }
+  var api = { fingerprint: fingerprint, LIMITS: LIMITS, FIELDS: FIELDS, parseCsv: parseCsv, detectDelimiter: detectDelimiter, detectMode: detectMode, suggestMapping: suggestMapping, headerSignature: headerSignature,
     parseNumber: parseNumber, parseSide: parseSide, parseTimestamp: parseTimestamp, normalizeSymbol: normalizeSymbol, readFills: readFills, readTrades: readTrades, pairFills: pairFills,
     toRawTrade: toRawTrade, plan: plan, hash: hash, tradeHash: tradeHash, validTz: validTz };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

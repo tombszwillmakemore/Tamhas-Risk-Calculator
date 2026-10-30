@@ -147,6 +147,8 @@
     t.accountId = (typeof raw.accountId === 'string' && raw.accountId.trim()) ? raw.accountId.trim().slice(0, 64) : 'acct-default';
     // Provenance for imported trades (used for duplicate detection and rollback). Ignored if malformed, never an error.
     if (Array.isArray(raw.srcKeys) && raw.srcKeys.length && raw.srcKeys.length <= 400 && raw.srcKeys.every(function (k) { return typeof k === 'string' && k.length > 0 && k.length <= 160; })) t.srcKeys = raw.srcKeys.slice();
+    if (raw.feeSource === 'file' || raw.feeSource === 'template') t.feeSource = raw.feeSource;
+    if (raw.srcInfo && typeof raw.srcInfo === 'object') { var si = {}; ['broker', 'report', 'account'].forEach(function (k) { if (typeof raw.srcInfo[k] === 'string' && raw.srcInfo[k]) si[k] = raw.srcInfo[k].slice(0, 60); }); if (Object.keys(si).length) t.srcInfo = si; }
     if (typeof raw.importBatch === 'string' && /^[A-Za-z0-9_-]{1,60}$/.test(raw.importBatch)) t.importBatch = raw.importBatch;
 
     return e.length ? { ok: false, errors: e } : { ok: true, trade: t };
