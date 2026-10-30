@@ -102,3 +102,9 @@ figure.ch { margin: 6px 0 10px; } figure.ch svg { width: 100%; height: auto; dis
 @media (prefers-reduced-motion: reduce) { .ui-meter i, .ui-toast { transition: none; } .ui-dlg-back { animation: none; } }
 .an-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; } .an-dims { margin-bottom: 10px; } .an-w h2 { margin-top: 0; }
 .an-w .ui-stat b { white-space: nowrap; font-size: clamp(17px, 5.4vw, 22px); } .an-w .ui-table th, .an-w .ui-table td { padding: 8px 6px; }
+
+/* update-ready bar (pwa.js): small, dismissible, never blocks input */
+.upd-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + 74px + env(safe-area-inset-bottom)); z-index: 59; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 99px; background: var(--glass-strong); border: 1px solid var(--line-hot); backdrop-filter: blur(12px); font-size: 13px; max-width: calc(100vw - 32px); }
+.upd-bar button { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .12em; border: 0; border-radius: 99px; padding: 8px 12px; cursor: pointer; min-height: 32px; }
+.upd-go { background: var(--cyan); color: #03050c; } .upd-x { background: transparent; color: var(--muted); font-size: 18px !important; padding: 4px 10px !important; }
+@media (min-width: 900px) { .upd-bar { bottom: 24px; left: calc(50% + var(--side-w) / 2); } }

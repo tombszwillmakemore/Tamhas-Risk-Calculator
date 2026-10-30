@@ -29,7 +29,7 @@
   ];
   var DEFAULT_HIDDEN = [];     // every section is visible by default; ones with nothing to show simply render nothing
 
-  function defaults() { return { v: 1, name: '', interests: [], density: 'comfortable', startPage: 'home', onboarded: false, tourSeen: false, favorites: [], recents: [], widgets: defaultWidgets(), goalNote: '', goalDate: '', whatsNewSeen: 0, lastView: 'home', lastSeen: 0, recentCalc: null }; }
+  function defaults() { return { v: 1, name: '', interests: [], density: 'comfortable', startPage: 'home', onboarded: false, tourSeen: false, favorites: [], recents: [], widgets: defaultWidgets(), goalNote: '', goalDate: '', whatsNewSeen: 0, toursSeen: [], lastView: 'home', lastSeen: 0, recentCalc: null }; }
   function defaultWidgets() { return WIDGETS.map(function (w) { return { id: w.id, visible: DEFAULT_HIDDEN.indexOf(w.id) < 0 }; }); }
   function cleanName(v) { return str(v).replace(/<[^>]*>/g, '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24); }
   function validViewId(id) { return CATALOG.some(function (c) { return c.id === id; }); }
@@ -50,6 +50,7 @@
     d.widgets = cleanWidgets(r.widgets); d.goalNote = str(r.goalNote).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 140);
     d.goalDate = /^\d{4}-\d{2}-\d{2}$/.test(str(r.goalDate)) ? str(r.goalDate) : ''; if (!d.goalNote) d.goalDate = '';
     d.whatsNewSeen = Number.isInteger(r.whatsNewSeen) && r.whatsNewSeen >= 0 ? r.whatsNewSeen : 0; d.lastView = validViewId(r.lastView) ? r.lastView : 'home'; d.lastSeen = Number.isFinite(r.lastSeen) && r.lastSeen > 0 ? r.lastSeen : 0;
+    d.toursSeen = uniq((Array.isArray(r.toursSeen) ? r.toursSeen : []).filter(function (i) { return REG.byId(i); })).slice(0, 40);
     var rc = r.recentCalc; d.recentCalc = rc && typeof rc === 'object' ? { entry: str(rc.entry).slice(0, 14), stop: str(rc.stop).slice(0, 14), risk: str(rc.risk).slice(0, 14), inst: str(rc.inst).slice(0, 10) } : null;
     return d;
   }

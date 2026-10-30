@@ -409,7 +409,7 @@
         if (/^(yes|yep|yeah|sure|ok|okay|save)/.test(n) && r.data.lesson) { var text = r.data.lesson; ctx.routine = null; return needConfirm('To confirm: save this as a reflection dated today? "' + text.slice(0, 160) + '"', [{ type: 'saveReflection', text: text, ok: 'Saved your reflection.', fail: 'I could not save the reflection.' }], 'Saving your reflection.'); }
         r.i++;
       }
-      else if (key === 'focus') { if (!/^(skip|next)$/.test(n)) { var tx = data.raw || n; ctx.routine = null; return needConfirm('To confirm: save "' + tx.slice(0, 160) + '" as your focus for next week in your Discipline goals?', [{ type: 'saveGoal', text: tx, ok: 'Saved your focus.', fail: 'I could not save that.' }], 'Saving.'); } r.i++; }
+      else if (key === 'focus') { if (!/^(skip|next)$/.test(n)) { var tx = data.raw || n; ctx.routine = null; return needConfirm('To confirm: show "' + tx.slice(0, 160) + '" as your focus note on the dashboard?', [{ type: 'saveGoal', text: tx, ok: 'Saved your focus.', fail: 'I could not save that.' }], 'Saving.'); } r.i++; }
       else { r.i++; }
       if (r.i >= CT.ROUTINES[r.id].steps.length) { ctx.routine = null; return R(note + 'That completes your ' + CT.ROUTINES[r.id].title.toLowerCase() + '. Nice work.', { chips: ['Open journal', 'What is new'] }); }
       res = routineStep(); res.reply = note + res.reply; return res;
@@ -605,7 +605,22 @@
     }
     return { handle: handle, ctx: ctx, reset: function () { for (var k in ctx) ctx[k] = null; ctx.level = 'plain'; ctx.depth = 0; }, endRoutine: function () { ctx.routine = null; ctx.quiz = null; ctx.pending = null; ctx.confirm = null; } };
   }
-  var api = { createSession: createSession, norm: norm, wordsToNumbers: wordsToNumbers, slotsFrom: slotsFrom, findInstrument: findInstrument, calcFallback: calcFallback, rangeOf: rangeOf, money: money, MAX_SHORTCUTS: MAX_SHORTCUTS, MAX_MEMORY: MAX_MEMORY };
+  /* ---------- Copilot preferences (local, included in backups). Everything is validated; bad data falls back to defaults. ---------- */
+  function str(v, n) { return String(v == null ? '' : v).replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n); }
+  function defaultPrefs() { return { v: 1, voice: { uri: '', rate: 1, mode: 'voice', greet: false }, micConsent: false, shortcuts: [], memory: {}, tried: [], recent: [] }; }
+  function cleanPrefs(raw) {
+    var d = defaultPrefs(), r = raw && typeof raw === 'object' ? raw : {}, v = r.voice && typeof r.voice === 'object' ? r.voice : {};
+    d.voice.uri = str(v.uri, 200); var rate = Number(v.rate); d.voice.rate = isFinite(rate) ? Math.min(1.6, Math.max(0.6, Math.round(rate * 100) / 100)) : 1;
+    d.voice.mode = ['voice', 'always', 'never'].indexOf(v.mode) >= 0 ? v.mode : 'voice'; d.voice.greet = v.greet === true; d.micConsent = r.micConsent === true;
+    var seen = {}; d.shortcuts = (Array.isArray(r.shortcuts) ? r.shortcuts : []).map(function (x) { return x && { phrase: str(x.phrase, 40), command: str(x.command, 120) }; }).filter(function (x) { if (!x || x.phrase.length < 2 || !x.command || seen[norm(x.phrase)]) return false; seen[norm(x.phrase)] = 1; return true; }).slice(0, MAX_SHORTCUTS);
+    var m = r.memory && typeof r.memory === 'object' ? r.memory : {};
+    if (m.defaultInstrument && INST.byId[m.defaultInstrument]) d.memory.defaultInstrument = m.defaultInstrument;
+    if (Number(m.defaultRisk) > 0 && Number(m.defaultRisk) <= 1000000) d.memory.defaultRisk = Number(m.defaultRisk);
+    d.tried = (Array.isArray(r.tried) ? r.tried : []).filter(function (id) { return REG.byId(id); }).slice(0, 40);
+    d.recent = (Array.isArray(r.recent) ? r.recent : []).map(function (x) { return str(x, 100); }).filter(Boolean).slice(0, 8);
+    return d;
+  }
+  var api = { cleanPrefs: cleanPrefs, defaultPrefs: defaultPrefs, createSession: createSession, norm: norm, wordsToNumbers: wordsToNumbers, slotsFrom: slotsFrom, findInstrument: findInstrument, calcFallback: calcFallback, rangeOf: rangeOf, money: money, MAX_SHORTCUTS: MAX_SHORTCUTS, MAX_MEMORY: MAX_MEMORY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.TTCopilotCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

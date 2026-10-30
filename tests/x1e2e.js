@@ -27,7 +27,7 @@ const view = (p) => p.evaluate(() => (document.querySelector('.view.active') || 
     let pr = await prof(p); ok(T + 'profile saved locally: sanitized name, interests, onboarded', pr && pr.onboarded === true && !/[<>]/.test(pr.name) && /Alex/.test(pr.name) && pr.interests.join() === 'risk,prop', pr);
     ok(T + 'name stored as plain text', pr.name === 'Alex', pr.name);
     // ---- tour
-    ok(T + 'tour step 1 on dashboard', /STEP 1 OF 5/.test(await p.innerText('.coach')) && (await view(p)) === 'view-home');
+    ok(T + 'tour step 1 on dashboard', /STEP 1 OF 6/.test(await p.innerText('.coach')) && (await view(p)) === 'view-home');
     await p.click('#tNext'); ok(T + 'tour step 2 opens the calculator and highlights nav', (await view(p)) === 'view-calc' && (await p.evaluate(() => !!document.querySelector('.nav [data-view=calc].tour-ring'))));
     await p.click('#tNext'); await p.click('#tBack'); ok(T + 'tour back works', /STEP 2/.test(await p.innerText('.coach')));
     await p.click('#tSkip'); ok(T + 'skip closes the tour and remembers it', (await p.$('.coach')) === null && (await prof(p)).tourSeen === true);
@@ -94,7 +94,7 @@ const view = (p) => p.evaluate(() => (document.querySelector('.view.active') || 
     // ---- help
     await p.evaluate(() => TTNav.go('help')); await p.waitForSelector('.gl details'); ok(T + 'help: glossary, shortcuts, what is new', (await p.$$('.gl details')).length >= 10 && /Ctrl/.test(await p.innerText('#hpKeys')) && /A more personal dashboard/.test(await p.innerText('#hpNew')));
     await p.click('.gl summary >> nth=0'); ok(T + 'glossary entry opens', await p.evaluate(() => document.querySelector('.gl details').open)); await p.screenshot({ path: path.join(out, 'X-help-' + theme + '.png'), fullPage: false });
-    ok(T + 'opening help marks what\'s new as seen', (await prof(p)).whatsNewSeen === 7);
+    await p.waitForTimeout(1800); ok(T + 'opening help marks what\'s new as seen', (await prof(p)).whatsNewSeen === 8);
     // ---- keyboard shortcuts
     await p.evaluate(() => { TTNav.go('home'); document.activeElement.blur(); }); await p.keyboard.press('g'); await p.keyboard.press('j'); ok(T + 'g then j -> journal', (await view(p)) === 'view-journal'); await p.keyboard.press('g'); await p.keyboard.press('h'); ok(T + 'g then h -> dashboard', (await view(p)) === 'view-home'); await p.keyboard.press('?'); ok(T + '? -> help', (await view(p)) === 'view-help');
     await p.evaluate(() => TTNav.go('settings')); await p.focus('#nameInput'); await p.keyboard.type('gj'); ok(T + 'shortcuts ignored while typing', (await view(p)) === 'view-settings');
