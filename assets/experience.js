@@ -3,7 +3,7 @@
    their logic. Personal choices live on this device only (localStorage, mirrored into backups). No account, no network. */
 (function () {
   'use strict';
-  var X = window.TTExperienceCore, U = window.TTUI, N = window.TTNav, C = window.TTJournalCore, A = window.TTAnalyticsCore, DB = window.TTDB, ST = window.TTStore, INST = window.TTInstruments;
+  var X = window.TTExperienceCore, U = window.TTUI, N = window.TTNav, C = window.TTJournalCore, A = window.TTAnalyticsCore, DB = window.TTDB, ST = window.TTStore, INST = window.TTInstruments, REG = window.TTRegistry;
   if (!X || !N) return;
   var esc = U.esc, KEY = 'tt.profile.v1', CALC_KEY = 'tt.calc.last.v1', LEGACY_SETTINGS = 'tt.settings.v1';
   var P = X.defaults(), S = { rows: [], plan: null, refToday: false, customizing: false, cur: 'home', data: false };
@@ -83,7 +83,7 @@
     },
     recents: function () { var r = P.recents.filter(function (id) { return X.entry(id); }).slice(0, 4); return r.length ? '<h2>Recently used</h2><div class="chips">' + r.map(function (id) { return '<button type="button" class="chip" data-go="' + id + '">' + esc(title(id).toUpperCase()) + '</button>'; }).join('') + '</div>' : ''; },
     tools: function () { return '<h2>All tools</h2><div class="xgrid">' + X.prioritize(P).map(function (id) { return tile(id, true); }).join('') + '</div>'; },
-    news: function () { var n = X.WHATS_NEW[0]; if (!n || n.id <= P.whatsNewSeen) return ''; return '<div class="wd-head"><h2>What\'s new</h2><button type="button" class="linkbtn" data-xact="dismiss-news">Dismiss</button></div><h3 style="margin:0 0 4px;font-size:16px">' + esc(n.title) + '</h3><ul style="margin:6px 0 10px;padding-left:20px;color:var(--muted);line-height:1.5">' + n.items.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('') + '</ul><button type="button" class="linkbtn" data-go="help">More in Help</button>'; }
+    news: function () { var n = X.WHATS_NEW[0]; if (!n || n.id <= P.whatsNewSeen) return ''; return '<div class="wd-head"><h2>What\'s new</h2><button type="button" class="linkbtn" data-xact="dismiss-news">Dismiss</button></div><h3 style="margin:0 0 4px;font-size:16px">' + esc(n.title) + '</h3><ul style="margin:6px 0 10px;padding-left:20px;color:var(--muted);line-height:1.5">' + n.items.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('') + '</ul>' + (n.features || []).map(function (id) { return REG.byId(id); }).filter(function (f) { return f && f.kind === 'screen'; }).slice(0, 2).map(function (f) { return '<button type="button" class="btn ghost" style="margin:0 8px 8px 0" data-xact="ftour" data-f="' + esc(f.id) + '">TRY: ' + esc(f.title.toUpperCase()) + '</button>'; }).join('') + '<br><button type="button" class="linkbtn" data-go="help">More in Help</button>'; }
   };
   var STATIC = { pnl: 1, sessions: 1, next: 1 };
   function buildWidgets() {
@@ -153,14 +153,16 @@
   }
   function waitFor(sel, fn, ms) { var t = Date.now(); (function poll() { var el = $(sel); if (el) { fn(el); return; } if (Date.now() - t < (ms || 2500)) setTimeout(poll, 60); })(); }
   function scrollTo(sel) { waitFor(sel, function (el) { el.scrollIntoView({ block: 'center' }); if (el.focus) try { el.focus({ preventScroll: true }); } catch (e) {} }); }
+  function openNewTrade() { var t = $('#view-journal [data-act=tab][data-tab=entries]'); if (t && !$('#view-journal [data-act=new]')) t.click(); waitFor('#view-journal [data-act=new]', function (b) { b.click(); }); }
   function run(item) {
     go(item.view);
     if (item.kind !== 'action') return;
     var a = item.act;
-    if (a === 'new-trade') waitFor('#view-journal [data-act=new]', function (b) { b.click(); });
+    if (a === 'new-trade') openNewTrade();
     else if (a === 'focus-name') scrollTo('#nameInput'); else if (a === 'theme') scrollTo('#themePick'); else if (a === 'personalize') scrollTo('#personalizePanel'); else if (a === 'sessions') scrollTo('#sessionEditor');
     else if (a === 'tour') startTour(); else if (a === 'customize') { S.customizing = true; renderCustomize(); setTimeout(function () { var c = $('#customPanel'); if (c) c.scrollIntoView({ block: 'center' }); }, 50); }
-    else if (a === 'backup') waitFor('#view-journal [data-act=tab][data-t=backup], #view-journal [data-t=backup]', function (b) { b.click(); }); else if (a === 'whatsnew') scrollTo('#hpNew'); else if (a === 'shortcuts') scrollTo('#hpKeys');
+    else if (a === 'backup') waitFor('#view-journal [data-act=tab][data-tab=backup]', function (b) { b.click(); }); else if (a === 'whatsnew') scrollTo('#hpNew'); else if (a === 'shortcuts') scrollTo('#hpKeys');
+    else if (a === 'report' && window.TTSupport) window.TTSupport.openReport(); else if (a === 'copilot' && window.TTCopilotBoot) window.TTCopilotBoot.open();
   }
 
   /* ---------- welcome and tour ---------- */
@@ -185,15 +187,24 @@
     });
     obOv.el.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.id === 'obName') { e.preventDefault(); name = e.target.value; step = 1; draw(); } });
   }
-  var tourEl = null, tourStep = 0;
+  var tourEl = null, tourStep = 0, tourSteps = [], tourMeta = {};
   function clearRing() { $$('.tour-ring').forEach(function (e) { e.classList.remove('tour-ring'); }); }
-  function startTour() { tourStep = 0; drawTour(); }
-  function endTour(done) { clearRing(); if (tourEl) { tourEl.remove(); tourEl = null; } P.tourSeen = true; persist(); if (done) toast('Tour finished. Replay it anytime from Help or Settings.'); }
+  function runTour(steps, meta) { if (!steps || !steps.length) return false; tourSteps = steps; tourMeta = meta || {}; tourStep = 0; drawTour(); return true; }
+  function startTour() { return runTour(X.TOUR.map(function (t) { return { view: t.view, ring: t.ring || (t.view === 'home' ? '#customizeBtn' : ''), title: t.title, text: t.text }; }), { main: true }); }
+  // A short tour for one feature, built from the registry. Remembered in P.toursSeen so it is offered once, then available any time.
+  function featureTour(id) {
+    var f = REG && REG.byId(id); if (!f || !f.tour || !f.tour.length) { toast('There is no tour for that yet.', true); return false; }
+    var v = f.virtual ? 'home' : f.view; if (tourEl) endTour(false);
+    return runTour(f.tour.map(function (t) { return { view: v, ring: t.target, title: t.title, text: t.text }; }), { feature: id });
+  }
+  function markToured(id) { if (id && P.toursSeen.indexOf(id) < 0) { P.toursSeen = P.toursSeen.concat([id]); persist(); } }
+  function endTour(done) { clearRing(); if (tourEl) { tourEl.remove(); tourEl = null; } if (tourMeta.main) P.tourSeen = true; if (tourMeta.feature) markToured(tourMeta.feature); persist(); if (done) toast(tourMeta.feature ? 'Tour finished. Replay it any time from Help.' : 'Tour finished. Replay it anytime from Help or Settings.'); tourMeta = {}; }
   function drawTour() {
-    var s = X.TOUR[tourStep]; if (!s) { endTour(true); return; } go(s.view); clearRing();
-    var ringSel = s.view === 'calc' ? '.nav [data-view=calc]' : s.view === 'journal' ? '.nav [data-view=journal]' : s.view === 'more' ? '.nav [data-view=more]' : tourStep === X.TOUR.length - 1 ? '#searchBtn' : '#customizeBtn'; var r = $(ringSel); if (r) r.classList.add('tour-ring');
+    var s = tourSteps[tourStep]; if (!s) { endTour(true); return; } if (s.view) go(s.view); clearRing();
+    if (s.ring) waitFor(s.ring, function (el) { if (!tourEl) return; clearRing(); el.classList.add('tour-ring'); try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }, 1500);
     if (!tourEl) { tourEl = document.createElement('div'); tourEl.className = 'coach'; tourEl.setAttribute('role', 'dialog'); tourEl.setAttribute('aria-label', 'Tour'); document.body.appendChild(tourEl); tourEl.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; if (b.id === 'tNext') { tourStep++; drawTour(); } else if (b.id === 'tBack') { tourStep--; drawTour(); } else if (b.id === 'tSkip') endTour(false); }); tourEl.addEventListener('keydown', function (e) { if (e.key === 'Escape') endTour(false); }); }
-    tourEl.innerHTML = '<small>STEP ' + (tourStep + 1) + ' OF ' + X.TOUR.length + '</small><h3>' + esc(s.title) + '</h3><p>' + esc(s.text) + '</p><div class="xact">' + (tourStep ? '<button type="button" class="btn ghost" id="tBack">BACK</button>' : '') + '<button type="button" class="btn ghost" id="tSkip">SKIP</button><button type="button" class="btn" id="tNext">' + (tourStep === X.TOUR.length - 1 ? 'FINISH' : 'NEXT') + '</button></div>'; $('#tNext', tourEl).focus();
+    var last = tourStep === tourSteps.length - 1;
+    tourEl.innerHTML = '<small>STEP ' + (tourStep + 1) + ' OF ' + tourSteps.length + '</small><h3>' + esc(s.title) + '</h3><p>' + esc(s.text) + '</p><div class="xact">' + (tourStep ? '<button type="button" class="btn ghost" id="tBack">BACK</button>' : '') + '<button type="button" class="btn ghost" id="tSkip">SKIP</button><button type="button" class="btn" id="tNext">' + (last ? 'FINISH' : 'NEXT') + '</button></div>'; $('#tNext', tourEl).focus();
   }
 
   /* ---------- screens: back bar, star, hub, settings, help ---------- */
@@ -233,15 +244,36 @@
       toast('Personalization reset.', false, { label: 'UNDO', fn: function () { P = X.cleanPrefs(JSON.parse(before)); persist(); applyDensity(); afterProfile(); } });
     });
   }
+  function newBadge(f) { return f.since > P.whatsNewSeen && P.toursSeen.indexOf(f.id) < 0 ? ' <span class="xnew">NEW</span>' : ''; }
+  function guideHtml(f) {
+    var h = f.help || {}, hasTour = f.tour && f.tour.length;
+    return '<details id="hp-' + esc(f.id) + '"><summary>' + esc(f.title) + newBadge(f) + '</summary><p>' + esc(h.summary || f.text) + '</p>' +
+      (h.how && h.how.length ? '<ol>' + h.how.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>' : '') +
+      (h.faq && h.faq.length ? h.faq.map(function (q) { return '<p><b>' + esc(q.q) + '</b><br>' + esc(q.a) + '</p>'; }).join('') : '') +
+      '<div class="xact">' + (hasTour ? '<button type="button" class="btn ghost" data-xact="ftour" data-f="' + esc(f.id) + '">TEACH ME THIS</button>' : '') + (f.virtual ? '<button type="button" class="btn ghost" data-xact="copilot">OPEN COPILOT</button>' : '<button type="button" class="btn ghost" data-go="' + esc(f.view) + '">OPEN</button>') + '</div></details>';
+  }
+  function releaseHtml(n, i) {
+    var fl = (n.features || []).map(function (id) { return REG.byId(id); }).filter(function (f) { return f && f.kind === 'screen'; });
+    return '<h3>' + esc(n.title) + (n.id > P.whatsNewSeen ? ' <span class="xnew">NEW</span>' : '') + '</h3><small>Version ' + esc(n.version) + ' · ' + esc(n.date) + '</small><ul>' + n.items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' +
+      (n.fixes && n.fixes.length ? '<p class="note" style="margin:4px 0 2px"><b>Fixed</b></p><ul>' + n.fixes.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '') +
+      (fl.length ? '<div class="xact">' + fl.map(function (f) { return '<button type="button" class="btn ghost" data-xact="ftour" data-f="' + esc(f.id) + '">TRY: ' + esc(f.title.toUpperCase()) + '</button>'; }).join('') + '</div>' : '');
+  }
   function renderHelp() {
     var h = $('#hpRoot'); if (!h) return;
-    h.innerHTML = '<div class="panel"><h2>Getting around</h2><p class="note" style="margin-top:0">Press <kbd class="kbd">Ctrl</kbd>/<kbd class="kbd">Cmd</kbd> + <kbd class="kbd">K</kbd> or tap the magnifier at the top to find any tool or setting.</p><div class="xact" style="margin-top:8px"><button type="button" class="btn" data-xact="tour">REPLAY WELCOME TOUR</button><button type="button" class="btn ghost" data-xact="search">SEARCH</button></div></div>' +
+    var screens = REG.screens();
+    h.innerHTML = '<div class="panel"><h2>Getting around</h2><p class="note" style="margin-top:0">Press <kbd class="kbd">Ctrl</kbd>/<kbd class="kbd">Cmd</kbd> + <kbd class="kbd">K</kbd> or tap the magnifier at the top to find any tool or setting.</p><div class="xact" style="margin-top:8px"><button type="button" class="btn" data-xact="tour">REPLAY WELCOME TOUR</button><button type="button" class="btn ghost" data-xact="search">SEARCH</button><button type="button" class="btn ghost" data-xact="copilot">ASK COPILOT</button></div></div>' +
+      '<div class="panel nw" id="hpNew"><h2>What\'s new</h2>' + X.WHATS_NEW.map(releaseHtml).join('<hr class="xhr">') + '</div>' +
+      '<div class="panel gl" id="hpGuides"><h2>Feature guides</h2><p class="note" style="margin-top:0">Every tool, explained. Tap one to read it or take a short tour.</p>' + screens.map(guideHtml).join('') + '</div>' +
       '<div class="panel gl"><h2>Plain-language glossary</h2>' + X.GLOSSARY.map(function (g) { return '<details><summary>' + esc(g.term) + '</summary><p>' + esc(g.text) + '</p></details>'; }).join('') + '</div>' +
       '<div class="panel" id="hpKeys"><h2>Keyboard shortcuts</h2><table class="sc-table">' + X.SHORTCUTS.map(function (s) { return '<tr><td><kbd class="kbd">' + esc(s[0]) + '</kbd></td><td>' + esc(s[1]) + '</td></tr>'; }).join('') + '</table></div>' +
-      '<div class="panel nw" id="hpNew"><h2>What\'s new</h2>' + X.WHATS_NEW.map(function (n) { return '<h3>' + esc(n.title) + '</h3><small>' + esc(n.date) + '</small><ul>' + n.items.map(function (i) { return '<li>' + esc(i) + '</li>'; }).join('') + '</ul>'; }).join('') + '</div>' +
-      '<div class="panel"><h2>Your data</h2><p class="note" style="margin:0">Everything is saved in this browser only. Use Journal → Backup to download a copy, and System health to check your data. Tamhas Trading does not give financial advice.</p></div>';
-    if (X.WHATS_NEW[0] && P.whatsNewSeen < X.WHATS_NEW[0].id) { P.whatsNewSeen = X.WHATS_NEW[0].id; persist(); buildWidgets(); }
+      '<div class="panel"><h2>Your data and this app</h2><p class="note" style="margin:0">Everything is saved in this browser on this device only. Use Journal → Backup to download a copy, and System health to check your data. Tamhas Trading does not give financial advice.</p><p class="note">Version ' + esc(REG.APP_VERSION) + '.</p><div class="xact"><button type="button" class="btn ghost" data-xact="report">REPORT A PROBLEM</button></div></div>';
   }
+  function syncDot() {
+    var unseen = X.WHATS_NEW[0] && P.whatsNewSeen < X.WHATS_NEW[0].id;
+    $$('.nav [data-view=more]').forEach(function (b) { var d = b.querySelector('.nav-dot'); if (unseen && !d) { d = document.createElement('i'); d.className = 'nav-dot'; d.setAttribute('role', 'img'); d.setAttribute('aria-label', 'New updates'); b.appendChild(d); } else if (!unseen && d) d.remove(); });
+    $$('[data-go=help]', $('#hubRoot') || document.createElement('div')).forEach(function (b) { var d = b.querySelector('.xnew'); if (unseen && !d) { d = document.createElement('span'); d.className = 'xnew'; d.textContent = 'NEW'; b.appendChild(d); } else if (!unseen && d) d.remove(); });
+  }
+  function markNewsSeen() { if (X.WHATS_NEW[0] && P.whatsNewSeen < X.WHATS_NEW[0].id) { P.whatsNewSeen = X.WHATS_NEW[0].id; persist(); buildWidgets(); syncDot(); } }
 
   /* ---------- calculator niceties: remember last inputs, reset, copy, hints ---------- */
   function enhanceCalc() {
@@ -266,11 +298,13 @@
     if (t.hasAttribute('data-copy')) { copyText(t.getAttribute('data-copy')); return; }
     if (t.hasAttribute('data-wmove')) { P.widgets = X.moveWidget(P.widgets, t.getAttribute('data-wmove'), +t.getAttribute('data-d')); persist(); buildWidgets(); var again = $('[data-wmove="' + t.getAttribute('data-wmove') + '"][data-d="' + t.getAttribute('data-d') + '"]'); if (again && !again.disabled) again.focus(); return; }
     var a = t.getAttribute('data-xact'); e.preventDefault();
-    if (a === 'search') openSearch(); else if (a === 'tour') { if (obOv) return; go('home'); startTour(); } else if (a === 'new-trade') { go('journal'); waitFor('#view-journal [data-act=new]', function (b) { b.click(); }); }
+    if (a === 'search') openSearch(); else if (a === 'tour') { if (obOv) return; go('home'); startTour(); } else if (a === 'new-trade') { go('journal'); openNewTrade(); }
     else if (a === 'customize') { S.customizing = !S.customizing; renderCustomize(); if (S.customizing) { var c = $('#customPanel'); if (c && c.scrollIntoView) c.scrollIntoView({ block: 'nearest' }); } }
     else if (a === 'reset-layout') { var wb = JSON.stringify(P.widgets); P.widgets = X.defaults().widgets; persist(); buildWidgets(); toast('Dashboard reset to default.', false, { label: 'UNDO', fn: function () { P.widgets = JSON.parse(wb); persist(); buildWidgets(); } }); }
     else if (a === 'dismiss-news') { P.whatsNewSeen = X.WHATS_NEW[0].id; persist(); buildWidgets(); }
     else if (a === 'reset-all') resetAll();
+    else if (a === 'ftour') featureTour(t.getAttribute('data-f')); else if (a === 'report' && window.TTSupport) window.TTSupport.openReport();
+    else if (a === 'copilot' && window.TTCopilotBoot) window.TTCopilotBoot.open();
   });
   document.addEventListener('change', function (e) {
     var w = e.target.getAttribute && e.target.getAttribute('data-wvis'); if (w) { P.widgets = P.widgets.map(function (x) { return x.id === w ? { id: x.id, visible: e.target.checked } : x; }); persist(); buildWidgets(); var again = $('[data-wvis="' + w + '"]'); if (again) again.focus(); return; }
@@ -284,7 +318,7 @@
     if ((e.ctrlKey || e.metaKey) && k === 'k') { e.preventDefault(); if (searchOv) searchOv.close('toggle'); else openSearch(); return; }
     if (typing || e.ctrlKey || e.metaKey || e.altKey || searchOv || obOv || document.querySelector('.ui-dlg-back')) return;
     if (k === '/') { e.preventDefault(); openSearch(); } else if (k === '?') { e.preventDefault(); go('help'); scrollTo('#hpKeys'); }
-    else if (k === 'n') { go('journal'); waitFor('#view-journal [data-act=new]', function (b) { b.click(); }); }
+    else if (k === 'n') { go('journal'); openNewTrade(); }
     else if (k === 'g') { gPending = Date.now(); }
     else if (gPending && Date.now() - gPending < 1200) { var m = { h: 'home', j: 'journal', r: 'calc', a: 'analytics', s: 'settings' }[k]; gPending = 0; if (m) go(m); }
   });
@@ -292,20 +326,27 @@
     var n = e.detail.name; S.cur = n; syncStars();
     if (X.entry(n) && n !== 'home') { P.recents = X.pushRecent(P.recents, n); P.lastView = n; persist(); }
     if (n === 'home') { renderGreeting(); loadData().then(buildWidgets); }
-    if (n === 'more') renderHub(); if (n === 'settings') renderSettings(); if (n === 'help') renderHelp();
+    if (n === 'more') renderHub(); if (n === 'settings') renderSettings(); if (n === 'help') { renderHelp(); setTimeout(function () { if (S.cur === 'help') { markNewsSeen(); } }, 1500); }
+    syncDot();
   });
   window.addEventListener('tt:journal-changed', function () { if (S.cur === 'home') loadData().then(buildWidgets); });
   var nameSave = $('#saveName'); if (nameSave) nameSave.addEventListener('click', function () { var v = X.cleanName($('#nameInput').value); P.name = v.toLowerCase() === 'trader' ? '' : v; persist(); renderGreeting(); });
   window.addEventListener('pagehide', function () { P.lastSeen = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(X.cleanPrefs(P))); } catch (e) {} });
 
-  function afterProfile() { applyDensity(); renderGreeting(); buildWidgets(); if (S.cur === 'more') renderHub(); renderSettings(); var ni = $('#nameInput'); if (ni && P.name && document.activeElement !== ni) ni.value = P.name; syncStars(); }
+  // Existing users get ONE quiet pointer per release (never the full onboarding again). Skipping it loses nothing: the dot on More stays until What's New is opened.
+  function nudgeRelease() {
+    var rel = X.WHATS_NEW[0]; if (!rel || P.whatsNewSeen >= rel.id) return; var key = 'tt.nw.nudged', last = 0;
+    try { last = +localStorage.getItem(key) || 0; } catch (e) {} if (last >= rel.id) return;
+    var tries = 0; (function later() { setTimeout(function () { var tt = document.querySelector('.ui-toast.show'); if (obOv || searchOv || tourEl || document.getElementById('copilotPanel') || tt || document.querySelector('.ui-dlg-back, .xo')) { if (++tries < 4) later(); return; } try { localStorage.setItem(key, String(rel.id)); } catch (e) {} toast('New in version ' + rel.version + ': ' + rel.title + '.', false, { label: 'SEE WHAT\'S NEW', fn: function () { go('help'); scrollTo('#hpNew'); } }); }, tries ? 15000 : 4000); })();
+  }
+  function afterProfile() { syncDot(); applyDensity(); renderGreeting(); buildWidgets(); if (S.cur === 'more') renderHub(); renderSettings(); var ni = $('#nameInput'); if (ni && P.name && document.activeElement !== ni) ni.value = P.name; syncStars(); }
   function refreshAll() { buildWidgets(); renderHub(); syncStars(); }
 
   /* ---------- start ---------- */
   function init() {
     var stored = readLocal(), fresh = !stored; P = X.cleanPrefs(stored);
     if (fresh) { var ln = legacyName(); if (ln) { P.name = ln; P.onboarded = true; } }      // existing users keep their name and skip the welcome
-    ensureHomeHead(); addBackBars(); enhanceCalc(); applyDensity(); renderGreeting(); renderSettings(); renderHelp(); renderHub();
+    ensureHomeHead(); addBackBars(); enhanceCalc(); applyDensity(); renderGreeting(); renderSettings(); renderHelp(); renderHub(); syncDot();
     // A profile restored from a backup beats an empty one.
     if (fresh && ST) ST.getPref('profile', null).then(function (v) { if (v && !P.onboarded) { P = X.cleanPrefs(v); persist(); afterProfile(); } }).catch(function () {});
     loadData().then(function () {
@@ -314,8 +355,14 @@
       if (!deep && P.onboarded && (P.startPage === 'last' ? P.lastView !== 'home' : P.startPage !== 'home')) go(P.startPage === 'last' ? P.lastView : P.startPage);
       if (!P.onboarded && (S.rows.length || legacyName())) { P.onboarded = true; if (!P.name) P.name = legacyName(); persist(); afterProfile(); toast('New: a 1-minute tour of the dashboard, search and more.', false, { label: 'TAKE TOUR', fn: startTour }); P.tourSeen = true; persist(); }   // existing users skip the welcome
       else if (!P.onboarded) startWelcome();
+      else nudgeRelease();
     });
   }
-  window.TTExperience = { state: S, prefs: function () { return P; }, openSearch: openSearch, startTour: startTour, startWelcome: startWelcome };
+  window.TTExperience = { state: S, prefs: function () { return P; }, openSearch: openSearch, startTour: startTour, startWelcome: startWelcome, featureTour: featureTour, runTour: runTour, endTour: endTour,
+    setDensity: function (d) { P.density = d === 'compact' ? 'compact' : 'comfortable'; persist(); applyDensity(); renderSettings(); return P.density === d; },
+    customize: function () { go('home'); S.customizing = true; renderCustomize(); setTimeout(function () { var c = $('#customPanel'); if (c) c.scrollIntoView({ block: 'center' }); }, 50); return true; },
+    highlight: function (sel, text) { clearRing(); waitFor(sel, function (el) { el.classList.add('tour-ring'); try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} setTimeout(clearRing, 6000); }, 1500); return !!$(sel) || true; },
+    markTried: function (id) { markToured(id); }, syncDot: syncDot, act: run, toursSeen: function () { return P.toursSeen.slice(); },
+    setFocus: function (t) { P.goalNote = String(t || ''); P.goalDate = P.goalNote.trim() ? todayKey() : ''; persist(); buildWidgets(); return P.goalNote.trim() !== '' ? true : false; } };
   init();
 })();

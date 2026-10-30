@@ -73,3 +73,10 @@ html[data-theme="light"] .xs { background: #fff; }
 html[data-density="compact"] .panel { padding: 12px; margin-bottom: 10px; border-radius: 14px; } html[data-density="compact"] .welcome { padding-bottom: 8px; } html[data-density="compact"] .welcome h1 { font-size: 26px; }
 html[data-density="compact"] .tile { padding: 10px; } html[data-density="compact"] .ui-list li { padding-top: 6px; padding-bottom: 6px; } html[data-density="compact"] .field { margin-bottom: 8px; }
 @media (prefers-reduced-motion: reduce) { .xo, .xcard, .xs, .coach, .tour-ring, .ui-loading::before { animation: none !important; } .skip-link { transition: none; } }
+
+/* registry-driven additions: new badges, unseen-update dot, release separators */
+.xnew { display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: .12em; padding: 2px 6px; border-radius: 99px; background: linear-gradient(90deg, var(--cyan), var(--purple)); color: #03050c; vertical-align: middle; margin-left: 6px; }
+.nav button { position: relative; } .nav-dot { position: absolute; top: 6px; left: calc(50% + 8px); width: 9px; height: 9px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 0 2px var(--void), 0 0 8px var(--cyan); }
+@media (min-width: 900px) { .nav-dot { top: 50%; left: auto; right: 14px; transform: translateY(-50%); } }
+.xhr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+#hpGuides details ol { margin: 6px 0 8px; padding-left: 20px; color: var(--muted); line-height: 1.5; }

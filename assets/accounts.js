@@ -197,6 +197,8 @@
   });
   window.addEventListener('tt:journal-changed', function () { if (!S.loaded) return; load().then(function () { if (!S.editing && !S.adding) render(); }); });
   if (window.TTTracker) TTTracker.init({ getLedger: function () { return S.ledger; }, getRows: function () { return S.rows; }, getAccounts: function () { return S.accounts; }, getOpenAccount: function () { return acctById(S.open); }, save: save, rerender: function () { render(); }, toast: toast });
-  window.TTAccounts = { reload: function () { return load().then(render); } };
+  window.TTAccounts = { reload: function () { return load().then(render); },
+    // Used by TRC Copilot: expand one account by id. Returns true only if that account exists and is now open.
+    open: function (id) { if (!acctById(id)) return false; S.tab = 'accounts'; S.open = id; S.editing = null; render(); return S.open === id; }, list: function () { return S.accounts.slice(); } };
   render(); load().then(render);
 })();
