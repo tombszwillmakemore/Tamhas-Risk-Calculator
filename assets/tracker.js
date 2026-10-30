@@ -210,6 +210,7 @@
       h += '<div class="field"><label id="lf-dir-l">Direction</label><div class="seg" role="radiogroup" aria-labelledby="lf-dir-l"><label class="seg-i"><input type="radio" name="lf-dir" value="out"' + (f.dir !== 'in' ? ' checked' : '') + '><span>SEND OUT</span></label><label class="seg-i"><input type="radio" name="lf-dir" value="in"' + (f.dir === 'in' ? ' checked' : '') + '><span>RECEIVE</span></label></div></div>' +
         fld('Other account', 'lf-other', '<select id="lf-other">' + others.map(function (x) { return '<option value="' + esc(x.id) + '"' + (f.other === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select>') + money$('amount', 'Amount', 'e.g. 500', '<p class="t-hint">Writes matching records to both accounts. Transfers move money and are never counted as profit or loss.</p>');
     } else h += money$('amount', kind === 'payout' ? 'Amount withdrawn' : 'Amount added', 'e.g. 1000', '<p class="t-hint">' + (kind === 'payout' ? 'Reduces the balance. Not a trading loss. The high-water mark is not lowered; if your firm treats payouts differently, enter a Firm snapshot.' : 'Raises the balance. Not trading profit.') + '</p>');
+    if (kind === 'payout') h += money$('received', 'Amount you actually received (optional)', 'after the firm\'s split', '<p class="t-hint">Leave blank if you do not know it. Money reports then use the amount withdrawn and say so; the split is never guessed.</p>');
     h += inp('ref', 'Reference (optional)', 'receipt / payout id', 'text', 'maxlength="80"') + inp('note', 'Note (optional)', '', 'text', 'maxlength="200"');
     return h + '<div class="row2"><button type="button" class="btn" data-act="t-ledger-save" data-id="' + esc(id) + '" data-kind="' + kind + '">SAVE</button><button type="button" class="btn" data-act="t-form-cancel" data-id="' + esc(id) + '">CANCEL</button></div></div>';
   }
@@ -217,9 +218,31 @@
     var list = ledgerFor(a.id).slice().sort(function (x, y) { return y.at - x.at; }); if (!list.length) return '';
     var label = { fee: 'Fee', payout: 'Payout', deposit: 'Deposit', 'transfer-in': 'Transfer in', 'transfer-out': 'Transfer out', snapshot: 'Firm snapshot' };
     return '<details class="t-adv"' + (T.showAll['rec:' + a.id] ? ' open' : '') + ' data-k="rec:' + esc(a.id) + '"><summary>Records: fees, payouts, transfers, snapshots (' + list.length + ')</summary><div class="t-advbody">' + list.map(function (l) {
-      var amt = l.type === 'snapshot' ? ['balance ' + (l.balanceCents != null ? D.fmt(l.balanceCents) : '—'), l.thresholdCents != null ? 'threshold ' + D.fmt(l.thresholdCents) : '', l.hwmCents != null ? 'peak ' + D.fmt(l.hwmCents) : '', l.equityCents != null ? 'equity ' + D.fmt(l.equityCents) : ''].filter(Boolean).join(' · ') : D.fmt(l.amountCents) + (l.feeKind ? ' · ' + l.feeKind : '');
+      var amt = l.type === 'snapshot' ? ['balance ' + (l.balanceCents != null ? D.fmt(l.balanceCents) : '—'), l.thresholdCents != null ? 'threshold ' + D.fmt(l.thresholdCents) : '', l.hwmCents != null ? 'peak ' + D.fmt(l.hwmCents) : '', l.equityCents != null ? 'equity ' + D.fmt(l.equityCents) : ''].filter(Boolean).join(' · ') : D.fmt(l.amountCents) + (l.feeKind ? ' · ' + l.feeKind : '') + (l.type === 'payout' ? (l.receivedCents != null ? ' · received ' + D.fmt(l.receivedCents) : ' · received amount not entered') : '');
       return '<div class="t-rec' + (l.voided ? ' void' : '') + '"><div><b>' + esc(label[l.type] || l.type) + '</b> · ' + esc(dstr(l.at)) + '<div class="note">' + esc(amt) + (l.note ? ' · ' + esc(l.note) : '') + (l.ref ? ' · ref ' + esc(l.ref) : '') + (l.voided ? ' · VOIDED' : '') + '</div></div>' +
         '<button type="button" class="linkbtn" data-act="t-void" data-id="' + esc(l.id) + '" data-acct="' + esc(a.id) + '">' + (l.voided ? 'Restore' : 'Void') + '</button></div>'; }).join('') + '<p class="note">Voiding keeps the record but removes it from calculations. Nothing is deleted.</p></div></details>';
+  }
+
+  /* ---------- payout readiness (funded accounts) ----------
+     Only numbers YOU enter. Research text is shown as a hint and never pre-filled or used. */
+  var PAY_HINT = { minProfitCents: 'payoutBuffer', minPayoutCents: 'minPayout', maxPayoutCents: 'maxPayoutPerRequest', bufferCents: 'payoutBuffer', consistencyPct: 'consistencyRule', splitPct: 'profitSplit' };
+  function lastPayoutDay(aid) { var d = null; ledgerFor(aid).forEach(function (l) { if (l.type === 'payout' && !l.voided && l.date && (!d || l.date > d)) d = l.date; }); return d; }
+  function payoutSection(a, r) {
+    var M = window.TTMoney; if (!M || a.category === 'sim' || a.status === 'evaluation' || a.status === 'failed') return '';
+    var id = a.id, rules = a.payoutRules || {}, draft = T.payDraft && T.payDraft[id], errs = (T.payErr && T.payErr[id]) || [];
+    var val = function (k) { if (draft && draft[k] != null) return draft[k]; var v = rules[k]; if (v == null) return ''; return /Cents$/.test(k) ? (v / 100).toFixed(2) : String(v); };
+    var res = M.readiness(rules, { days: r.series || [], lastPayoutDay: lastPayoutDay(id), bufferCents: r.buffer && r.buffer.cents != null ? r.buffer.cents : null, balanceCents: r.balance && r.balance.cents != null ? r.balance.cents : null });
+    var badge = { met: 'ok', 'not met': 'bad', unknown: 'warn' };
+    var h = '<details class="t-adv" data-k="pay:' + esc(id) + '"' + (T.showAll['pay:' + id] ? ' open' : '') + '><summary>Payout readiness · ' + esc(res.label) + '</summary><div class="t-advbody">';
+    h += '<p class="note" style="margin-top:0">Checked only against the numbers you enter below, counting trading days after your last payout' + (lastPayoutDay(id) ? ' (' + esc(lastPayoutDay(id)) + ')' : '') + '. Your firm makes the real decision.</p>';
+    if (res.items.length) h += '<ul class="ui-list">' + res.items.map(function (i) { return '<li><span>' + esc(i.label) + '<div class="note" style="margin:2px 0 0">' + esc(i.detail) + '</div></span><span class="ui-badge ' + (i.status === 'met' ? 'good' : i.status === 'not met' ? 'bad' : 'warn') + '">' + esc(i.status) + '</span></li>'; }).join('') + '</ul>';
+    if (res.requestableCents != null) h += '<p class="note"><b>Upper bound you could request: ' + esc(D.fmt(res.requestableCents)) + '</b>' + (res.yourShareCents != null ? ' · your share at your entered split: about ' + esc(D.fmt(res.yourShareCents)) : '') + '<br>' + esc(res.requestNote) + '</p>'; else h += '<p class="note">' + esc(res.requestNote) + '</p>';
+    h += '<h3 class="a-h" style="margin-top:14px">Your payout rules</h3>' + (errs.length ? '<div class="banner bad" role="alert">' + errs.map(esc).join('<br>') + '</div>' : '');
+    M.RULE_KEYS.forEach(function (k) {
+      var hint = a.rules && a.rules[PAY_HINT[k[0]]] && a.rules[PAY_HINT[k[0]]].value;
+      h += '<div class="field"><label for="pr-' + k[0] + '">' + esc(k[1]) + '</label><input id="pr-' + k[0] + '" type="text" inputmode="decimal" value="' + esc(val(k[0])) + '" placeholder="not set"' + '>' + (hint ? '<p class="t-hint">Research note (not used): ' + esc(String(hint).slice(0, 160)) + '</p>' : '') + '</div>';
+    });
+    return h + '<div class="row2"><button type="button" class="btn small" data-act="t-pay-save" data-id="' + esc(id) + '">SAVE PAYOUT RULES</button></div></div></details>';
   }
 
   /* ---------- main entry ---------- */
@@ -235,6 +258,7 @@
       var r = compute(a, ver);
       if (!r.ok) h += '<div class="banner bad">The saved rules can no longer be read: ' + esc(r.errors.join(' ')) + ' Edit the rules to fix them.</div>';
       else h += '<p class="note" style="margin-top:0">' + esc(D.MODEL_LABEL[r.settings.model]) + (r.settings.model !== 'static' ? ' · ' + esc(r.settings.basis) + '-based' : '') + ' · rules version ' + ver.n + ', checked ' + esc(ver.verifiedOn) + '</p>' + summary(a, ver, r) + advanced(a, ver, r);
+      if (r.ok) h += payoutSection(a, r);
       h += '<div class="row2"><button type="button" class="btn small" data-act="t-rules-open" data-id="' + esc(id) + '">EDIT RULES</button></div>' + versionList(a);
     }
     h += '<div class="t-addrow" role="group" aria-label="Add a record">';
@@ -249,14 +273,14 @@
   function acct(id) { return ctx.getAccounts().filter(function (x) { return x.id === id; })[0]; }
   function readLedgerDraft() {
     var g = function (n) { var e = $('#lf-' + n); return e ? e.value : ''; }, f = {};
-    ['date', 'time', 'amount', 'balance', 'equity', 'threshold', 'hwm', 'ref', 'note', 'source', 'feeKind', 'other'].forEach(function (k) { f[k] = g(k); });
+    ['date', 'time', 'amount', 'received', 'balance', 'equity', 'threshold', 'hwm', 'ref', 'note', 'source', 'feeKind', 'other'].forEach(function (k) { f[k] = g(k); });
     var d = $('input[name="lf-dir"]:checked'); f.dir = d ? d.value : 'out'; return f;
   }
   function journalTz(a) { var v = D.activeVersion(a.dd); return v ? v.settings.journalTz : BROWSER_TZ; }
   function saveLedger(id, kind) {
     var a = acct(id), f = readLedgerDraft(); T.forms[id] = { mode: 'ledger', kind: kind, draft: f, errors: [] };
     var recs = [], tid = kind === 'transfer' ? 'tr-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : null;
-    var make = function (type, accountId) { return D.validateLedger({ type: type, accountId: accountId, date: f.date, time: f.time, amount: f.amount, feeKind: f.feeKind, balance: f.balance, equity: f.equity, threshold: f.threshold, hwm: f.hwm, source: f.source, note: f.note, ref: f.ref, transferId: tid }, { journalTz: journalTz(a) }); };
+    var make = function (type, accountId) { return D.validateLedger({ type: type, accountId: accountId, date: f.date, time: f.time, amount: f.amount, received: type === 'payout' ? f.received : '', feeKind: f.feeKind, balance: f.balance, equity: f.equity, threshold: f.threshold, hwm: f.hwm, source: f.source, note: f.note, ref: f.ref, transferId: tid }, { journalTz: journalTz(a) }); };
     var first = make(kind === 'transfer' ? (f.dir === 'in' ? 'transfer-in' : 'transfer-out') : kind, id);
     if (!first.ok) { T.forms[id].errors = first.errors; ctx.rerender(); return; }
     recs.push(first.record);
@@ -270,6 +294,14 @@
     ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: now, type: 'ledger-add', details: { kind: kind, accountId: id, ids: recs.map(function (r) { return r.id; }) } } });
     DB.batch(ops).then(function () { recs.forEach(function (r) { ctx.getLedger().push(r); }); delete T.forms[id]; ctx.toast('Saved.'); ctx.rerender(); window.dispatchEvent(new Event('tt:ledger-changed')); })
       .catch(function () { T.forms[id].errors = ['Could not save (browser storage blocked or full). Nothing was changed.']; ctx.rerender(); });
+  }
+  function savePayoutRules(id) {
+    var a = acct(id), M = window.TTMoney, raw = {};
+    M.RULE_KEYS.forEach(function (k) { var e = $('#pr-' + k[0]); raw[k[0]] = e ? e.value : ''; });
+    var v = M.validatePayoutRules(raw); T.payDraft = T.payDraft || {}; T.payErr = T.payErr || {};
+    if (!v.ok) { T.payDraft[id] = raw; T.payErr[id] = v.errors; T.showAll['pay:' + id] = true; ctx.rerender(); return; }
+    var next = Object.assign({}, a, { payoutRules: v.clean, payoutRulesAt: Date.now() }); delete T.payDraft[id]; delete T.payErr[id]; T.showAll['pay:' + id] = true;
+    ctx.save(next).then(function (ok) { if (ok) ctx.toast('Payout rules saved.'); ctx.rerender(); });
   }
   function voidRecord(recId, acctId) {
     var rec = ctx.getLedger().filter(function (l) { return l.id === recId; })[0]; if (!rec) return;
@@ -301,6 +333,7 @@
   function click(el) {
     var act = el.getAttribute('data-act'), id = el.getAttribute('data-id');
     switch (act) {
+      case 't-pay-save': savePayoutRules(id); return true;
       case 't-help': T.help[id] = T.help[id] === el.getAttribute('data-key') ? null : el.getAttribute('data-key'); ctx.rerender(); return true;
       case 't-rules-open': T.rf[id] = null; T.forms[id] = { mode: 'rules', step: 'edit', errors: [] }; ctx.rerender(); return true;
       case 't-rules-cancel': delete T.forms[id]; T.rf[id] = null; ctx.rerender(); return true;

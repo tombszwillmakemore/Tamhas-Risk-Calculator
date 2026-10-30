@@ -15,7 +15,7 @@
   function money(c) { return c == null ? '—' : JC.fmtMoney(c, true); }
   function firmBySlug(s) { return P.firms.filter(function (f) { return f.slug === s; })[0] || null; }
   function productOf(f, name) { return f && f.products.filter(function (p) { return p.name === name; })[0] || null; }
-  function toast(msg, bad) { var t = document.createElement('div'); t.className = 'toast show' + (bad ? ' bad' : ''); t.setAttribute('role', 'status'); t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, bad ? 6000 : 3000); }
+  function toast(msg, bad) { if (window.TTUI) { window.TTUI.toast(msg, bad); return; } var t = document.createElement('div'); t.className = 'toast show' + (bad ? ' bad' : ''); t.setAttribute('role', 'status'); t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, bad ? 6000 : 3000); }
 
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), DB.getAll('trades'), DB.getAll('ledger')]); }).then(function (r) {

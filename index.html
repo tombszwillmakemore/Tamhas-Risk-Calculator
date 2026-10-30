@@ -13,10 +13,13 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <title>Tamhas Trading</title>
+<script src="assets/theme-boot.js"></script>
 <link rel="stylesheet" href="assets/app.css">
 <link rel="stylesheet" href="assets/journal.css">
 <link rel="stylesheet" href="assets/accounts.css">
 <link rel="stylesheet" href="assets/tracker.css">
+<link rel="stylesheet" href="assets/ui.css">
+<link rel="stylesheet" href="assets/money.css">
 </head>
 <body>
 <div class="app">
@@ -24,10 +27,9 @@
   <nav class="nav" aria-label="Main navigation">
     <button data-view="home" class="active"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</button>
     <button data-view="calc"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>Risk</button>
-    <button data-view="intel"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Intel</button>
     <button data-view="journal"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 013 3v13H8a3 3 0 01-3-3z"/><path d="M9 9h6M9 13h6"/></svg>Journal</button>
     <button data-view="accounts"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 11h18M7 15h3"/></svg>Accounts</button>
-    <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>Settings</button>
+    <button data-view="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
   </nav>
 
   <main class="main">
@@ -51,6 +53,8 @@
         <small>WELCOME BACK,</small>
         <h1 id="displayName">TRADER</h1>
       </div>
+
+      <div id="homeStart"></div>
 
       <div class="panel">
         <h2>Today's P&amp;L</h2>
@@ -142,7 +146,7 @@
         <button class="btn" id="evAdd" type="button">ADD EVENT</button>
         <div class="saved" id="evMsg" aria-live="polite"></div>
         <details class="io"><summary>Backup / import my events</summary>
-          <textarea id="evIO" rows="5" spellcheck="false" placeholder="Paste a JSON list of events here to import"></textarea>
+          <textarea id="evIO" rows="5" spellcheck="false" aria-label="Event list as JSON" placeholder="Paste a JSON list of events here to import"></textarea>
           <div class="row-inline"><button class="btn" id="evExport" type="button">EXPORT</button><button class="btn" id="evImport" type="button">IMPORT</button></div>
         </details>
       </div>
@@ -158,6 +162,52 @@
       <div id="aRoot"><p class="note">Loading accounts…</p></div>
     </section>
 
+    <!-- MORE hub -->
+    <section class="view" id="view-more">
+      <div class="welcome" style="padding-bottom:12px"><small>EXPLORE</small><h1 style="font-size:26px">More</h1></div>
+      <div class="hub" id="hubRoot"></div>
+    </section>
+
+    <section class="view" id="view-import">
+      <div class="welcome" style="padding-bottom:12px"><small>DATA</small><h1 style="font-size:26px">Import</h1></div>
+      <div id="iRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-analytics">
+      <div class="welcome" style="padding-bottom:12px"><small>PERFORMANCE</small><h1 style="font-size:26px">Analytics</h1></div>
+      <div id="anRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-risk">
+      <div class="welcome" style="padding-bottom:12px"><small>PROTECTION</small><h1 style="font-size:26px">Risk center</h1></div>
+      <div id="rkRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-discipline">
+      <div class="welcome" style="padding-bottom:12px"><small>PROCESS</small><h1 style="font-size:26px">Discipline</h1></div>
+      <div id="dsRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-strategy">
+      <div class="welcome" style="padding-bottom:12px"><small>LAB</small><h1 style="font-size:26px">Strategy lab</h1></div>
+      <div id="stRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-insights">
+      <div class="welcome" style="padding-bottom:12px"><small>OBSERVATIONS</small><h1 style="font-size:26px">Insights</h1></div>
+      <div id="inRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-health">
+      <div class="welcome" style="padding-bottom:12px"><small>YOUR DATA</small><h1 style="font-size:26px">System health</h1></div>
+      <div id="hlRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-money">
+      <div class="welcome" style="padding-bottom:12px"><small>FINANCES</small><h1 style="font-size:26px">Money</h1></div>
+      <div id="mRoot"><p class="note">Loading…</p></div>
+    </section>
+
     <section class="view" id="view-settings">
       <div class="welcome" style="padding-bottom:12px"><small>SYSTEM</small><h1 style="font-size:26px">Settings</h1></div>
       <div class="panel">
@@ -168,6 +218,15 @@
           <button class="btn" id="saveName" type="button">SAVE</button>
         </div>
         <div class="saved" id="nameSaved" aria-live="polite"></div>
+      </div>
+      <div class="panel">
+        <h2>Appearance</h2>
+        <div class="ui-tabs" id="themePick" role="radiogroup" aria-label="Theme">
+          <button type="button" role="radio" data-theme-set="dark">Dark</button>
+          <button type="button" role="radio" data-theme-set="light">Light</button>
+          <button type="button" role="radio" data-theme-set="system">Match device</button>
+        </div>
+        <p class="note" style="margin-top:0">Applies instantly and is remembered on this device.</p>
       </div>
       <div class="panel">
         <h2>Session windows</h2>
@@ -192,14 +251,33 @@
 <script src="assets/intel-data.js"></script>
 <script src="assets/intel.js"></script>
 <script src="assets/journal-core.js"></script>
+<script src="assets/journal2-core.js"></script>
 <script src="assets/db.js"></script>
+<script src="assets/store.js"></script>
+<script src="assets/ui.js"></script>
 <script src="assets/accounts-core.js"></script>
 <script src="assets/propfirm-data.js"></script>
 <script src="assets/app.js"></script>
 <script src="assets/journal.js"></script>
+<script src="assets/journal2.js"></script>
 <script src="assets/dd-core.js"></script>
+<script src="assets/money-core.js"></script>
 <script src="assets/tracker.js"></script>
 <script src="assets/accounts.js"></script>
+<script src="assets/money.js"></script>
+<script src="assets/import-core.js"></script>
+<script src="assets/analytics-core.js"></script>
+<script src="assets/risk-core.js"></script>
+<script src="assets/risk.js"></script>
+<script src="assets/discipline-core.js"></script>
+<script src="assets/discipline.js"></script>
+<script src="assets/strategy-core.js"></script>
+<script src="assets/strategy.js"></script>
+<script src="assets/insights-core.js"></script>
+<script src="assets/health-core.js"></script>
+<script src="assets/insights.js"></script>
+<script src="assets/analytics.js"></script>
+<script src="assets/import.js"></script>
 <script src="assets/pwa.js"></script>
 </body>
 </html>

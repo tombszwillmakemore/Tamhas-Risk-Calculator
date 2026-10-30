@@ -9,9 +9,9 @@
 .a-pnl{text-align:right}.a-pnl small{display:block;font-size:10px;letter-spacing:.1em;color:var(--muted)}
 .a-pnl .pos{color:var(--good)}.a-pnl .neg{color:var(--bad)}
 .a-chev{font-size:22px;color:var(--cyan)}
-.a-body{padding:0 16px 16px;border-top:1px solid rgba(255,255,255,.07)}
+.a-body{padding:0 16px 16px;border-top:1px solid var(--wash2)}
 .a-h{font-size:13px;letter-spacing:.1em;margin:16px 0 4px;color:var(--cyan)}
-.a-rule{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.a-rule{padding:10px 0;border-bottom:1px solid var(--wash2)}
 .a-rl{font-size:11px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
 .a-rv{margin:3px 0;overflow-wrap:anywhere}
 .a-rm{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px}
