@@ -8,7 +8,7 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
-**Stage H - strategy lab** (next). Stages A-G complete (G = discipline). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
+**Stage I - insights, health, onboarding, performance, tests-in-repo** (next). Stages A-H complete (H = strategy lab). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
 
 ## Completed features
 - Batch 0: IndexedDB platform, non-destructive legacy migration, PWA (manifest, offline service worker, icons), CSP.
@@ -60,3 +60,7 @@ Stage G: discipline - trading plans, pre-trade checklists, post-trade reviews, d
 
 ## Stage G - discipline (done)
 Added `assets/discipline-core.js` (66 checks) and `assets/discipline.js` (54 browser checks, dark+light): trading plan, pre/post-trade checklists, routines, daily reflections, goals, and a discipline score (mean of measurable habits; ignores P&L; unmeasured habits shown as not measured, never 0). Mistake analysis is labelled association, not cause. Full regression: 22 suites green.
+
+
+## Stage H - strategy lab (done)
+`assets/strategy-core.js` (63 checks) + `assets/strategy.js` (62 browser checks, dark+light). Strategies (rules, status, link to journal by Strategy name), manual/pasted backtest results in R (nothing fetched or invented), journal results, forward-vs-backtest comparison, compare up to 4 sets with 95% ranges, Monte Carlo resampling (seeded, needs 20+ results), settings sweeps with earlier/later halves and an overfitting warning, show/hide sections. Limits: backtests are R-only entries (no tick replay, no market-data import); sweeps are risk-cap and trades-per-day only. Full regression: 25 suites green.

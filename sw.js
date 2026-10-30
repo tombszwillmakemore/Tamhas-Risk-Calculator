@@ -4,7 +4,7 @@
    (that lives in IndexedDB / localStorage, not in the network layer). */
 var CACHE = 'tt-app-v2';
 var PRECACHE = ['./', 'index.html', 'manifest.webmanifest',
-  'assets/app.css', 'assets/journal.css', 'assets/ui.css', 'assets/money.css', 'assets/money.js', 'assets/import-core.js', 'assets/analytics-core.js', 'assets/risk-core.js', 'assets/discipline-core.js', 'assets/discipline.js', 'assets/risk.js', 'assets/analytics.js', 'assets/import.js', 'assets/money-core.js', 'assets/ui.js', 'assets/store.js', 'assets/theme-boot.js', 'assets/accounts.css', 'assets/app.js', 'assets/calculator.js', 'assets/instruments.js', 'assets/sessions.js',
+  'assets/app.css', 'assets/journal.css', 'assets/ui.css', 'assets/money.css', 'assets/money.js', 'assets/import-core.js', 'assets/analytics-core.js', 'assets/risk-core.js', 'assets/discipline-core.js', 'assets/discipline.js', 'assets/strategy-core.js', 'assets/strategy.js', 'assets/risk.js', 'assets/analytics.js', 'assets/import.js', 'assets/money-core.js', 'assets/ui.js', 'assets/store.js', 'assets/theme-boot.js', 'assets/accounts.css', 'assets/app.js', 'assets/calculator.js', 'assets/instruments.js', 'assets/sessions.js',
   'assets/intel-data.js', 'assets/intel.js', 'assets/journal-core.js', 'assets/journal2-core.js', 'assets/journal2.js', 'assets/db.js', 'assets/accounts-core.js', 'assets/propfirm-data.js', 'assets/dd-core.js', 'assets/tracker.js', 'assets/tracker.css', 'assets/accounts.js', 'assets/pwa.js', 'assets/journal.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
