@@ -110,12 +110,12 @@ const txt=async(page,sel)=>((await page.locator(sel).first().innerText())||'').r
   await page.click('[data-tab=calendar]'); await page.waitForSelector('.cal');
   const cal=await txt(page,'#jRoot');
   ok('calendar: month heading October 2026', /october 2026/i.test(cal));
-  const d22=await page.locator('[data-date="2026-10-22"]').innerText(); ok('calendar: Oct 22 shows +$196 (net $195.50)', d22.replace(/\s+/g,' ').includes('+$196'), d22);
-  const d23=await page.locator('[data-date="2026-10-23"]').innerText(); ok('calendar: Oct 23 (no fees) shows — * not $0', /—\*/.test(d23.replace(/\s+/g,' ')), d23);
-  const d26=await page.locator('[data-date="2026-10-26"]').innerText(); ok('calendar: Oct 26 (only partial trade) shows —', /—/.test(d26)&&!/\$0/.test(d26), d26);
+  const d22=await page.locator('.cal [data-date="2026-10-22"]').innerText(); ok('calendar: Oct 22 shows the exact net $195.50 (no silent rounding)', /\+?\$195\.50?\b/.test(d22.replace(/\s+/g,' ')), d22);
+  const d23=await page.locator('.cal [data-date="2026-10-23"]').innerText(); ok('calendar: Oct 23 (no fees) shows — and the * marker, not $0', /—/.test(d23)&&/\*/.test(d23)&&!/\$0/.test(d23), d23);
+  const d26=await page.locator('.cal [data-date="2026-10-26"]').innerText(); ok('calendar: Oct 26 (only partial trade) shows —', /—/.test(d26)&&!/\$0/.test(d26), d26);
   ok('calendar: month P&L +$798.50', cal.includes('MONTH P&L +$798.50'), cal.slice(0,300));
-  const cls=await page.locator('[data-date="2026-10-20"]').getAttribute('class'); ok('calendar: loss day styled neg', /neg/.test(cls), cls);
-  await page.click('[data-date="2026-10-22"]'); await page.waitForSelector('.fchip');
+  const cls=await page.locator('.cal [data-date="2026-10-20"]').getAttribute('class'); ok('calendar: loss day styled neg', /neg/.test(cls), cls);
+  await page.click('.cal [data-date="2026-10-22"]'); await page.waitForSelector('.fchip');
   ok('calendar day click → entries filtered to that day', (await txt(page,'#jCount'))==='Showing 1 of 7');
   await page.click('[data-act=clear-date]'); await page.waitForSelector('.jt');
   await page.click('[data-act=tab][data-tab=calendar]'); await page.click('[data-act=cal-prev]'); await page.waitForSelector('.cal');

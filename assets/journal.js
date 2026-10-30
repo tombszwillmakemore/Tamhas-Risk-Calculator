@@ -220,7 +220,7 @@
     var n = activeFilterCount(), badge = $('#jFiltBadge'); if (badge) badge.textContent = n ? ' · ' + n : '';
     var cnt = $('#jCount'); if (cnt) cnt.textContent = all.length ? 'Showing ' + fr.length + ' of ' + all.length : '';
     var h = S.selMode ? bulkBarHtml() : '';
-    if (S.filters.date) h += '<div class="fchip">Date: ' + esc(fmtDate(S.filters.date)) + ' <button type="button" data-act="clear-date" aria-label="Clear date filter">✕</button></div>';
+    if (S.filters.date) { var dall = rows(), dsum = C.summaryForDate(dall, S.filters.date, effBasis(dall)); h += '<div class="fchip" id="dayChip">Date: ' + esc(fmtDate(S.filters.date)) + ' · <b class="' + clsOf(dsum.pnlCents) + '">' + (dsum.pnlCents != null ? C.fmtMoney(dsum.pnlCents, true) : 'no counted P&amp;L') + '</b> · ' + plural(dsum.trades, 'trade') + ' <button type="button" data-act="clear-date" aria-label="Clear date filter">✕</button></div>'; }
     if (!all.length) h += '<div class="panel empty"><h2>No trades yet</h2><p class="note" style="margin-top:0">Log your first trade to start building your journal, calendar and analytics. Everything you see here comes only from trades you enter.</p></div>';
     else if (!fr.length) h += '<div class="panel empty"><p class="note" style="margin:0">No trades match these filters.</p></div>';
     else h += shown.map(cardHtml).join('');
@@ -337,16 +337,22 @@
       ntr += e.trades; traded++;
       if (e.pnlCents != null) { total = (total || 0) + e.pnlCents; if (e.pnlCents > 0) green++; else if (e.pnlCents < 0) red++; }
     }
-    var cells = '';
+    var cells = '', dayList = '';
     ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach(function (w) { cells += '<div class="cal-h">' + w + '</div>'; });
     for (var i = 0; i < lead; i++) cells += '<div class="cal-d blank"></div>';
     for (var k = 1; k <= days; k++) {
       var key = y + '-' + pad2(m + 1) + '-' + pad2(k), e2 = dm[key];
       if (!e2) { cells += '<div class="cal-d empty' + (key === today ? ' today' : '') + '"><span class="cn">' + k + '</span></div>'; continue; }
       var star = (e2.excluded || e2.open) ? '*' : '';
-      var label = fmtDate(key) + ': ' + plural(e2.trades, 'trade') + (e2.pnlCents != null ? ', ' + C.fmtMoney(e2.pnlCents, true) : ', no counted P&L') + (star ? ' (some trades not counted)' : '');
-      cells += '<button type="button" class="cal-d has ' + clsOf(e2.pnlCents) + (key === today ? ' today' : '') + '" data-act="cal-day" data-date="' + key + '" aria-label="' + esc(label) + '">' +
-        '<span class="cn">' + k + '</span><span class="cp">' + (e2.pnlCents != null ? esc(C.fmtCompact(e2.pnlCents)) : DASH) + star + '</span><span class="ct">' + plural(e2.trades, 'trade') + '</span></button>';
+      var exact = e2.pnlCents != null ? C.fmtMoney(e2.pnlCents, true) : 'no counted P&L';
+      var label = fmtDate(key) + ': ' + plural(e2.trades, 'trade') + ', ' + exact + (star ? ' (some trades not counted)' : '') + '. Tap for details.';
+      // Value and count start with their most precise text; fitCalendar() then picks, per cell, the most precise text that fits.
+      var mc = e2.pnlCents != null ? C.moneyCandidates(e2.pnlCents) : [], cc = C.countCandidates(e2.trades);
+      cells += '<button type="button" class="cal-d has ' + clsOf(e2.pnlCents) + (key === today ? ' today' : '') + '" data-act="cal-day" data-date="' + key + '" aria-label="' + esc(label) + '" title="' + esc(fmtDate(key) + ': ' + exact + ' · ' + plural(e2.trades, 'trade')) + '">' +
+        '<span class="cn" aria-hidden="true">' + k + '</span>' + (star ? '<span class="cs" aria-hidden="true">*</span>' : '') + '<i class="cdot" aria-hidden="true"></i>' +
+        '<span class="cp" aria-hidden="true" data-fit="' + esc(JSON.stringify(mc.map(function (x) { return [x.t, x.approx ? (x.err > 0.01 ? 2 : 1) : 0]; }))) + '">' + (mc.length ? esc(mc[0].t) : DASH) + '</span>' +
+        '<span class="ct" aria-hidden="true" data-fit="' + esc(JSON.stringify(cc.map(function (x, i) { return [x, i > 0 && /k/.test(x) ? 1 : 0]; }))) + '">' + esc(cc[0]) + '</span></button>';
+      dayList += '<li><button type="button" data-act="cal-day" data-date="' + key + '" class="cal-li"><span>' + esc(fmtDate(key)) + (star ? ' *' : '') + '</span><b class="' + clsOf(e2.pnlCents) + '">' + esc(exact) + '</b><small>' + esc(cc[0]) + '</small></button></li>';
     }
     var mname = new Date(y, m, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     return basisToggleHtml(b, b === 'net' ? 'Only closed trades with fees entered are counted. Others are marked * and left out of the total.' : 'All fully closed trades are counted before fees.') +
@@ -355,7 +361,7 @@
       '<div class="kpis small cal-k"><div class="kpi"><div class="kpi-l">MONTH P&amp;L</div><div class="kpi-v ' + clsOf(total) + '">' + C.fmtMoney(total, true) + '</div></div>' +
       '<div class="kpi"><div class="kpi-l">DAYS TRADED</div><div class="kpi-v">' + traded + '</div><div class="kpi-s">' + green + ' green · ' + red + ' red</div></div>' +
       '<div class="kpi"><div class="kpi-l">TRADES</div><div class="kpi-v">' + ntr + '</div></div></div>' +
-      '<div class="cal">' + cells + '</div><div class="jbar"><button type="button" class="chip" data-act="cal-today">THIS MONTH</button></div>' +
+      '<div class="cal">' + cells + '</div>' + (dayList ? '<div class="cal-days"><h3 class="im-h3">Day totals (exact)</h3><ul class="ui-list">' + dayList + '</ul></div>' : '') + '<div class="jbar"><button type="button" class="chip" data-act="cal-today">THIS MONTH</button></div>' +
       '<p class="note">Tap a day to see its trades. ' + DASH + ' means the day has trades but none with a counted P&amp;L (open, partly closed' + (b === 'net' ? ', or fees missing' : '') + '). * marks days that include trades left out.</p></div>';
   }
 
@@ -699,8 +705,39 @@
   }
 
   /* ---------- tab setup ---------- */
+  /* Calendar containment: every value must sit inside its own cell. For each value the candidates go from exact to compact; the first
+     one whose rendered width fits the cell is kept (this follows the real cell size, the font size the person uses, and orientation).
+     If even the shortest does not fit, the text is made smaller (never below 8px) - never clipped halfway. */
+  function fitCalendar() {
+    var cal = root.querySelector('.cal'); if (!cal) return;
+    // Precision first: exact texts at the normal size, then slightly smaller (never under 8px); only then rounded forms.
+    var SIZES = ['', 'tight', 'tighter'];
+    cal.querySelectorAll('[data-fit]').forEach(function (el) {
+      var list; try { list = JSON.parse(el.getAttribute('data-fit')); } catch (e) { list = []; } if (!list.length) return;
+      var w = el.clientWidth; if (!w) return;
+      function fits(t, z) { el.classList.remove('tight', 'tighter'); if (SIZES[z]) el.classList.add(SIZES[z]); el.textContent = t; return el.scrollWidth <= el.clientWidth; }
+      // exact texts are equally precise, so prefer the largest size; rounded texts: prefer more digits, even a little smaller
+      // Readable first: exact at the normal or 9px size, then rounded forms at those sizes, and only then 8px. The exact amount is
+      // always in the day's label, its tooltip and the day view.
+      function exactGroup(g, zs) { for (var a = 0; a < zs.length; a++) for (var i = 0; i < g.length; i++) if (fits(g[i][0], zs[a])) { el.setAttribute('data-shown', 'exact'); return true; } return false; }
+      function approxGroup(g, zs) { for (var i = 0; i < g.length; i++) for (var a = 0; a < zs.length; a++) if (fits(g[i][0], zs[a])) { el.setAttribute('data-shown', 'approx'); return true; } return false; }
+      // Rounded forms off by more than 1% (e.g. $12,500 as $13K) come only after every exact form at every size.
+      var ex = list.filter(function (x) { return !x[1]; }), ap = list.filter(function (x) { return x[1] === 1; }), far = list.filter(function (x) { return x[1] === 2; });
+      if (exactGroup(ex, [0, 1]) || approxGroup(ap, [0, 1]) || exactGroup(ex, [2]) || approxGroup(ap, [2]) || approxGroup(far, [0, 1, 2])) return;
+      el.textContent = list[list.length - 1][0]; el.classList.remove('tight'); el.classList.add('tighter'); el.setAttribute('data-shown', 'none');
+    });
+    // Cells too narrow for any readable value (very small screen with very large text): show a coloured marker in each cell and the
+    // exact amounts in the list right under the calendar, instead of shrinking text to nothing or letting it spill over.
+    cal.classList.remove('cal-narrow');
+    var tooNarrow = Array.prototype.some.call(cal.querySelectorAll('.cp[data-fit], .ct[data-fit]'), function (el) { return el.getAttribute('data-shown') === 'none' || el.scrollWidth > el.clientWidth; });
+    if (tooNarrow) cal.classList.add('cal-narrow');
+    var panel = cal.parentNode; if (panel) panel.classList.toggle('cal-narrow-on', tooNarrow);
+  }
+  var fitQ = false;
+  window.addEventListener('resize', function () { if (fitQ || S.tab !== 'calendar') return; fitQ = true; requestAnimationFrame(function () { fitQ = false; fitCalendar(); }); });
   function afterTab() {
     var ext = EXT.tabs.filter(function (x) { return x.id === S.tab; })[0]; if (ext && ext.after) ext.after(EXT.ctx);
+    if (S.tab === 'calendar') { fitCalendar(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitCalendar); }
     if (S.tab === 'entries') renderList();
     if (S.tab === 'analytics') bindChart();
     if (S.tab === 'backup' && S.imgOk !== false) IMG.keys().then(function (k) { var e = $('#bkShots'); if (e) e.textContent = k.length; }).catch(function () { var e = $('#bkShots'); if (e) e.textContent = 'n/a'; });

@@ -12,7 +12,7 @@ Last updated with release 2.0.1 (2026-10-30). Honest status; check here before b
 
 - **Release 2.0.0:** Tradovate Smart Import (Orders, Performance, fills lists, summary reports; CSV, pasted tables, on-device screenshot reading with review grid; FIFO fill grouping with scale-ins, partial exits and reversals; reconciliation against the report's P&L; account mapping incl. evaluation/funded/live/sim with remembered choices; your own commission per contract; duplicate and possible-duplicate protection; select/deselect; history with ranges, counts, saved copies, summary references and rollback). Install TRC guide and TRC Home Screen name. Startup screen (no forced delay) with reduced/off settings, shared loading components, backup reminder, diagnostics and repair app files. Copilot understands "import my tradovate report" and "install the app".
 
-- **Release 2.0.1:** bottom navigation pinned to the visible bottom on phones (visual-viewport pinning for address-bar/toolbar changes, hidden while the keyboard is open, own compositing layer, safe-area and `dvh` units, focused fields kept clear via scroll padding). Regression suite `tests/nav1e2e.js`.
+- **Release 2.0.1:** bottom navigation pinned to the visible bottom on phones (visual-viewport pinning for address-bar/toolbar changes, hidden while the keyboard is open, own compositing layer, safe-area and `dvh` units, focused fields kept clear via scroll padding). Regression suite `tests/nav1e2e.js`. Journal calendar containment: exact-first values fitted to each cell (`moneyCandidates`, `fitCalendar`), rounded forms always marked (~ or K/M), narrow mode with an exact day-total list, exact total on the tapped day; shared `TTUI.fitValues` keeps large amounts inside KPI and stat cards app-wide. Suites `tests/cal0core.js`, `tests/cal1e2e.js`.
 
 ## Partially implemented
 - Tradovate layouts follow header lists published by journal vendors; not yet checked against a real Tradovate export. Orders with several fill prices (average with more than 2 decimals) are listed for manual entry or the Performance report.
@@ -23,6 +23,7 @@ Last updated with release 2.0.1 (2026-10-30). Honest status; check here before b
 - Mobile tab strips with 6+ tabs scroll sideways (by design) rather than wrapping.
 
 ## Known bugs / needs manual verification
+- Calendar on real phones with the system text size set to large (automated tests used browser zoom 1.3-1.5 to simulate it).
 - Bottom navigation on real devices: scroll long Journal/Accounts pages on iPhone Safari, the installed TRC app, Chrome on Android and Samsung Internet; open the keyboard in a form. Address-bar and keyboard behaviour were simulated, not tested on a phone.
 - Import a real Tradovate Performance and Orders CSV and a real screenshot; compare totals with Tradovate.
 - Confirm the Home Screen icon label says TRC on iPhone/iPad Safari, Android Chrome and Samsung Internet.
