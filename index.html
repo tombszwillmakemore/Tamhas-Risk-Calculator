@@ -54,6 +54,8 @@
         <h1 id="displayName">TRADER</h1>
       </div>
 
+      <div id="homeStart"></div>
+
       <div class="panel">
         <h2>Today's P&amp;L</h2>
         <div class="pnl-value none" id="pnlValue">—</div>
@@ -144,7 +146,7 @@
         <button class="btn" id="evAdd" type="button">ADD EVENT</button>
         <div class="saved" id="evMsg" aria-live="polite"></div>
         <details class="io"><summary>Backup / import my events</summary>
-          <textarea id="evIO" rows="5" spellcheck="false" placeholder="Paste a JSON list of events here to import"></textarea>
+          <textarea id="evIO" rows="5" spellcheck="false" aria-label="Event list as JSON" placeholder="Paste a JSON list of events here to import"></textarea>
           <div class="row-inline"><button class="btn" id="evExport" type="button">EXPORT</button><button class="btn" id="evImport" type="button">IMPORT</button></div>
         </details>
       </div>
@@ -189,6 +191,16 @@
     <section class="view" id="view-strategy">
       <div class="welcome" style="padding-bottom:12px"><small>LAB</small><h1 style="font-size:26px">Strategy lab</h1></div>
       <div id="stRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-insights">
+      <div class="welcome" style="padding-bottom:12px"><small>OBSERVATIONS</small><h1 style="font-size:26px">Insights</h1></div>
+      <div id="inRoot"><p class="note">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-health">
+      <div class="welcome" style="padding-bottom:12px"><small>YOUR DATA</small><h1 style="font-size:26px">System health</h1></div>
+      <div id="hlRoot"><p class="note">Loading…</p></div>
     </section>
 
     <section class="view" id="view-money">
@@ -261,6 +273,9 @@
 <script src="assets/discipline.js"></script>
 <script src="assets/strategy-core.js"></script>
 <script src="assets/strategy.js"></script>
+<script src="assets/insights-core.js"></script>
+<script src="assets/health-core.js"></script>
+<script src="assets/insights.js"></script>
 <script src="assets/analytics.js"></script>
 <script src="assets/import.js"></script>
 <script src="assets/pwa.js"></script>

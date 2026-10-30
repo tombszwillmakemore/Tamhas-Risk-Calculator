@@ -8,7 +8,7 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
-**Stage I - insights, health, onboarding, performance, tests-in-repo** (next). Stages A-H complete (H = strategy lab). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
+**RELEASE CANDIDATE READY - awaiting your review.** Stages A-I and Final complete on `dev-free-platform`; main untouched. See RELEASE-CANDIDATE.md. Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
 
 ## Completed features
 - Batch 0: IndexedDB platform, non-destructive legacy migration, PWA (manifest, offline service worker, icons), CSP.
@@ -64,3 +64,7 @@ Added `assets/discipline-core.js` (66 checks) and `assets/discipline.js` (54 bro
 
 ## Stage H - strategy lab (done)
 `assets/strategy-core.js` (63 checks) + `assets/strategy.js` (62 browser checks, dark+light). Strategies (rules, status, link to journal by Strategy name), manual/pasted backtest results in R (nothing fetched or invented), journal results, forward-vs-backtest comparison, compare up to 4 sets with 95% ranges, Monte Carlo resampling (seeded, needs 20+ results), settings sweeps with earlier/later halves and an overfitting warning, show/hide sections. Limits: backtests are R-only entries (no tick replay, no market-data import); sweeps are risk-cap and trades-per-day only. Full regression: 25 suites green.
+
+
+## Stage I + Final (done)
+Insights (deterministic, no AI), System health (read-only audit + confirmed quarantine repairs), Getting-started card, migration tests from DB v1/v2/v3, offline/security/accessibility/performance checks, all tests moved into `tests/` with `node tests/run.js` (self-hosted server, relative paths). Final full run: 35/35 suites passed, plus `desk.js` (48 checks). Report: RELEASE-CANDIDATE.md.
