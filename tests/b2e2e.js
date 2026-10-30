@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { chromium } = require('./_pw');
 const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html');
 let fail=0,pass=0; const ok=(n,c,d)=>{ if(c) pass++; else { fail++; console.log('FAIL',n,d===undefined?'':JSON.stringify(d)); } };
 const waitT=async(p,re)=>{ await p.waitForFunction(r=>new RegExp(r).test(document.getElementById('aRoot').innerText.replace(/\s+/g,' ')),re.source,{timeout:8000}).catch(()=>{}); };

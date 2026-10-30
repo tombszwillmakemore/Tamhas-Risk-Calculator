@@ -7,8 +7,8 @@
 const http = require('http'), fs = require('fs'), path = require('path'), cp = require('child_process');
 const root = path.join(__dirname, '..'), types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml' };
 const srv = http.createServer((q, r) => { let u = decodeURIComponent(q.url.split('?')[0].split('#')[0]); if (u.endsWith('/')) u += 'index.html'; const f = path.join(root, u); if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { r.writeHead(404); r.end('not found'); return; } r.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(r); });
-const args = process.argv.slice(2), all = fs.readdirSync(__dirname).filter(f => /\.js$/.test(f) && f !== 'run.js').sort();
-const isBrowser = f => /require\(['"]playwright['"]\)/.test(fs.readFileSync(path.join(__dirname, f), 'utf8'));
+const args = process.argv.slice(2), all = fs.readdirSync(__dirname).filter(f => /\.js$/.test(f) && f !== 'run.js' && !f.startsWith('_')).sort();
+const isBrowser = f => /require\(['"](playwright|\.\/_pw)['"]\)/.test(fs.readFileSync(path.join(__dirname, f), 'utf8'));
 let list = all.filter(f => !args.length || args.some(a => a === 'core' ? !isBrowser(f) : a === 'e2e' ? isBrowser(f) : f.startsWith(a)));
 function run(f, base) { return new Promise(res => { const c = cp.spawn(process.execPath, [path.join(__dirname, f)], { env: Object.assign({}, process.env, { TT_BASE: base }) }); let out = ''; const k = setTimeout(() => c.kill(), 600000); c.stdout.on('data', d => out += d); c.stderr.on('data', d => out += d); c.on('close', code => { clearTimeout(k); res({ status: code, out: out }); }); }); }
 srv.listen(0, '127.0.0.1', async () => {

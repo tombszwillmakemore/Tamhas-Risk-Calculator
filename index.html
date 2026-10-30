@@ -20,8 +20,10 @@
 <link rel="stylesheet" href="assets/tracker.css">
 <link rel="stylesheet" href="assets/ui.css">
 <link rel="stylesheet" href="assets/money.css">
+<link rel="stylesheet" href="assets/experience.css">
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="app">
 
   <nav class="nav" aria-label="Main navigation">
@@ -32,7 +34,7 @@
     <button data-view="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</button>
   </nav>
 
-  <main class="main">
+  <main class="main" id="main" tabindex="-1">
     <header class="topbar">
       <div class="brand">
         <!-- Original Tamhas mark: hex frame, T, rising signal line -->
@@ -44,7 +46,7 @@
         </svg>
         <div class="brand-name">TAMHAS<span>TRADING</span></div>
       </div>
-      <div class="status-chip"><i></i>LOCAL MODE</div>
+      <div class="topbar-r"><button type="button" class="iconbtn" id="searchBtn" aria-label="Search tools and settings (Ctrl or Cmd + K)" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button><div class="status-chip"><i></i>LOCAL MODE</div></div>
     </header>
 
     <!-- HOME -->
@@ -56,25 +58,23 @@
 
       <div id="homeStart"></div>
 
-      <div class="panel">
+      <div id="homeWidgets">
+      <div class="panel" data-widget="pnl">
         <h2>Today's P&amp;L</h2>
         <div class="pnl-value none" id="pnlValue">—</div>
         <p class="note" id="pnlNote"></p>
       </div>
-
-      <div class="panel">
+      <div class="panel" data-widget="sessions">
         <h2>Market sessions</h2>
         <div class="yourtime"><span>YOUR TIME</span><b id="localClock">--:--:--</b></div>
         <div id="sessionList"></div>
         <p class="note">Windows are approximate and editable in Settings. Futures trade nearly around the clock, so these mark typical regional activity, not exchange hours.</p>
       </div>
-
-      <div class="panel">
+      <div class="panel" data-widget="next">
         <h2>Next event</h2>
         <button class="tile nxtile" data-go="intel" type="button"><div id="homeNext" class="nx"></div></button>
       </div>
-
-      <div class="panel">
+      <div class="panel" data-widget="tools">
         <h2>Quick access</h2>
         <div class="grid2">
           <button class="tile" data-go="calc"><b>Risk Calculator</b><span>Contract size within your risk range</span></button>
@@ -83,11 +83,6 @@
           <button class="tile" data-go="settings"><b>Settings</b><span>Display name &amp; sessions</span></button>
         </div>
       </div>
-
-      <div class="panel">
-        <h2>Coming next</h2>
-        <p class="note" style="margin-top:0">Prop firm accounts, drawdown &amp; payout tracking<span class="soon">PLANNED</span></p>
-        <p class="note">CSV import from your broker (Tradovate)<span class="soon">PLANNED</span></p>
       </div>
     </section>
 
@@ -170,42 +165,47 @@
 
     <section class="view" id="view-import">
       <div class="welcome" style="padding-bottom:12px"><small>DATA</small><h1 style="font-size:26px">Import</h1></div>
-      <div id="iRoot"><p class="note">Loading…</p></div>
+      <div id="iRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-analytics">
       <div class="welcome" style="padding-bottom:12px"><small>PERFORMANCE</small><h1 style="font-size:26px">Analytics</h1></div>
-      <div id="anRoot"><p class="note">Loading…</p></div>
+      <div id="anRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-risk">
       <div class="welcome" style="padding-bottom:12px"><small>PROTECTION</small><h1 style="font-size:26px">Risk center</h1></div>
-      <div id="rkRoot"><p class="note">Loading…</p></div>
+      <div id="rkRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-discipline">
       <div class="welcome" style="padding-bottom:12px"><small>PROCESS</small><h1 style="font-size:26px">Discipline</h1></div>
-      <div id="dsRoot"><p class="note">Loading…</p></div>
+      <div id="dsRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-strategy">
       <div class="welcome" style="padding-bottom:12px"><small>LAB</small><h1 style="font-size:26px">Strategy lab</h1></div>
-      <div id="stRoot"><p class="note">Loading…</p></div>
+      <div id="stRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-insights">
       <div class="welcome" style="padding-bottom:12px"><small>OBSERVATIONS</small><h1 style="font-size:26px">Insights</h1></div>
-      <div id="inRoot"><p class="note">Loading…</p></div>
+      <div id="inRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-health">
       <div class="welcome" style="padding-bottom:12px"><small>YOUR DATA</small><h1 style="font-size:26px">System health</h1></div>
-      <div id="hlRoot"><p class="note">Loading…</p></div>
+      <div id="hlRoot"><p class="note ui-loading" role="status">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-help">
+      <div class="welcome" style="padding-bottom:12px"><small>LEARN</small><h1 style="font-size:26px">Help and glossary</h1></div>
+      <div id="hpRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-money">
       <div class="welcome" style="padding-bottom:12px"><small>FINANCES</small><h1 style="font-size:26px">Money</h1></div>
-      <div id="mRoot"><p class="note">Loading…</p></div>
+      <div id="mRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
     <section class="view" id="view-settings">
@@ -276,6 +276,8 @@
 <script src="assets/insights-core.js"></script>
 <script src="assets/health-core.js"></script>
 <script src="assets/insights.js"></script>
+<script src="assets/experience-core.js"></script>
+<script src="assets/experience.js"></script>
 <script src="assets/analytics.js"></script>
 <script src="assets/import.js"></script>
 <script src="assets/pwa.js"></script>

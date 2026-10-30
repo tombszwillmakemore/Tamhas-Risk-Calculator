@@ -1,4 +1,4 @@
-const { chromium } = require('playwright'); const fs=require('fs');
+const { chromium } = require('./_pw'); const fs=require('fs');
 const until=async(pg,fn,ms=8000)=>{const t=Date.now(); while(Date.now()-t<ms){ if(await pg.evaluate(fn)) return true; await pg.waitForTimeout(30);} return false;};
 const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html'); let fail=0,pass=0; const ok=(n,c,d)=>{ if(c) pass++; else { fail++; console.log('FAIL',n,d===undefined?'':JSON.stringify(d)); } };
 (async()=>{
