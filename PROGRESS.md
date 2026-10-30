@@ -8,7 +8,7 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
-**Stage G - discipline** (next). Stages A-F complete (F = risk center). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
+**Stage H - strategy lab** (next). Stages A-G complete (G = discipline). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
 
 ## Completed features
 - Batch 0: IndexedDB platform, non-destructive legacy migration, PWA (manifest, offline service worker, icons), CSP.
@@ -56,3 +56,7 @@ Stage G: discipline - trading plans, pre-trade checklists, post-trade reviews, d
 - Stage F (run): f1core 79 (position size incl. fees/rounding/cap and 2,000 randomized sizes never over risk and always maximal; reward:risk, net-of-fees, break-even price; loss-streak probability DP verified against brute-force enumeration; EV; open risk with FIFO lots; limits validation and evaluation; account context day/week/open risk; risk history); f1e2e 52 in dark and light (calculator incl. gold, limits save, exposure vs limits, scenarios, sequences, use-my-stats, history, backup). Instrument tests updated for 8 contracts; import test now uses CL as the unsupported example.
 - Stage F notes: GC and MGC added after reading CME's "1 oz futures comparison" sheet (GC 100 oz, 0.10 = $10 tick -> $100/pt; MGC 1/10 of Gold, 0.10 = $1 tick -> $10/pt). Limits are only what the user enters (docs kind `risklimit`); firm rules are never assumed. Scenarios assume independent trades and are labelled as arithmetic, not forecasts. Open risk uses the initial stop; unknown stops are reported, never counted as $0.
 - Known test-infrastructure note: tests currently live outside the repo (scratchpad) and use absolute paths; they are moved into `tests/` with a runner in Stage I so the release candidate is self-contained.
+
+
+## Stage G - discipline (done)
+Added `assets/discipline-core.js` (66 checks) and `assets/discipline.js` (54 browser checks, dark+light): trading plan, pre/post-trade checklists, routines, daily reflections, goals, and a discipline score (mean of measurable habits; ignores P&L; unmeasured habits shown as not measured, never 0). Mistake analysis is labelled association, not cause. Full regression: 22 suites green.
