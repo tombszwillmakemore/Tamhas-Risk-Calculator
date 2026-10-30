@@ -8,3 +8,9 @@
   #view-calc > .welcome, #view-calc > .foot { grid-column: 1 / -1; }
   #view-calc > .result { position: sticky; top: 24px; }
 }
+/* Accounts: breathing room under the add button; Enter key-sized rename button */
+#aRoot [data-act="a-new"] { margin-bottom: 14px; }
+#aRoot .a-head .a-chev { flex: 0 0 auto; width: 18px; text-align: center; }
+#aRoot .row-inline .btn.small { flex: 0 0 auto; }
+#aRoot .a-head > div:first-child { flex: 1; min-width: 0; }
+#aRoot .row2 .btn { height: 44px; margin-top: 0; }

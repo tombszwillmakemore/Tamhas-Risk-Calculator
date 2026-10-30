@@ -49,16 +49,18 @@
     var open = S.open === a.id;
     var h = '<div class="panel a-card' + (a.archived ? ' arch' : '') + '"><button type="button" class="a-head" data-act="a-toggle" data-id="' + esc(a.id) + '" aria-expanded="' + open + '">' +
       '<div><b>' + esc(a.name) + '</b><div class="a-sub"><span class="a-tag">' + LABEL[a.category] + '</span> <span class="a-tag st-' + esc(a.status) + '">' + esc(a.status.toUpperCase()) + '</span>' + (a.archived ? ' <span class="a-tag">ARCHIVED</span>' : '') + (window.TTTracker ? ' ' + TTTracker.chip(a) : '') + '</div></div>' +
-      '<div class="a-pnl"><small>' + (st.netCents != null ? 'NET' : st.grossCents != null ? 'GROSS' : 'P&amp;L') + '</small><b class="' + ((st.netCents != null ? st.netCents : st.grossCents) > 0 ? 'pos' : (st.netCents != null ? st.netCents : st.grossCents) < 0 ? 'neg' : 'none') + '">' + money(st.netCents != null ? st.netCents : st.grossCents) + '</b></div></button>';
+      '<div class="a-pnl"><small>' + (st.netCents != null ? 'NET' : st.grossCents != null ? 'GROSS' : 'P&amp;L') + '</small><b class="' + ((st.netCents != null ? st.netCents : st.grossCents) > 0 ? 'pos' : (st.netCents != null ? st.netCents : st.grossCents) < 0 ? 'neg' : 'none') + '">' + money(st.netCents != null ? st.netCents : st.grossCents) + '</b></div><span class="a-chev" aria-hidden="true">' + (open ? '−' : '+') + '</span></button>';
     if (open) h += detail(a, st, ruleKeys, stale);
     return h + '</div>';
   }
   function detail(a, st, ruleKeys, stale) {
     var h = '<div class="a-body"><p class="note">' + st.trades + ' trade' + (st.trades === 1 ? '' : 's') + ' logged · ' + st.closed + ' closed' + (st.open ? ' · ' + st.open + ' open' : '') +
       (a.startingBalanceCents != null ? ' · starting balance ' + money(a.startingBalanceCents) : '') + (st.closed && st.netTrades < st.closed ? ' · net counts only ' + st.netTrades + ' trade(s) with fees entered' : '') + '</p>';
+    h += '<div class="field"><label for="a-nm-' + esc(a.id) + '">Account name</label><div class="row-inline"><input id="a-nm-' + esc(a.id) + '" type="text" maxlength="60" autocomplete="off" value="' + esc(a.name) + '">' +
+      '<button type="button" class="btn small" data-act="a-rename" data-id="' + esc(a.id) + '">RENAME</button></div></div>';
     if (a.template) h += '<p class="note">Started from the <b>' + esc((firmBySlug(a.template.slug) || {}).name || a.template.slug) + ' · ' + esc(a.template.product || 'custom') + '</b> template, researched ' + esc(a.template.researchedOn) + '. These are your editable copies, not live rules.</p>';
     h += '<div class="field"><label for="a-st-' + esc(a.id) + '">Status</label><select id="a-st-' + esc(a.id) + '" data-act="a-status" data-id="' + esc(a.id) + '">' +
-      A.STATUSES[a.category].map(function (s) { return '<option' + (s === a.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>';
+      A.STATUSES[a.category].map(function (s) { return '<option value="' + s + '"' + (s === a.status ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>'; }).join('') + '</select></div>';
     if (window.TTTracker) h += TTTracker.html(a);
     if (a.category === 'prop') {
       h += '<h3 class="a-h">Rules' + (stale ? ' <span class="a-age stale">' + stale + ' need re-checking</span>' : '') + '</h3>';
@@ -180,6 +182,9 @@
       case 'a-edit': S.editing = { id: id, field: el.getAttribute('data-field') }; render(); var i = $('#rv-' + S.editing.field); if (i) i.focus(); break;
       case 'a-rule-cancel': S.editing = null; render(); break;
       case 'a-rule-save': saveRule(); break;
+      case 'a-rename': var rn = acctById(id), inp = document.getElementById('a-nm-' + id), nm = inp ? inp.value.replace(/\s+/g, ' ').trim().slice(0, 60) : '';
+        if (!rn) break; if (!nm) { toast('Give the account a name.', true); break; } if (nm === rn.name) break;
+        save(Object.assign({}, rn, { name: nm })).then(function (ok) { if (ok) { render(); toast('Account renamed.'); } }); break;
       case 'a-archive': var a = acctById(id); if (a) save(Object.assign({}, a, { archived: !a.archived })).then(function () { render(); }); break;
       case 'a-delete': var d = acctById(id); if (!d) break;
         if (A.accountStats(S.rows, id, DEF).trades) { toast('This account has trades. Archive it instead.', true); break; }
@@ -187,6 +192,7 @@
         DB.del('accounts', id).then(function () { S.accounts = S.accounts.filter(function (x) { return x.id !== id; }); S.open = null; window.dispatchEvent(new Event('tt:accounts-changed')); render(); toast('Account deleted.'); }).catch(function () { toast('Could not delete.', true); }); break;
     }
   });
+  root.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && ev.target.id && ev.target.id.indexOf('a-nm-') === 0) { var b = ev.target.parentNode.querySelector('[data-act="a-rename"]'); if (b) b.click(); } });
   root.addEventListener('change', function (ev) {
     var el = ev.target; if (window.TTTracker && el.getAttribute && TTTracker.change(el)) return; var act = el.getAttribute && el.getAttribute('data-act'); if (!act) return;
     if (act === 'n-cat') { readNew(); S.form.firm = ''; S.form.product = ''; render(); }
