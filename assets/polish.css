@@ -14,3 +14,7 @@
 #aRoot .row-inline .btn.small { flex: 0 0 auto; }
 #aRoot .a-head > div:first-child { flex: 1; min-width: 0; }
 #aRoot .row2 .btn { height: 44px; margin-top: 0; }
+/* Calculator: pointer to the Risk center */
+#view-calc .calc-more { text-align: center; margin: 2px 0 0; font-size: 12px; }
+#view-calc .calc-more .linkbtn { font-size: 12px; vertical-align: middle; }
+#view-calc > .calc-more { grid-column: 1 / -1; }

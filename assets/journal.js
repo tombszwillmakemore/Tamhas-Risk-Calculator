@@ -615,7 +615,15 @@
       IMG.get(E.id + ':' + s).then(function (url) { if (url && S.editing === E && !E.shots[s].changed && !E.shots[s].removed) { E.shots[s].dataUrl = url; E.shots[s].had = true; renderShot(s); } }).catch(function () {});
     });
     updatePreview();
+    if (E.snap == null) { try { E.snap = JSON.stringify(readForm()); } catch (e) { E.snap = ''; } }   // what the form looked like when it opened
   }
+  // True when the open form differs from how it opened (typed values or screenshots), so leaving would lose work.
+  function formDirty() {
+    var E = S.editing; if (!E) return false;
+    if (SLOTS.some(function (s) { return E.shots[s].changed || E.shots[s].removed; })) return true;
+    try { return E.snap !== '' && JSON.stringify(readForm()) !== E.snap; } catch (e) { return false; }
+  }
+  window.addEventListener('beforeunload', function (ev) { if (formDirty()) { ev.preventDefault(); ev.returnValue = ''; } });
   function renderShot(slot) {
     var sh = S.editing && S.editing.shots[slot], box = $('#shot-' + slot); if (!box || !sh) return;
     box.innerHTML = sh.dataUrl ? '<img class="shot-img" data-act="lightbox" alt="' + slot + ' screenshot">' : '<span class="note">No screenshot</span>';
@@ -811,7 +819,7 @@
       case 'new': openForm(null); break;
       case 'edit': openForm(el.getAttribute('data-id')); break;
       case 'delete': deleteTrade(el.getAttribute('data-id')); break;
-      case 'cancel': S.editing = null; render(); break;
+      case 'cancel': if (formDirty() && !window.confirm('Discard your unsaved changes to this trade?')) break; S.editing = null; render(); break;
       case 'save': saveForm(); break;
       case 'toggle-card': var id = el.getAttribute('data-id'); S.expanded = S.expanded === id ? null : id; renderList(); break;
       case 'more': S.limit += 30; renderList(); break;
