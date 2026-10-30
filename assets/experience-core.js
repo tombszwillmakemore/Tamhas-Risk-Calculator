@@ -7,39 +7,12 @@
   var DENSITY = ['comfortable', 'compact'];
   var MAX_FAV = 8, MAX_RECENT = 6;
 
-  /* One entry per screen. cat groups the More hub; keys are extra search words. */
-  var CATALOG = [
-    { id: 'home', title: 'Dashboard', text: 'Your daily overview.', cat: 'start', keys: 'home overview today' },
-    { id: 'calc', title: 'Risk calculator', text: 'How many contracts fit your risk range.', cat: 'trade', keys: 'contracts size stop loss points position quick calculator' },
-    { id: 'journal', title: 'Trade journal', text: 'Log trades, calendar, notes and backups.', cat: 'trade', keys: 'log trade entry diary calendar backup export csv screenshots new trade' },
-    { id: 'import', title: 'Import trades', text: 'Bring in a CSV from your broker, with preview and undo.', cat: 'trade', keys: 'csv upload broker tradovate history migrate' },
-    { id: 'risk', title: 'Risk center', text: 'Position sizing, exposure and limits you set yourself.', cat: 'trade', keys: 'exposure limits daily loss max risk scenarios streak reward ratio' },
-    { id: 'analytics', title: 'Analytics', text: 'Win rate, expectancy, drawdown, heatmaps and more.', cat: 'review', keys: 'performance stats statistics equity curve profit factor charts' },
-    { id: 'insights', title: 'Insights', text: 'Plain observations from your own trades. No AI.', cat: 'review', keys: 'patterns mistakes review summary overtrading' },
-    { id: 'discipline', title: 'Discipline', text: 'Plan, checklists, routines, reflections and goals.', cat: 'review', keys: 'plan checklist routine reflection goals score rules habit journal mood' },
-    { id: 'strategy', title: 'Strategy lab', text: 'Define strategies, backtest by hand, compare and simulate.', cat: 'review', keys: 'backtest monte carlo simulate compare setups forward test' },
-    { id: 'accounts', title: 'Accounts', text: 'Prop firm and personal accounts, drawdown and payouts.', cat: 'money', keys: 'prop firm apex topstep drawdown payout balance trailing' },
-    { id: 'money', title: 'Money', text: 'Fees, payouts, deposits and profit after costs.', cat: 'money', keys: 'fees expenses subscriptions payouts deposits net profit ledger' },
-    { id: 'intel', title: 'Market intel', text: 'Economic calendar, events and market sessions.', cat: 'market', keys: 'news calendar fomc cpi events sessions' },
-    { id: 'health', title: 'System health', text: 'Check your saved data, storage and backups.', cat: 'system', keys: 'integrity repair storage quarantine problems' },
-    { id: 'help', title: 'Help and glossary', text: 'Plain-language explanations and keyboard shortcuts.', cat: 'system', keys: 'learn explain what is r multiple expectancy drawdown shortcuts keyboard guide tour' },
-    { id: 'settings', title: 'Settings', text: 'Name, theme, layout, sessions and privacy.', cat: 'system', keys: 'profile name theme dark light compact preferences privacy reset' }
-  ];
-  var CATS = [['start', 'Start'], ['trade', 'Trade'], ['review', 'Review and improve'], ['money', 'Money'], ['market', 'Market'], ['system', 'System']];
+  /* Derived from the feature registry (assets/registry-core.js) - the single source of truth. Do not hand-edit lists here. */
+  var REG = (typeof module !== 'undefined' && module.exports) ? require('./registry-core.js') : root.TTRegistry;
+  var CATALOG = REG.FEATURES.filter(function (f) { return f.kind === 'screen' && !f.virtual; }).map(function (f) { return { id: f.id, title: f.title, text: f.text, cat: f.cat, keys: f.keys, since: f.since }; });
+  var CATS = REG.CATS;
   /* Things you can do or change, found by search. view = where it lives; act = optional action keyword handled by the UI. */
-  var EXTRAS = [
-    { id: 'x-newtrade', title: 'Log a new trade', text: 'Open the trade form.', view: 'journal', act: 'new-trade', keys: 'add entry record' },
-    { id: 'x-name', title: 'Change my name', text: 'Update the name used in greetings.', view: 'settings', act: 'focus-name', keys: 'profile display greeting' },
-    { id: 'x-theme', title: 'Switch light or dark theme', text: 'Appearance settings.', view: 'settings', act: 'theme', keys: 'dark light mode appearance' },
-    { id: 'x-compact', title: 'Compact or comfortable layout', text: 'Change how dense screens are.', view: 'settings', act: 'personalize', keys: 'density spacing display mode' },
-    { id: 'x-tour', title: 'Replay the welcome tour', text: 'See the quick tour of the main tools again.', view: 'home', act: 'tour', keys: 'onboarding intro walkthrough' },
-    { id: 'x-startpage', title: 'Choose my start page', text: 'Pick which screen opens first.', view: 'settings', act: 'personalize', keys: 'default page home' },
-    { id: 'x-widgets', title: 'Customize my dashboard', text: 'Show, hide and reorder dashboard sections.', view: 'home', act: 'customize', keys: 'widgets layout home' },
-    { id: 'x-backup', title: 'Download a backup', text: 'Save a copy of your data.', view: 'journal', act: 'backup', keys: 'export save copy restore' },
-    { id: 'x-sessions', title: 'Edit market session windows', text: 'Change session start and end times.', view: 'settings', act: 'sessions', keys: 'london new york asia times' },
-    { id: 'x-whatsnew', title: "What's new", text: 'Recent improvements.', view: 'help', act: 'whatsnew', keys: 'updates changelog release' },
-    { id: 'x-shortcuts', title: 'Keyboard shortcuts', text: 'Move around faster on a computer.', view: 'help', act: 'shortcuts', keys: 'keys hotkeys' }
-  ];
+  var EXTRAS = REG.FEATURES.filter(function (f) { return f.kind === 'action' || f.virtual; }).map(function (f) { return { id: f.kind === 'action' ? f.id : 'x-' + f.id, title: f.title, text: f.text, view: f.virtual ? 'home' : f.view, act: f.act || f.id, keys: f.keys, since: f.since }; });
   var INTERESTS = [
     { id: 'risk', label: 'Position sizing and risk', pick: ['calc', 'risk'] },
     { id: 'journal', label: 'Journaling my trades', pick: ['journal', 'import'] },
@@ -127,34 +100,10 @@
     return { line: line, sub: part + (n ? '' : '') + '. ' + (first ? 'Everything here stays on this device.' : 'Here is your day at a glance.') };
   }
 
-  var WHATS_NEW = [
-    { id: 7, date: '2026-10-29', title: 'A more personal dashboard', items: ['Greeting by name, favorites, recently used tools and a customizable dashboard.', 'Search anything with Ctrl or Cmd + K, or the search button.', 'A short optional tour, a help page with plain-language explanations, and compact layout.'] },
-    { id: 6, date: '2026-10-29', title: 'Insights, health check and strategy lab', items: ['Rule-based insights from your own trades (no AI).', 'System health check for your saved data.', 'Strategy lab with manual backtests, comparisons and Monte Carlo.'] },
-    { id: 5, date: '2026-10-28', title: 'Discipline, risk center, analytics', items: ['Trading plan, checklists, reflections and goals.', 'Position sizing, exposure and limits that you set.', 'Deeper analytics with sample-size labels.'] }
-  ];
-  var GLOSSARY = [
-    { term: 'R multiple', text: 'Profit or loss measured in units of what you risked. If you risk $100 and make $250, that is +2.5R. It lets you compare trades of different sizes.' },
-    { term: 'Expectancy', text: 'The average result per trade. Positive means your trades have averaged a gain. It is only meaningful with enough trades, and past averages do not guarantee future ones.' },
-    { term: 'Win rate', text: 'Winning trades divided by all trades. A high win rate can still lose money if the losses are bigger than the wins.' },
-    { term: 'Profit factor', text: 'Total gains divided by total losses. Above 1.0 means gains outweighed losses over the period.' },
-    { term: 'Drawdown', text: 'How far you have fallen from your highest point. Max drawdown is the biggest such fall. Prop firms often limit it.' },
-    { term: 'Trailing drawdown', text: 'A drawdown limit that rises with your account high, so the floor moves up as you profit. Check your firm\'s exact rule.' },
-    { term: 'Sample size', text: 'How many trades a statistic is based on. Small samples swing wildly, so the app labels them and shows a range.' },
-    { term: '95% range', text: 'A range that would contain the true value about 95 times out of 100 if your trades were a fair sample. Wide ranges mean you cannot be sure yet.' },
-    { term: 'Stop', text: 'The price where you exit a losing trade. Recording it lets the app work out your planned risk and R.' },
-    { term: 'Planned risk', text: 'What you would lose if the stop is hit: distance to the stop times the dollar value per point times contracts.' },
-    { term: 'Net and gross', text: 'Gross is before fees; net is after fees. Net needs fees entered on each trade.' },
-    { term: 'Monte Carlo', text: 'Reshuffling your own past results many times to see how much luck alone could change the outcome. It is not a forecast.' },
-    { term: 'Contract (point value)', text: 'Each futures contract moves a fixed dollar amount per point. NQ is $20 per point, MNQ is $2.' }
-  ];
-  var SHORTCUTS = [['Ctrl/Cmd + K or /', 'Search everything'], ['?', 'Show shortcuts'], ['G then H', 'Dashboard'], ['G then J', 'Journal'], ['G then R', 'Risk calculator'], ['G then A', 'Analytics'], ['G then S', 'Settings'], ['N', 'Log a new trade'], ['Esc', 'Close any pop-up']];
-  var TOUR = [
-    { view: 'home', title: 'Your dashboard', text: 'Today\'s trading, your favorites and recent tools live here. Tap CUSTOMIZE to show, hide or reorder sections.' },
-    { view: 'calc', title: 'Risk calculator', text: 'Enter a stop distance and your dollar range to see how many contracts fit. Your last settings are remembered.' },
-    { view: 'journal', title: 'Trade journal', text: 'Log trades in under a minute. Everything feeds your analytics, insights and discipline score.' },
-    { view: 'more', title: 'Everything else', text: 'Analytics, accounts, strategy lab and more are grouped here. Star a tool to pin it to your dashboard.' },
-    { view: 'home', title: 'Search from anywhere', text: 'Press Ctrl or Cmd + K, or tap the search button at the top, then type what you want.' }
-  ];
+  var WHATS_NEW = REG.RELEASES.map(function (r) { return { id: r.id, version: r.version, date: r.date, title: r.title, items: r.items.concat(r.improvements || []), fixes: r.fixes || [], features: r.features || [] }; });
+  var GLOSSARY = REG.GLOSSARY;
+  var SHORTCUTS = REG.SHORTCUTS;
+  var TOUR = REG.MAIN_TOUR.map(function (t) { var f = t.feature ? REG.byId(t.feature) : null; return { view: t.view || (f && !f.virtual ? f.view : 'home'), title: t.title, text: t.text, ring: t.ring || '', feature: t.feature || '' }; });
 
   var api = { CATALOG: CATALOG, CATS: CATS, EXTRAS: EXTRAS, INTERESTS: INTERESTS, WIDGETS: WIDGETS, WHATS_NEW: WHATS_NEW, GLOSSARY: GLOSSARY, SHORTCUTS: SHORTCUTS, TOUR: TOUR, MAX_FAV: MAX_FAV, MAX_RECENT: MAX_RECENT, defaults: defaults, cleanPrefs: cleanPrefs, cleanName: cleanName, cleanWidgets: cleanWidgets, pushRecent: pushRecent, toggleFavorite: toggleFavorite, moveWidget: moveWidget, prioritize: prioritize, entry: entry, search: search, greeting: greeting };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
