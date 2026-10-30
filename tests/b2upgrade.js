@@ -1,4 +1,4 @@
-const { chromium } = require('playwright'); let fail=0; const ok=(n,c,d)=>{ if(!c){fail++; console.log('FAIL',n,JSON.stringify(d));} else console.log('ok  ',n); };
+const { chromium } = require('./_pw'); let fail=0; const ok=(n,c,d)=>{ if(!c){fail++; console.log('FAIL',n,JSON.stringify(d));} else console.log('ok  ',n); };
 (async()=>{ const b=await chromium.launch(); const p=await b.newPage(); const errors=[]; p.on('pageerror',e=>errors.push(e.message));
  await p.goto(((process.env.TT_BASE||'http://127.0.0.1:8765')+'/calculator-classic.html'));
  // build a Batch 0/1 era database (version 1, no ledger store) with real-looking data

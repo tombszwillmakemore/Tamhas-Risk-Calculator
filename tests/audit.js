@@ -1,4 +1,4 @@
-const { chromium, devices } = require('playwright'); const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html');
+const { chromium, devices } = require('./_pw'); const URL=((process.env.TT_BASE||'http://127.0.0.1:8765')+'/index.html');
 let fail=0; const ok=(n,c,d)=>{ if(!c) fail++; console.log(c?'ok  ':'FAIL',n,c?'':'\n     '+d); };
 (async()=>{ const b=await chromium.launch(); const ctx=await b.newContext({viewport:{width:1100,height:900}}); const p=await ctx.newPage(); const dialogs=[], errs=[];
  p.on('dialog',d=>{dialogs.push(d.message()); d.dismiss();}); p.on('pageerror',e=>errs.push(e.message));
