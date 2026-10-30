@@ -197,6 +197,8 @@
   });
   window.addEventListener('tt:journal-changed', function () { if (!S.loaded) return; load().then(function () { if (!S.editing && !S.adding) render(); }); });
   if (window.TTTracker) TTTracker.init({ getLedger: function () { return S.ledger; }, getRows: function () { return S.rows; }, getAccounts: function () { return S.accounts; }, getOpenAccount: function () { return acctById(S.open); }, save: save, rerender: function () { render(); }, toast: toast });
-  window.TTAccounts = { reload: function () { return load().then(render); } };
+  // Reloads after another tab changed accounts. Skips redrawing while the person is typing here, so nothing is lost.
+  function busy() { var f = document.activeElement; return S.adding || S.editing || (f && root.contains(f) && /^(INPUT|SELECT|TEXTAREA)$/.test(f.tagName)); }
+  window.TTAccounts = { reload: function () { return load().then(function () { if (!busy()) render(); }); } };
   render(); load().then(render);
 })();

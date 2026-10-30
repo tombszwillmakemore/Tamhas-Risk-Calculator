@@ -105,7 +105,7 @@
     var legacy = function () { var raw = null; try { raw = localStorage.getItem(JOURNAL_KEY); } catch (e) {} return C ? C.parseStored(raw) : { trades: [], corrupt: false }; };
     if (!window.TTDB || !window.indexedDB || !C) return Promise.resolve(legacy());
     return window.TTDB.ready().then(function () { return window.TTDB.getAll('trades'); })
-      .then(function (list) { return window.TTDB.getAll('quarantine').then(function (q) { var ok = []; list.forEach(function (r) { var n = C.normalizeTrade(r); if (n.ok) ok.push(n.trade); }); return { trades: ok, corrupt: q.some(function (x) { return x.kind === 'legacy-journal-unreadable'; }) }; }); })
+      .then(function (list) { return window.TTDB.getAll('quarantine').then(function (q) { var ok = []; list.forEach(function (r) { var n = C.normalizeTrade(r); if (n.ok) ok.push(n.trade); }); return { trades: ok, corrupt: q.some(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; }) }; }); })
       .catch(function () { return legacy(); });
   }
   function renderPnl() { readTrades().then(drawPnl); }
