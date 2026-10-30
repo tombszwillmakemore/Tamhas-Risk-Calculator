@@ -1,4 +1,7 @@
-# Tamhas Trading - release candidate report
+# Tamhas Trading - release report (v2.0.0)
+
+Released to `main` on 2026-10-30 at your instruction. Old `main` kept as `backup-main-before-v2`. Full feature-by-feature audit: AUDIT.md.
+
 
 Branch `dev-free-platform`. **Not merged into `main`.** Merge only after your review and approval (back up `main` first).
 Everything is vanilla JS, no build step, no dependencies, no paid services, no network calls. All data stays in this browser (IndexedDB).
@@ -8,7 +11,8 @@ Everything is vanilla JS, no build step, no dependencies, no paid services, no n
 |---|---|
 | Foundation | IndexedDB v3 (accounts, trades, ledger, docs, quarantine, audit), safe migrations, backup/restore v3, PWA offline cache |
 | Money | Fees, payouts, deposits, transfers, prop-firm tracker, drawdown tracking, firm research (sourced, editable) |
-| Import | Generic CSV mapping with preview, atomic commit, history, rollback of unedited imports (no broker presets, no credentials) |
+| Import | Tradovate Smart Import (Orders, Performance, fills, summaries; CSV, pasted tables, on-device screenshot reading) with reconciliation, account mapping, duplicate protection, rollback; generic CSV mapping for anything else |
+| Help & app | Universal search, voice commands (opt-in), help centre, tour, install guide (TRC), feedback, diagnostics, update banner, repair, backup reminder, startup screen |
 | Journal v2 | Scale-in fills, tags/emotions/mistakes/grades, custom fields, templates, saved filters, bulk edit, compare, review (day/week/month) |
 | Analytics | 11 breakdown dimensions, equity/drawdown, heatmap, histogram, Wilson ranges, sample-size labels, customizable layout |
 | Risk center | Position sizing (NQ, MNQ, ES, MES, GC, MGC...), reward:risk, exposure vs your own limits, scenarios, risk history |
@@ -18,7 +22,7 @@ Everything is vanilla JS, no build step, no dependencies, no paid services, no n
 | System health | Integrity audit (read-only), confirmed repairs that move data to quarantine (never delete), storage estimate, persist request |
 | Onboarding | Getting-started card on Home and Insights, empty states with next actions |
 
-## Tested (all actually executed: `node tests/run.js`, 36 suites)
+## Tested (all actually executed: `node tests/run.js`, 39 suites, all passed on 2026-10-30)
 - 35 suites green at last full run (before adding `desk.js`, which also passes: 48 checks).
 - Pure-logic suites: money, drawdown, journal, import, analytics, risk, discipline, strategy, insights, health (~1,000 checks, including brute-force verification of the loss-streak math).
 - Browser suites (Playwright Chromium, dark and light, 390px phone width): every screen, forms, validation messages, persistence, delete/rollback flows.
@@ -30,7 +34,7 @@ Everything is vanilla JS, no build step, no dependencies, no paid services, no n
 
 ## Not done / known limits (nothing silently dropped)
 - Intel calendar: no verified free API for economic events (Forex Factory has none), so events are manual/importable only.
-- Tradovate and other broker APIs: not used (disabled/paid or credential-based). CSV import only, no presets.
+- Tradovate API: not used (needs funded live account + paid subscription). Tradovate layouts follow published headers and were not tested on a real export; screenshot reading was tested on synthetic tables.
 - Prop-firm research: only rules with a source are included; gaps stay marked unverified.
 - Backtests: you enter results in R. No market data download, no tick replay (would need paid data).
 - Sweeps: risk cap and trades-per-day only. Custom field values are in JSON backup but not in CSV export.

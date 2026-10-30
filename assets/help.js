@@ -11,10 +11,12 @@
   function go(r) {
     if (!r) return; if (r.action === 'tour') { startTour(); return; } if (r.action === 'search') { openSearch(); return; } if (r.action === 'voice') { window.TTNav.go('settings'); setTimeout(function () { var v = $('#voiceSettings'); if (v) v.scrollIntoView({ block: 'start' }); }, 60); return; }
     window.TTNav.go(r.view);
-    setTimeout(function () {
-      if (r.tab) { var t = document.querySelector('[data-act=tab][data-tab="' + r.tab + '"]'); if (t) t.click(); }
-      if (r.anchor) { var el = document.getElementById(r.anchor); if (el) { if (el.tagName === 'DETAILS') el.open = true; el.scrollIntoView({ block: 'start' }); var f = el.querySelector('summary, button, input'); if (f) f.focus({ preventScroll: true }); } }
-    }, 80);
+    // Sections render asynchronously after navigation, so keep looking for the target for a moment and re-open it if it is re-rendered.
+    var tabbed = false, last = null, n = 0, iv = setInterval(function () {
+      if (r.tab && !tabbed) { var t = document.querySelector('[data-act=tab][data-tab="' + r.tab + '"]'); if (t) { t.click(); tabbed = true; } }
+      if (r.anchor) { var el = document.getElementById(r.anchor); if (el && el !== last) { last = el; if (el.tagName === 'DETAILS') el.open = true; el.scrollIntoView({ block: 'start' }); var f = el.querySelector('summary, button, input'); if (f) f.focus({ preventScroll: true }); } }
+      if (++n > 15) clearInterval(iv);
+    }, 100);
   }
 
   /* ---------- recoverable error log (messages only; never data) ---------- */

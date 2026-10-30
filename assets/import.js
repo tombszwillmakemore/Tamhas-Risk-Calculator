@@ -38,7 +38,8 @@
       '<div class="ui-row im-actions"><button type="button" class="btn" data-act="im-clip">PASTE FROM CLIPBOARD</button><button type="button" class="btn ghost" data-act="im-paste-toggle" aria-expanded="' + S.pasteOpen + '">PASTE TEXT</button><button type="button" class="btn ghost" data-act="im-guide">HOW TO EXPORT FROM TRADOVATE</button></div>' +
       '<p class="note">Tip: on a computer you can also press ' + (/Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘' : 'Ctrl') + '+V on this page to paste a copied table or screenshot.</p>' +
       (S.pasteOpen ? '<label for="im-paste">Paste your report or table</label><textarea id="im-paste" rows="7" placeholder="Copy the rows from Tradovate (including the column titles) and paste them here"></textarea><div class="ui-row" style="margin-top:8px"><button type="button" class="btn" data-act="im-paste-read">READ PASTED TEXT</button></div>' : '') +
-      (S.stage ? '<p class="note im-stage" role="status" aria-live="polite">' + esc(S.stage) + '</p>' : '<p class="vh" role="status" aria-live="polite"></p>') +
+      (S.stage ? '<div class="im-busy">' + U.progress(null, S.stage) + '<button type="button" class="btn ghost sm" data-act="im-ocr-cancel">CANCEL</button></div>' : '<p class="vh" role="status" aria-live="polite"></p>') +
+      (S.retry ? '<div class="ui-row"><button type="button" class="btn" data-act="im-ocr-retry">TRY AGAIN</button></div>' : '') +
       (S.msg ? '<div class="ui-banner bad" role="alert">' + esc(S.msg) + '</div>' : '') +
       (S.nearMiss ? '<div class="ui-banner warn">' + esc(S.nearMiss) + '</div>' : '') + '</div>';
     h += settingsPanel() + guidePanel(false) + historyPanel();
@@ -122,15 +123,16 @@
 
   /* ---------- screenshots ---------- */
   function readNextImage() {
-    var job = S.queue.shift(); S.step = 'file'; S.stage = 'Reading ' + job.name + '…'; render();
+    var job = S.queue.shift(); S.step = 'file'; S.stage = 'Reading ' + job.name + ' on this device…'; S.retry = null; S.msg = ''; render(); S.curJob = job;
+    var slow = U.later(function () { if (S.stage) { S.stage += ' Still working - large or busy screenshots take longer on phones.'; var t = $('.ui-prog-t'); if (t) t.textContent = S.stage; } }, 8000);
     if (!window.TTOcr || !window.TTOcr.available) { S.stage = ''; S.msg = 'This browser cannot run the on-device text reader. Paste the report as text or upload the CSV instead.'; render(); return; }
     var url = URL.createObjectURL(job.blob);
-    window.TTOcr.readTable(job.blob, function (st) { S.stage = job.name + ': ' + st; var el = $('.im-stage'); if (el) el.textContent = S.stage; }).then(function (t) {
-      S.stage = '';
+    U.timeout(window.TTOcr.readTable(job.blob, function (st) { S.stage = job.name + ': ' + st; var el = $('.ui-prog-t'); if (el) el.textContent = S.stage; }), 90000, 'Reading the screenshot took longer than 90 seconds and was stopped. Try a smaller or cropped screenshot, or paste the report as text.').then(function (t) {
+      slow(); S.stage = '';
       if (!t.ok) { URL.revokeObjectURL(url); S.msg = job.name + ': ' + t.error; if (S.queue.length) readNextImage(); else route(); return; }
       S.review = { name: job.name, url: url, headers: t.headers, rows: t.rows.map(function (r) { return r.slice(); }), low: t.lowConf, unreadable: t.unreadable || [] };
       S.step = 'review'; render(); window.scrollTo(0, 0);
-    }).catch(function (e) { URL.revokeObjectURL(url); S.stage = ''; S.msg = job.name + ': ' + e.message; render(); });
+    }).catch(function (e) { slow(); URL.revokeObjectURL(url); S.stage = ''; if (/90 seconds/.test(e.message)) window.TTOcr.cancel(); if (e.message === 'cancelled') { S.msg = 'Screenshot reading cancelled.'; S.queue = []; } else { S.msg = job.name + ': ' + e.message; S.retry = job; } render(); });
   }
   function reviewStep() {
     var r = S.review, det = TV.detect(r.headers), nLow = 0, nBad = 0;
@@ -419,6 +421,8 @@
     else if (a === 'im-more') { S.showN += 50; render(); }
     else if (a === 'im-all-on') { S.off = {}; render(); } else if (a === 'im-all-off') { (S.tv || []).forEach(function (x) { x.plan.trades.forEach(function (t) { S.off[t.fp] = 1; }); }); render(); }
     else if (a === 'im-tv-commit') tvCommit();
+    else if (a === 'im-ocr-cancel') { window.TTOcr.cancel(); }
+    else if (a === 'im-ocr-retry') { var j = S.retry; S.retry = null; if (j) { S.queue.unshift(j); readNextImage(); } }
     else if (a === 'im-goto-journal') { reset(); if (window.TTNav) window.TTNav.go('journal'); }
     else if (a === 'im-reopen') reopen(b.getAttribute('data-id'));
     else if (a === 'im-view-sum') viewSummary(b.getAttribute('data-id'));

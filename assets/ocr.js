@@ -46,5 +46,7 @@
     }
     return next().then(function () { var m = T.mergeTables(got); if (!m || !m.ok) { var e = got.filter(function (t) { return t && t.error; })[0]; return { ok: false, error: e ? e.error : 'Nothing could be read.', words: words }; } m.words = words; return m; });
   }
-  window.TTOcr = { readTable: readTable, recognize: recognize, available: typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined' };
+  // Stops the reader (terminates the worker). Any pending reading is rejected with a 'cancelled' error.
+  function cancel() { if (worker) { worker.terminate(); worker = null; } Object.keys(waiting).forEach(function (k) { waiting[k].rej(new Error('cancelled')); delete waiting[k]; }); }
+  window.TTOcr = { cancel: cancel, readTable: readTable, recognize: recognize, available: typeof Worker !== 'undefined' && typeof WebAssembly !== 'undefined' };
 })();

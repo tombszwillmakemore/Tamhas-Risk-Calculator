@@ -8,7 +8,8 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
-**RELEASE CANDIDATE READY - awaiting your review.** Stages A-I and Final complete on `dev-free-platform`; main untouched. See RELEASE-CANDIDATE.md. Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
+**Version 2.0.0 released to `main` on 2026-10-30 at your instruction ("make it live").** Stage J (Tradovate Smart Import) and Stage K (platform completeness, TRC install naming, startup/loading system) are done; full audit in AUDIT.md. Previous `main` saved as branch `backup-main-before-v2`.
+Previously: RELEASE CANDIDATE READY. Stages A-I and Final complete on `dev-free-platform`; main untouched. See RELEASE-CANDIDATE.md. Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
 
 ## Completed features
 - Batch 0: IndexedDB platform, non-destructive legacy migration, PWA (manifest, offline service worker, icons), CSP.
@@ -38,7 +39,7 @@ Recorded per stage below (only tests that were actually run).
 - Realized P&L is assigned to the trade's entry date (no exit time is stored yet; Stage C adds fills with times).
 - Intraday trailing drawdown on an equity basis needs firm-reported figures (by design).
 - Forex Factory has no verified free API; the Intel calendar stays on the bundled schedule data.
-- Tradovate API stays disabled; CSV import is the supported route.
+- Tradovate API stays disabled (needs a funded live account + paid API subscription). Smart Import of CSV, pasted tables and screenshots is the supported route.
 - GC/MGC contract specs not yet verified against CME (Stage F verifies before adding).
 
 ## Next steps
@@ -68,3 +69,11 @@ Added `assets/discipline-core.js` (66 checks) and `assets/discipline.js` (54 bro
 
 ## Stage I + Final (done)
 Insights (deterministic, no AI), System health (read-only audit + confirmed quarantine repairs), Getting-started card, migration tests from DB v1/v2/v3, offline/security/accessibility/performance checks, all tests moved into `tests/` with `node tests/run.js` (self-hosted server, relative paths). Final full run: 35/35 suites passed, plus `desk.js` (48 checks). Report: RELEASE-CANDIDATE.md.
+
+
+## Stage J - Tradovate Smart Import (done)
+`tradovate-core.js` (report detection: Orders, Performance, fills list, summary; fills rebuilt by id; reconciliation; OCR table builder), `ocr.js` + `vendor/ocr` (Tesseract core v5.1.1 and tessdata_fast English, Apache-2.0, run in a worker on the device), `import.js` rewritten as Smart Import (drop/choose/paste/clipboard/screenshots, review grid, account mapping with create-account, remembered settings and per-contract fees, preview with select/deselect, possible-duplicate and ambiguity review, success summary, history with report types, ranges, counts, saved copies and summary references). Engine extensions in `import-core.js` (pre-read fills, file P&L per trade, fingerprint duplicate check, enrichment hook) and `journal-core.js` (feeSource, srcInfo). Tests: tv1core 72, tv2e2e 93 (dark 390 px, light 1280 px, screenshot import at phone width, 2,000-trade import).
+Notes: npm registry is blocked from the build environment, so Tesseract came from its GitHub repositories. Orders with multi-price average fills (more than 2 decimals) are listed, not guessed.
+
+## Stage K - completeness (done)
+TRC naming (manifest, Apple title, install guide, onboarding first optional step), startup screen + shared loaders (`TTUI.skeleton/progress/busy/later/timeout`), animation settings, versioned service worker with version handshake and update banner, repair app files, diagnostics, backup reminder, universal search, voice commands (Web Speech, opt-in), help centre with education, guided tour, feedback workflow. Tests: x1core 133, x1e2e 80. Regression fix: the update banner no longer appears on first install. Full run: 39/39 suites.

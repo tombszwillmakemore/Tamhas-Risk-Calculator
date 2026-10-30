@@ -161,3 +161,5 @@ html[data-anim=reduced] *, html[data-anim=reduced] *::before, html[data-anim=red
 .tour-hl { position: relative; z-index: 1000; box-shadow: 0 0 0 3px var(--good), 0 0 0 9999px rgba(0, 0, 0, .45) !important; border-radius: 12px; }
 .inst-tabs { flex-wrap: wrap; } .inst-preview { display: flex; align-items: center; gap: 12px; margin: 10px 0; } .inst-preview img { width: 60px; height: 60px; border-radius: 14px; } .inst-preview b { font-size: 13px; display: block; text-align: center; margin-top: 4px; }
 .help-art { scroll-margin-top: 80px; } .help-art h3 { margin: 0 0 4px; font-size: 15px; }
+.im-busy { display: flex; gap: 10px; align-items: center; } .im-busy > div:first-child, .im-busy .ui-prog { flex: 1; }
+.dropzone, .dropzone b, .dropzone span { text-transform: none; letter-spacing: normal; } .dropzone b { font-weight: 700; }

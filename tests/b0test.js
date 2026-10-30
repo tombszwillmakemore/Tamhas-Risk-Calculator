@@ -44,7 +44,7 @@ let fail=0; const ok=(n,c,d)=>{ if(!c) fail++; console.log(c?'ok  ':'FAIL',n, c?
   ok('failed batch writes nothing',a===0,a);
   // F) service worker + manifest valid
   const m=await p.evaluate(async()=>{const r=await fetch('manifest.webmanifest'); const j=await r.json(); const ic=await Promise.all(j.icons.map(i=>fetch(i.src).then(x=>x.status))); return {name:j.name,ic}; });
-  ok('manifest + icons load',m.name==='Tamhas Trading'&&m.ic.every(s=>s===200),m);
+  ok('manifest + icons load',m.name==='TRC'&&m.ic.every(s=>s===200),m);
   const csp=await p.evaluate(()=>document.querySelector('meta[http-equiv="Content-Security-Policy"]').content); ok('CSP present',/default-src 'self'/.test(csp));
   ok('no page errors',errors.length===0,errors);
   await browser.close(); console.log(fail?('FAILED '+fail):'ALL PASSED'); process.exit(fail?1:0);
