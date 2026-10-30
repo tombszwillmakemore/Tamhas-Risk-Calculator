@@ -26,7 +26,7 @@
       need: { symbol: ['symbol'], qty: ['qty'], buyPrice: ['buyPrice'], sellPrice: ['sellPrice'], bought: ['boughtTimestamp'], sold: ['soldTimestamp'] },
       opt: { pnl: ['pnl'], buyId: ['buyFillId'], sellId: ['sellFillId'], duration: ['duration'], account: ['account', 'Account'] }, fees: false },
     fills: { title: 'Fills / executions list', basis: 'Recognised by its column names only. This layout has not been checked against a published Tradovate header, so check the preview.', verified: 'names',
-      need: { side: ['B/S', 'Side', 'Buy/Sell', 'Action'], contract: ['Contract', 'Symbol', 'Instrument'], qty: ['Quantity', 'Qty', 'Filled Qty', 'Fill Qty'], price: ['Price', 'Fill Price', 'Exec Price'], time: ['Timestamp', 'Fill Time', 'Time', 'Date/Time', 'Exec Time'] },
+      need: { side: ['B/S'], contract: ['Contract'], qty: ['Quantity', 'Qty', 'Filled Qty', 'Fill Qty'], price: ['Price', 'Fill Price', 'Exec Price'], time: ['Timestamp', 'Fill Time', 'Time', 'Date/Time', 'Exec Time'] },
       opt: { account: ['Account'], id: ['Fill ID', 'fillId', 'id', 'Execution ID', 'Exec ID'], order: ['Order ID', 'orderId'], fee: ['Commission', 'Commissions', 'Fees', 'Fee', 'Total Fees'] }, fees: true }
   };
   var SUMMARY_WORDS = ['netliq', 'netliquidation', 'cashbalance', 'accountbalance', 'balance', 'totalpnl', 'realizedpnl', 'openpnl', 'totalamount', 'cashchange', 'endofdaybalance', 'margin', 'buyingpower', 'availablefunds', 'grossprofit', 'grossloss', 'totalpl', 'wintrades', 'losstrades', 'totaltrades'];
@@ -41,8 +41,8 @@
     var tradeish = col(headers, ['B/S', 'Side', 'Buy/Sell', 'buyPrice', 'Price', 'Avg Fill Price', 'Entry Price']) >= 0;
     if (sumHits && !tradeish) return { report: 'summary', title: 'Account summary or balance report', basis: 'Contains balances or totals but no individual executions, so no trades can be built from it.', verified: 'names', cols: {} };
     // close to a Tradovate layout? say which columns are missing
-    var near = order.map(function (k) { var f = findCols(headers, LAYOUTS[k]); return { k: k, miss: f.missing, have: Object.keys(LAYOUTS[k].need).length - f.missing.length }; }).sort(function (a, b) { return b.have - a.have; })[0];
-    return { report: null, near: near.have >= 2 ? { report: near.k, title: LAYOUTS[near.k].title, missing: near.miss } : null };
+    var near = ['performance', 'orders'].map(function (k) { var f = findCols(headers, LAYOUTS[k]); return { k: k, miss: f.missing, have: Object.keys(LAYOUTS[k].need).length - f.missing.length }; }).sort(function (a, b) { return b.have - a.have; })[0];
+    return { report: null, near: near.have >= 3 ? { report: near.k, title: LAYOUTS[near.k].title, missing: near.miss } : null };
   }
 
   /* ---------- small readers ---------- */

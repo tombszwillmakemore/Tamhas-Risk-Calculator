@@ -181,7 +181,7 @@
 
   /* ---------- entries ---------- */
   function entriesHtml() {
-    return '<button type="button" class="btn big" data-act="new">+ NEW TRADE</button>' +
+    return '<div class="j-actions"><button type="button" class="btn big import-cta" data-go="import"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>IMPORT TRADES</button><button type="button" class="btn big ghost" data-act="new" aria-label="Add a trade by hand">+ MANUAL</button></div>' +
       '<div class="panel jsearch"><input id="jq" type="text" data-f="q" placeholder="Search strategy, reasons, mistakes, notes…" autocomplete="off" value="' + esc(S.filters.q || '') + '" aria-label="Search journal">' +
       '<div class="jbar"><button type="button" class="chip' + (S.filtersOpen ? ' on' : '') + '" data-act="toggle-filters" aria-expanded="' + S.filtersOpen + '">FILTERS<span id="jFiltBadge"></span></button>' +
       '<button type="button" class="chip" data-act="clear-filters">CLEAR</button><button type="button" class="chip' + (S.selMode ? ' on' : '') + '" data-act="sel-mode" aria-pressed="' + S.selMode + '">SELECT</button><span class="note" id="jCount"></span></div>' +

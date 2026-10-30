@@ -1,7 +1,8 @@
 {
-  "name": "Tamhas Trading",
-  "short_name": "Tamhas",
-  "description": "Local-first futures trading management: risk calculator, journal, analytics, sessions and calendar. Your data stays on your device.",
+  "name": "TRC",
+  "short_name": "TRC",
+  "id": "./index.html",
+  "description": "TRC by Tamhas Trading - Local-first futures trading management: risk calculator, journal, analytics, sessions and calendar. Your data stays on your device.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

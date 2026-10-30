@@ -7,10 +7,11 @@
   var I = window.TTInsightsCore, H = window.TTHealthCore, C = window.TTJournalCore, U = window.TTUI, DB = window.TTDB, ST = window.TTStore, esc = U.esc;
   var S = { rows: [], data: null, plan: null, health: null, est: null, persisted: null, msg: null, loaded: false, err: null };
   function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function installedOrSkipped() { try { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true || !!localStorage.getItem('tt.installed') || !!localStorage.getItem('tt.install.skip'); } catch (e) { return false; } }
   function lastBackup() { try { return (JSON.parse(localStorage.getItem('tt.journal.prefs.v1') || '{}') || {}).lastBackup || null; } catch (e) { return null; } }
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('trades'), DB.getAll('accounts'), DB.getAll('ledger'), DB.getAll('quarantine'), DB.getAll('docs')]); }).then(function (r) {
-      S.data = { trades: r[0], accounts: r[1], ledger: r[2], quarantine: r[3], docs: r[4], today: today(), lastBackup: lastBackup() };
+      S.data = { trades: r[0], accounts: r[1], ledger: r[2], quarantine: r[3], docs: r[4], today: today(), lastBackup: lastBackup(), installed: installedOrSkipped() };
       var ok = []; r[0].forEach(function (raw) { var n = C.normalizeTrade(raw); if (n.ok) ok.push(n.trade); }); S.rows = C.analyze(ok);
       S.plan = r[4].filter(function (d) { return d.id === 'plan-main'; })[0] || null; S.health = H.audit(S.data); S.loaded = true; S.err = null;
     }).catch(function (e) { S.err = (e && e.message) || 'Could not open the local database.'; S.loaded = true; });

@@ -33,7 +33,8 @@
   function steps(data) {
     var docs = data.docs || [], has = function (k) { return docs.some(function (d) { return d.kind === k; }); };
     return [
-      { id: 'trade', label: 'Log your first trade', done: (data.trades || []).length > 0, go: 'journal' },
+      { id: 'install', label: 'Optional: add TRC to your Home Screen', done: !!data.installed, go: 'install', optional: true },
+      { id: 'trade', label: 'Import your trades (or add one by hand)', done: (data.trades || []).length > 0, go: 'import' },
       { id: 'account', label: 'Add the account you trade', done: (data.accounts || []).filter(function (a) { return a.id !== 'acct-default'; }).length > 0 || (data.accounts || []).some(function (a) { return a.id === 'acct-default' && a.name !== 'Main account'; }), go: 'accounts' },
       { id: 'limits', label: 'Set your own risk limits', done: has('risklimit'), go: 'risk' },
       { id: 'plan', label: 'Write your trading plan', done: docs.some(function (d) { return d.kind === 'plan'; }), go: 'discipline' },

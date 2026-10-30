@@ -11,7 +11,7 @@ const type=async(p,sel,v)=>{ await p.fill(sel,v); };
   p.on('pageerror',e=>errors.push(e.message)); p.on('console',m=>{ if(m.type()==='error') errors.push('console:'+m.text()); }); p.on('dialog',d=>{ errors.push('dialog:'+d.message()); d.dismiss(); });
   await p.goto(URL); await p.evaluate(()=>TTDB.ready()); await p.evaluate(async()=>{ for (const s of ['trades','docs','quarantine','ledger']) await TTDB.clear(s); localStorage.removeItem('tt.journal.prefs.v1'); }); if(theme==='light') await p.evaluate(()=>localStorage.setItem('tt.theme','light')); await p.reload();
   // home getting started
-  await p.evaluate(()=>TTNav.go('home')); await p.waitForSelector('#homeStart .panel'); let t=await p.innerText('#homeStart'); ok(T+'home shows getting started 0/5',/Getting started/i.test(t)&&/0\/5/.test(t)&&/Log your first trade/.test(t),t);
+  await p.evaluate(()=>TTNav.go('home')); await p.waitForSelector('#homeStart .panel'); let t=await p.innerText('#homeStart'); ok(T+'home shows getting started 0/6',/Getting started/i.test(t)&&/0\/6/.test(t)&&/Import your trades/.test(t)&&/Home Screen/.test(t),t);
   await p.evaluate(()=>TTNav.go('more')); const hub=await p.innerText('#hubRoot'); ok(T+'hub tiles for insights and health',/Insights/.test(hub)&&/System health/.test(hub));
   await p.evaluate(()=>TTNav.go('insights')); await p.waitForSelector('#inRoot .panel'); ok(T+'no trades: asks for data, never invents',/Not enough data yet/i.test(await p.innerText('#inRoot'))&&/Log some trades/.test(await p.innerText('#inRoot')));
   // seed: 40 trades over 8 weeks

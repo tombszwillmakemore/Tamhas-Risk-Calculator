@@ -194,7 +194,27 @@
   }
   function meter(pct, klass) { var p = Math.max(0, Math.min(100, pct || 0)); return '<div class="ui-meter ' + (klass || '') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(p) + '"><i style="width:' + p.toFixed(1) + '%"></i></div>'; }
 
-  root.TTUI = { esc: esc, fmtMoney: fmtMoney, fmtMoneyShort: fmtMoneyShort, fmtPct: fmtPct, fmtNum: fmtNum, cls: cls, plural: plural, toast: toast, dialog: dialog, confirm: confirmDlg,
+  /* ---------- shared loading components (use these, not one-off spinners) ----------
+     skeleton(n)        placeholder lines for cards/lists while data loads
+     progress(f, text)  a real fraction 0..1, or null for "working, amount unknown" (never an invented percentage)
+     busy(btn, p, txt)  inline spinner on a button while promise p runs; blocks double presses; restores afterwards
+     later(fn, ms)      run fn only if the work is still going after ms (avoids flicker on fast operations); returns cancel()
+     timeout(p, ms, m)  rejects with message m if p takes longer than ms (so nothing loads forever) */
+  function skeleton(n) { var h = '<div class="ui-skel" aria-hidden="true">'; for (var i = 0; i < (n || 3); i++) h += '<i></i>'; return h + '</div><span class="vh">Loading…</span>'; }
+  function progress(f, text) {
+    var known = typeof f === 'number' && isFinite(f), p = known ? Math.max(0, Math.min(1, f)) * 100 : 0;
+    return '<div class="ui-prog' + (known ? '' : ' ind') + '" role="progressbar" aria-valuemin="0" aria-valuemax="100"' + (known ? ' aria-valuenow="' + Math.round(p) + '"' : '') + ' aria-label="' + esc(text || 'Working') + '"><i' + (known ? ' style="width:' + p.toFixed(1) + '%"' : '') + '></i></div>' + (text ? '<p class="note ui-prog-t" role="status" aria-live="polite">' + esc(text) + '</p>' : '');
+  }
+  function busy(btn, p, txt) {
+    if (!btn || btn.getAttribute('aria-busy') === 'true') return p;
+    var old = btn.innerHTML; btn.setAttribute('aria-busy', 'true'); btn.disabled = true; btn.innerHTML = '<span class="ui-spin" aria-hidden="true"></span>' + esc(txt || 'WORKING…');
+    function done() { if (!btn.isConnected) return; btn.removeAttribute('aria-busy'); btn.disabled = false; btn.innerHTML = old; }
+    return Promise.resolve(p).then(function (v) { done(); return v; }, function (e) { done(); throw e; });
+  }
+  function later(fn, ms) { var t = setTimeout(fn, ms == null ? 300 : ms); return function () { clearTimeout(t); }; }
+  function timeout(p, ms, msg) { return new Promise(function (res, rej) { var t = setTimeout(function () { rej(new Error(msg || 'This is taking longer than expected.')); }, ms); Promise.resolve(p).then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); }); }); }
+
+  root.TTUI = { skeleton: skeleton, progress: progress, busy: busy, later: later, timeout: timeout, esc: esc, fmtMoney: fmtMoney, fmtMoneyShort: fmtMoneyShort, fmtPct: fmtPct, fmtNum: fmtNum, cls: cls, plural: plural, toast: toast, dialog: dialog, confirm: confirmDlg,
     empty: empty, stat: stat, tabs: tabs, lineChart: lineChart, barChart: barChart, heatmap: heatmap, meter: meter, nice: nice, downsample: downsample };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.TTUI;
 })(typeof window !== 'undefined' ? window : globalThis);

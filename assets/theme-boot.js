@@ -5,5 +5,6 @@
   var eff = t === 'system' ? ((window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark') : (t === 'light' ? 'light' : 'dark');
   document.documentElement.setAttribute('data-theme', eff);
   document.documentElement.setAttribute('data-theme-pref', t);
+  var a = 'standard'; try { a = localStorage.getItem('tt.anim') || 'standard'; } catch (e) {} document.documentElement.setAttribute('data-anim', a === 'reduced' || a === 'off' ? a : 'standard');
   var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', eff === 'light' ? '#eef3fb' : '#03050c');
 })();

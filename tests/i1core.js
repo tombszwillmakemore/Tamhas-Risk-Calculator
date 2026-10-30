@@ -45,6 +45,6 @@ ok('wrong-side stop flagged is impossible via normalize or flagged',true);
 ok('quarantine count info',H.audit({trades:[],accounts:[],quarantine:[{id:'q'}]}).issues.some(i=>i.id==='quarantine'));
 ok('audit never mutates input',JSON.stringify(data.docs).length>0&&data.trades.length===2);
 // steps
-let s=H.steps({trades:[],accounts:[{id:'acct-default',name:'Main account'}],docs:[]}); ok('fresh install: 0 done',s.every(x=>!x.done)&&s.length===5);
-s=H.steps({trades:[t1],accounts:[{id:'a2'}],docs:[{kind:'risklimit'},{kind:'plan'}],lastBackup:1}); ok('all done',s.every(x=>x.done));
+let s=H.steps({trades:[],accounts:[{id:'acct-default',name:'Main account'}],docs:[]}); ok('fresh install: 0 done',s.every(x=>!x.done)&&s.length===6&&s[0].id==='install'&&s[0].optional);
+s=H.steps({trades:[t1],accounts:[{id:'a2'}],docs:[{kind:'risklimit'},{kind:'plan'}],lastBackup:1,installed:true}); ok('all done',s.every(x=>x.done));
 console.log(`i1core: ${p} passed, ${f} failed`); process.exit(f?1:0);
