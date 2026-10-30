@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="assets/tracker.css">
 <link rel="stylesheet" href="assets/ui.css">
 <link rel="stylesheet" href="assets/money.css">
+<link rel="stylesheet" href="assets/polish.css">
 </head>
 <body>
 <div class="app">
@@ -58,6 +59,12 @@
         <h2>Today's P&amp;L</h2>
         <div class="pnl-value none" id="pnlValue">—</div>
         <p class="note" id="pnlNote"></p>
+        <button class="btn wide" id="homeLog" type="button">+ LOG A TRADE</button>
+      </div>
+
+      <div class="panel">
+        <h2>Next event</h2>
+        <button class="tile nxtile" data-go="intel" type="button"><div id="homeNext" class="nx"></div></button>
       </div>
 
       <div class="panel">
@@ -68,24 +75,13 @@
       </div>
 
       <div class="panel">
-        <h2>Next event</h2>
-        <button class="tile nxtile" data-go="intel" type="button"><div id="homeNext" class="nx"></div></button>
-      </div>
-
-      <div class="panel">
         <h2>Quick access</h2>
         <div class="grid2">
           <button class="tile" data-go="calc"><b>Risk Calculator</b><span>Contract size within your risk range</span></button>
-          <button class="tile" data-go="journal"><b>Trade Journal</b><span>Log trades, calendar &amp; analytics</span></button>
-          <button class="tile" data-go="intel"><b>Tamhas Intel</b><span>Economic calendar</span></button>
-          <button class="tile" data-go="settings"><b>Settings</b><span>Display name &amp; sessions</span></button>
+          <button class="tile" data-go="journal"><b>Trade Journal</b><span>Log trades, calendar &amp; reviews</span></button>
+          <button class="tile" data-go="accounts"><b>Accounts</b><span>Prop firm rules, drawdown &amp; payouts</span></button>
+          <button class="tile" data-go="analytics"><b>Analytics</b><span>Win rate, drawdown &amp; breakdowns</span></button>
         </div>
-      </div>
-
-      <div class="panel">
-        <h2>Coming next</h2>
-        <p class="note" style="margin-top:0">Prop firm accounts, drawdown &amp; payout tracking<span class="soon">PLANNED</span></p>
-        <p class="note">CSV import from your broker (Tradovate)<span class="soon">PLANNED</span></p>
       </div>
     </section>
 

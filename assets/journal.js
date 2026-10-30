@@ -918,5 +918,5 @@
     openTrade: function (id) { S.tab = 'entries'; S.expanded = id; S.filters = {}; render(); },
     updateTrades: function (next) { var before = S.trades; S.trades = next; return persist().then(function (ok) { if (!ok) S.trades = before; else changed(); return ok; }); } };
   boot();
-  window.TTJournal = { hasShots: function (id) { if (S.imgOk === false) return Promise.resolve(false); return Promise.all(SLOTS.map(function (sl) { return IMG.get(id + ':' + sl).catch(function () { return null; }); })).then(function (r) { return r.some(Boolean); }); }, reload: function () { return (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { if (!S.editing) render(); }); } };   // an open trade form is never redrawn, so nothing typed is lost
+  window.TTJournal = { newTrade: function () { if (S.loaded && !S.editing) openForm(null); }, hasShots: function (id) { if (S.imgOk === false) return Promise.resolve(false); return Promise.all(SLOTS.map(function (sl) { return IMG.get(id + ':' + sl).catch(function () { return null; }); })).then(function (r) { return r.some(Boolean); }); }, reload: function () { return (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { if (!S.editing) render(); }); } };   // an open trade form is never redrawn, so nothing typed is lost
 })();
