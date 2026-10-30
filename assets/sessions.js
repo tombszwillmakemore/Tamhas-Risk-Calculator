@@ -143,10 +143,15 @@
       if (s === e) return say(c.name + ': start and end cannot be the same.', true);
       next[c.id] = { start: s, end: e };
     }
-    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch (e2) {}
+    var stored = true; try { localStorage.setItem(KEY, JSON.stringify(next)); } catch (e2) { stored = false; }
+    if (!stored) {   // storage blocked (private mode / full): apply for this visit, and say so instead of claiming it was saved
+      cfg = cfg.map(function (c) { return Object.assign({}, c, next[c.id]); }); tick();
+      return say('Applied for this visit only: this browser would not save it.', true);
+    }
     cfg = loadCfg(); tick(); say('Session windows saved.');
   });
   if (resetBtn) resetBtn.addEventListener('click', function () {
+    if (!window.confirm('Reset all three session windows to the default times?')) return;
     try { localStorage.removeItem(KEY); } catch (e) {}
     cfg = loadCfg(); renderEditor(); tick(); say('Reset to defaults.');
   });
