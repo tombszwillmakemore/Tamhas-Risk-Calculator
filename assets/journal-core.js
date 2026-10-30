@@ -381,7 +381,7 @@
     return { list: out, skipped: skipped };
   }
   // Generic documents (expenses, strategies, plans, goals, templates, preferences...). Unknown kinds are skipped, not guessed at.
-  var DOC_KINDS = ['expense', 'recurring', 'strategy', 'backtest', 'plan', 'checklist', 'reflection', 'goal', 'template', 'review', 'import', 'pref', 'filter', 'field', 'tagdef', 'dashboard', 'routine', 'payoutplan', 'note'];
+  var DOC_KINDS = ['expense', 'recurring', 'strategy', 'backtest', 'plan', 'checklist', 'reflection', 'goal', 'template', 'review', 'import', 'pref', 'filter', 'field', 'tagdef', 'dashboard', 'routine', 'payoutplan', 'note', 'risklimit'];
   function cleanDocs(list) {
     var out = [], skipped = 0, seen = {};
     (Array.isArray(list) ? list : []).slice(0, 50000).forEach(function (d) {

@@ -8,7 +8,7 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
-**Stage F - risk center** (next). Stages A-E complete (E = analytics center). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
+**Stage G - discipline** (next). Stages A-F complete (F = risk center). Stages A (foundation), B (money) and C (scale-in fills + CSV import) are complete. Order: A foundation -> B money -> C import -> D journal v2 -> E analytics -> F risk -> G discipline -> H strategy lab -> I insights/health/onboarding/performance -> Final.
 
 ## Completed features
 - Batch 0: IndexedDB platform, non-destructive legacy migration, PWA (manifest, offline service worker, icons), CSP.
@@ -42,7 +42,7 @@ Recorded per stage below (only tests that were actually run).
 - GC/MGC contract specs not yet verified against CME (Stage F verifies before adding).
 
 ## Next steps
-Stage F: risk center - position size, R:R, fee impact, break-even, streak/scenario simulations, custom limits and warnings; verify GC/MGC specs at CME before adding.
+Stage G: discipline - trading plans, pre-trade checklists, post-trade reviews, daily reflections, routines, goals, adherence/discipline scoring.
 
 ## Test log
 - Stage A (run): stageA.js 24 passed; regression: engine 230, tracker e2e 54, backup/CSV 15, upgrade, migration, journal e2e, audit (XSS + 3,000 trades) all passed after updating assertions for the intentional changes (5-button nav, schema v3, backup v3). A flaky test (async waitForFunction does not await) was fixed with a polling helper.
@@ -53,4 +53,6 @@ Stage F: risk center - position size, R:R, fee impact, break-even, streak/scenar
 - Stage D notes: tags/emotions/mistake tags are free labels (case-insensitive de-duplication, 30 chars, caps 12/8/8); grade A-F measures plan execution; custom fields (text/number/choice/yes-no) live in docs kind `field`, values on `trade.custom` and are never deleted when a field is removed; templates never store prices/quantities/dates; custom field values are not in the CSV (they are in the JSON backup).
 - Stage E (run): e1core 60 (hand-computed dataset: summary, Wilson interval, equity/drawdown incl. from-zero peak, histogram, 11 breakdown dimensions, heatmap, rolling, net/gross exclusions, layout validation, consistency with journal stats(), 5,000 trades < 2 s); e1e2e 50 in dark and light (empty state, KPIs, breakdown tabs, custom range, filters, layout customize + persistence + reset, no-fee/open banners, 3,000 trades render about 0.4 s, DOM under 6,000 nodes). Found/fixed duplicate element id (aRoot) with Accounts.
 - Stage E notes: analytics counts closed trades only, drawdown is on closed-trade P&L (no percentages, starting balance unknown); heatmap/hour use entry time and report trades without a time; multi-label dimensions count a trade in each label; groups under 10 trades are flagged.
+- Stage F (run): f1core 79 (position size incl. fees/rounding/cap and 2,000 randomized sizes never over risk and always maximal; reward:risk, net-of-fees, break-even price; loss-streak probability DP verified against brute-force enumeration; EV; open risk with FIFO lots; limits validation and evaluation; account context day/week/open risk; risk history); f1e2e 52 in dark and light (calculator incl. gold, limits save, exposure vs limits, scenarios, sequences, use-my-stats, history, backup). Instrument tests updated for 8 contracts; import test now uses CL as the unsupported example.
+- Stage F notes: GC and MGC added after reading CME's "1 oz futures comparison" sheet (GC 100 oz, 0.10 = $10 tick -> $100/pt; MGC 1/10 of Gold, 0.10 = $1 tick -> $10/pt). Limits are only what the user enters (docs kind `risklimit`); firm rules are never assumed. Scenarios assume independent trades and are labelled as arithmetic, not forecasts. Open risk uses the initial stop; unknown stops are reported, never counted as $0.
 - Known test-infrastructure note: tests currently live outside the repo (scratchpad) and use absolute paths; they are moved into `tests/` with a runner in Stage I so the release candidate is self-contained.
