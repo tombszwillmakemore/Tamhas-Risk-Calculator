@@ -1,2 +1,10 @@
 /* Tamhas Trading - small UX polish layered on top of the main stylesheets (kept separate so it never conflicts with them). */
 #homeLog { margin-top: 14px; }
+/* Risk calculator: guidance line under a warning */
+.result .calc-hint { margin: 6px auto 4px; max-width: 46ch; font-size: 13px; line-height: 1.5; color: var(--muted); }
+/* Risk calculator: inputs and result side by side on wide screens, result stays in view while typing */
+@media (min-width: 900px) {
+  #view-calc.active { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); column-gap: 16px; align-items: start; }
+  #view-calc > .welcome, #view-calc > .foot { grid-column: 1 / -1; }
+  #view-calc > .result { position: sticky; top: 24px; }
+}

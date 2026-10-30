@@ -32,7 +32,7 @@ window.TT_INTEL_OFFICIAL = {
    "flags": [
     "typical-time"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement is released; a press conference usually follows."
   },
   {
    "id": "o33",
@@ -149,7 +149,7 @@ window.TT_INTEL_OFFICIAL = {
    "flags": [
     "typical-time"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement and Summary of Economic Projections are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement and Summary of Economic Projections are released; a press conference usually follows."
   },
   {
    "id": "o10",
@@ -227,7 +227,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement is released; a press conference usually follows."
   },
   {
    "id": "o4",
@@ -296,7 +296,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement and Summary of Economic Projections are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement and Summary of Economic Projections are released; a press conference usually follows."
   },
   {
    "id": "o6",
@@ -345,7 +345,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement is released; a press conference usually follows."
   },
   {
    "id": "o7",
@@ -404,7 +404,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement and Summary of Economic Projections are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement and Summary of Economic Projections are released; a press conference usually follows."
   },
   {
    "id": "o16",
@@ -443,7 +443,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement is released; a press conference usually follows."
   },
   {
    "id": "o24",
@@ -457,7 +457,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement and Summary of Economic Projections are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement and Summary of Economic Projections are released; a press conference usually follows."
   },
   {
    "id": "o25",
@@ -471,7 +471,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement is released; a press conference usually follows."
   },
   {
    "id": "o26",
@@ -485,7 +485,7 @@ window.TT_INTEL_OFFICIAL = {
     "typical-time",
     "tentative"
    ],
-   "note": "Last day of the FOMC meeting. Policy statement and Summary of Economic Projections are released; a press conference usually follows."
+   "note": "Last day of the FOMC meeting. The policy statement and Summary of Economic Projections are released; a press conference usually follows."
   }
  ]
 };

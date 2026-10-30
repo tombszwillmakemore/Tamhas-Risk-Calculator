@@ -107,9 +107,12 @@
 
   function renderNext() {
     var now = Date.now(), n = nextEvent(all, now);
+    var others = n ? all.filter(function (e) { return e.ts === n.ts && e !== n; }) : [], same = others.length,
+        sameTitles = others.map(function (e) { return e.title; }).join(', ');
     var inner = !n ? '<span class="note">No upcoming events in the calendar. Add your own, or check back after the next update.</span>' :
       badge(n.cat) + '<div class="nx-title">' + esc(n.title) + '</div><div class="nx-time">' + esc(new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(n.ts))) + ' · ' + esc(fmtTime(n.ts, tzLocal)) + ' ' + esc(abbr(n.ts, tzLocal)) +
-      '</div><div class="nx-count">' + esc('In ' + S.countdown(n.ts - now)) + '</div>';
+      '</div>' + (same > 0 ? '<div class="note" style="margin-top:2px">+ ' + same + ' more at the same time: ' + esc(sameTitles) + '</div>' : '') +
+      '<div class="nx-count">' + esc('In ' + S.countdown(n.ts - now)) + '</div>';
     nextEl.innerHTML = inner;
     if (homeNext) homeNext.innerHTML = inner;
   }
@@ -132,6 +135,7 @@
   /* Add / export / import */
   var catSel = document.getElementById('evCat');
   catSel.innerHTML = Object.keys(CATS).map(function (k) { return '<option value="' + k + '">' + k + '</option>'; }).join('');
+  if (CATS.BRIEFING) catSel.value = 'BRIEFING';   // the category meant for your own notes
   var addMsg = document.getElementById('evMsg');
   function say(t, bad) { addMsg.textContent = t; addMsg.style.color = bad ? 'var(--bad)' : 'var(--good)'; setTimeout(function () { addMsg.textContent = ''; }, 4000); }
   document.getElementById('evAdd').addEventListener('click', function () {

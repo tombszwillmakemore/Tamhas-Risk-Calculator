@@ -36,6 +36,14 @@
     totEl.textContent = tot;
   }
   function msg(t) { return '<div class="msg">' + t + '</div>'; }
+  function hint(t) { return '<p class="calc-hint">' + t + '</p>'; }
+  function plural(n) { return n + ' contract' + (n === 1 ? '' : 's'); }
+  function pts(p) { return (+p.toFixed(2)).toLocaleString('en-US') + ' points'; }
+  // Stop distances (points) for which n contracts lands inside [min, max]. Rounded inward so the shown range really fits.
+  function stopRange(n, minC, maxC) {
+    var lo = Math.ceil(minC / (n * CENTS_PER_POINT) * 100) / 100, hi = Math.floor(maxC / (n * CENTS_PER_POINT) * 100) / 100;
+    return lo > hi ? 'no stop in this range' : (lo === hi ? 'a stop of ' + pts(lo) : 'a stop between ' + (+lo.toFixed(2)).toLocaleString('en-US') + ' and ' + pts(hi));
+  }
 
   function calculate() {
     var stop = parse(stopEl), min = parse(minEl), max = parse(maxEl);
@@ -59,7 +67,8 @@
 
     if (perCents > maxCents) {
       show('warn', 'Warning',
-        msg('Stop too large, even one contract exceeds your maximum risk.'),
+        msg('Stop too large, even one contract exceeds your maximum risk.') +
+        hint('Use a stop of ' + pts(Math.floor(maxCents / CENTS_PER_POINT * 100) / 100) + ' or less, or raise your maximum risk to at least ' + fmt(perCents) + '.'),
         fmt(perCents), '—');
       return;
     }
@@ -68,8 +77,13 @@
     var totalCents = contracts * perCents;
 
     if (contracts < 1 || totalCents < minCents || totalCents > maxCents) {
+      // Closest whole sizes on either side of the range, so the person can see what to change.
+      var over = contracts + 1;
       show('info', 'Warning',
-        msg('No contract size fits your risk range.'),
+        msg('No contract size fits your risk range.') +
+        hint(plural(contracts) + ' = ' + fmt(totalCents) + ' (below your ' + fmt(minCents) + ' minimum); ' +
+          plural(over) + ' = ' + fmt(over * perCents) + ' (above your ' + fmt(maxCents) + ' maximum). ' +
+          'Widen the range, or for ' + plural(contracts) + ' use ' + stopRange(contracts, minCents, maxCents) + '.'),
         fmt(perCents), '—');
       return;
     }
@@ -91,7 +105,7 @@
   }
   if (instEl) {
     instEl.innerHTML = INST.list.map(function (i) {
-      return '<option value="' + i.id + '">' + i.id + ' — ' + i.name + ' (' + i.label + '/pt)</option>';
+      return '<option value="' + i.id + '">' + i.id + ' · ' + i.label + '/pt · ' + i.name + '</option>';
     }).join('');
     var saved = INST.defaultId;
     try { saved = localStorage.getItem(INST_KEY) || saved; } catch (e) {}
@@ -102,6 +116,12 @@
       calculate();
     });
   }
+
+  /* ---------- Remember the risk range (it rarely changes between trades) ---------- */
+  var RANGE_KEY = 'tt.calc.range.v1';
+  try { var rr = JSON.parse(localStorage.getItem(RANGE_KEY) || 'null'); if (rr) { if (typeof rr.min === 'string') minEl.value = rr.min; if (typeof rr.max === 'string') maxEl.value = rr.max; } } catch (e) {}
+  function saveRange() { try { localStorage.setItem(RANGE_KEY, JSON.stringify({ min: minEl.value.slice(0, 20), max: maxEl.value.slice(0, 20) })); } catch (e) {} }
+  minEl.addEventListener('input', saveRange); maxEl.addEventListener('input', saveRange);
 
   ['input', 'change', 'keyup'].forEach(function (ev) {
     stopEl.addEventListener(ev, calculate);
