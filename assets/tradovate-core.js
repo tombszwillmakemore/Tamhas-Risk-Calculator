@@ -189,7 +189,7 @@
   /* ---------- 5. text that came from a screenshot (OCR) or a loose paste -> a table ----------
      words: [{text, conf}] lines. A header line with known column names fixes the column order; each later line must produce exactly
      that many values, otherwise it is kept as an unreadable line for you to fix. Values read with low confidence are marked. */
-  var HEAD_WORDS = { 'b/s': 'B/S', bs: 'B/S', side: 'B/S', contract: 'Contract', symbol: 'symbol', qty: 'qty', quantity: 'Quantity', 'filled': 'Filled Qty', price: 'Price', 'avg': 'Avg Fill Price', 'fill': 'Fill Time', time: 'Timestamp', status: 'Status', account: 'Account', pnl: 'pnl', 'p&l': 'pnl', buyprice: 'buyPrice', sellprice: 'sellPrice', boughttimestamp: 'boughtTimestamp', soldtimestamp: 'soldTimestamp', bought: 'boughtTimestamp', sold: 'soldTimestamp' };
+  var HEAD_WORDS = { 'b/s': 'B/S', bs: 'B/S', bis: 'B/S', 'b/5': 'B/S', '8/s': 'B/S', 'bls': 'B/S', 'b|s': 'B/S', filledqty: 'Filled Qty', avgfillprice: 'Avg Fill Price', avgprice: 'Avg Fill Price', filltime: 'Fill Time', productdescription: 'Product Description', product: 'Product', orderid: 'orderId', fillid: 'Fill ID', commission: 'Commission', commissions: 'Commission', fees: 'Fees', side: 'B/S', contract: 'Contract', symbol: 'symbol', qty: 'qty', quantity: 'Quantity', 'filled': 'Filled Qty', price: 'Price', 'avg': 'Avg Fill Price', 'fill': 'Fill Time', time: 'Timestamp', status: 'Status', account: 'Account', pnl: 'pnl', 'p&l': 'pnl', buyprice: 'buyPrice', sellprice: 'sellPrice', boughttimestamp: 'boughtTimestamp', soldtimestamp: 'soldTimestamp', bought: 'boughtTimestamp', sold: 'soldTimestamp' };
   function joinTimes(tokens) {
     var out = []; for (var i = 0; i < tokens.length; i++) {
       var t = tokens[i];
@@ -200,7 +200,7 @@
     } return out;
   }
   function headerFromLine(tokens) {
-    var raw = tokens.map(function (t) { return t.text.toLowerCase().replace(/[^a-z&\/]/g, ''); }), h = [];
+    var raw = tokens.map(function (t) { return t.text.toLowerCase().replace(/[^a-z0-9&\/|]/g, ''); }), h = [];
     for (var i = 0; i < raw.length; i++) {
       var a = raw[i], b = raw[i + 1] || '';
       if ((a === 'filled' && (b === 'qty' || b === 'quantity')) || (a === 'fill' && b === 'time') || (a === 'avg' && (b === 'fill' || b === 'price'))) {
@@ -210,6 +210,96 @@
       if (HEAD_WORDS[a]) h.push(HEAD_WORDS[a]); else if (a) h.push(tokens[i].text);
     }
     return h;
+  }
+  // Same as headerFromLine, but keeps where each heading sits (x from..to) so values can be placed under the right heading.
+  function headerSpans(tokens) {
+    var raw = tokens.map(function (t) { return t.text.toLowerCase().replace(/[^a-z0-9&\/|]/g, ''); }), out = [];
+    function span(a, b, name) { out.push({ name: name, x0: tokens[a].x, x1: tokens[b].x + tokens[b].w }); }
+    for (var i = 0; i < raw.length; i++) {
+      var a = raw[i], b = raw[i + 1] || '';
+      if ((a === 'filled' && (b === 'qty' || b === 'quantity')) || (a === 'fill' && b === 'time') || (a === 'avg' && (b === 'fill' || b === 'price'))) {
+        var j = i + ((a === 'avg' && b === 'fill' && raw[i + 2] === 'price') ? 2 : 1); span(i, j, a === 'filled' ? 'Filled Qty' : a === 'fill' ? 'Fill Time' : 'Avg Fill Price'); i = j; continue;
+      }
+      if ((a === 'buy' || a === 'sell') && b === 'price') { span(i, i + 1, a === 'buy' ? 'buyPrice' : 'sellPrice'); i++; continue; }
+      if (HEAD_WORDS[a]) span(i, i, HEAD_WORDS[a]); else if (a) span(i, i, tokens[i].text);
+    }
+    return out;
+  }
+  // Words with positions (from the text reader) -> lines (by vertical position) -> a table using the heading positions as columns.
+  function toLines(words) {
+    var ws = words.filter(function (w) { return w.text && w.h > 0 && /[A-Za-z0-9]/.test(w.text); })   // borders and rules come out as dashes and marks.slice().sort(function (a, b) { return (a.y + a.h / 2) - (b.y + b.h / 2); });
+    if (!ws.length) return [];
+    var hs = ws.map(function (w) { return w.h; }).sort(function (a, b) { return a - b; }), mh = hs[Math.floor(hs.length / 2)], lines = [], cur = null;
+    ws.forEach(function (w) { var cy = w.y + w.h / 2; if (cur && Math.abs(cy - cur.cy) <= mh * 0.6) { cur.w.push(w); cur.cy = (cur.cy * (cur.w.length - 1) + cy) / cur.w.length; } else { cur = { cy: cy, w: [w] }; lines.push(cur); } });
+    return lines.map(function (l) { return l.w.sort(function (a, b) { return a.x - b.x; }); });
+  }
+  function canonHead(text) {
+    var k = String(text).toLowerCase().replace(/[^a-z0-9&\/|]/g, ''); if (HEAD_WORDS[k]) return HEAD_WORDS[k];
+    var m = { filledquantity: 'Filled Qty', buyfillid: 'buyFillId', sellfillid: 'sellFillId', boughttimestamp: 'boughtTimestamp', soldtimestamp: 'soldTimestamp', datetime: 'Timestamp', 'date/time': 'Timestamp' }; return m[k] || String(text).trim();
+  }
+  // Rows of a table: a new row starts on a line that has text at the table's left edge; lines without it are the 2nd line of a wrapped cell.
+  function toBands(lines, mh) {
+    // Wrapped cells are centred vertically, so a continuation line can sit above or below its row: attach it to the nearest row.
+    var left = Math.min.apply(null, lines.map(function (l) { return l[0].x; })), cy = function (l) { return l.reduce(function (a, w) { return a + w.y + w.h / 2; }, 0) / l.length; };
+    var anchors = [], rest = [];
+    lines.forEach(function (l) { (l[0].x <= left + mh * 1.2 ? anchors : rest).push(l); });
+    var bands = anchors.map(function (l) { return { cy: cy(l), w: l.slice() }; });
+    rest.forEach(function (l) { var c = cy(l), best = null; bands.forEach(function (b) { if (!best || Math.abs(b.cy - c) < Math.abs(best.cy - c)) best = b; }); if (best) best.w = best.w.concat(l); });
+    return bands.map(function (b) { return b.w; });
+  }
+  // Heading words that overlap or nearly touch horizontally belong to one column ("Avg Fill" over "Price").
+  function headColumns(band, mh) {
+    var ws = band.slice().sort(function (a, b) { return a.x - b.x; }), cols = [];
+    ws.forEach(function (w) { var c = cols[cols.length - 1]; if (c && w.x <= c.x1 + mh * 0.9) { c.w.push(w); c.x1 = Math.max(c.x1, w.x + w.w); } else cols.push({ x0: w.x, x1: w.x + w.w, w: [w] }); });
+    return cols.map(function (c) { var t = c.w.slice().sort(function (a, b) { return (Math.abs(a.y - b.y) > mh * 0.6 ? a.y - b.y : a.x - b.x); }).map(function (w) { return w.text; }).join(' '); return { name: canonHead(t), raw: t, x0: c.x0, x1: c.x1 }; });
+  }
+  function fromWords(words, minConf) {
+    minConf = minConf == null ? 80 : minConf;
+    var lines = toLines(words); if (!lines.length) return { ok: false, error: 'No text was found in the picture.' };
+    var hs = [].concat.apply([], lines).map(function (w) { return w.h; }).sort(function (a, b) { return a - b; }), mh = hs[Math.floor(hs.length / 2)];
+    var bands = toBands(lines, mh), hi = -1, spans = null;
+    for (var i = 0; i < bands.length && hi < 0; i++) { var sp = headColumns(bands[i], mh), d = detect(sp.map(function (x) { return x.name; })); if (d.report && d.report !== 'summary') { hi = i; spans = sp; } }
+    if (hi < 0) return { ok: false, error: 'No table heading was recognised in the screenshot. Make sure the column titles (for example B/S, Contract, Fill Time) are visible, crop out other panels, or paste the report as text instead.', lines: lines.length };
+    var cuts = []; for (var k = 0; k < spans.length - 1; k++) cuts.push((spans[k].x1 + spans[k + 1].x0) / 2);
+    var rows = [], low = [], bad = [], confs = [];
+    bands.slice(hi + 1).forEach(function (band, j) {
+      var cells = spans.map(function () { return []; }), conf = spans.map(function () { return 100; });
+      band.forEach(function (w) { var cx = w.x + w.w / 2, c = 0; while (c < cuts.length && cx > cuts[c]) c++; cells[c].push(w); conf[c] = Math.min(conf[c], w.conf); });
+      var vals = cells.map(function (c) { return c.sort(function (a, b) { return Math.abs(a.y - b.y) > mh * 0.6 ? a.y - b.y : a.x - b.x; }).map(function (w) { return w.text; }).join(' ').trim(); }), filled = vals.filter(Boolean).length;
+      if (filled < Math.min(3, spans.length)) { if (filled) bad.push({ line: j + 1, text: vals.join(' ').trim() }); return; }
+      rows.push(vals); low.push(conf.map(function (c, ci) { return !!vals[ci] && c < minConf; })); confs.push(conf);
+    });
+    return { ok: rows.length > 0, error: rows.length ? null : 'The heading was found but no rows could be read.', headers: spans.map(function (x) { return x.name; }), rows: rows, lowConf: low, conf: confs, unreadable: bad, delimiter: 'ocr' };
+  }
+  /* Does a cell look right for its column? Used to pick between reading passes and to highlight cells for you to check. */
+  var QTY = ['Filled Qty', 'qty', 'Quantity'], PRICE = ['Avg Fill Price', 'Price', 'buyPrice', 'sellPrice', 'avgPrice'], CON = ['Contract', 'symbol'], TIME = ['Fill Time', 'Timestamp', 'boughtTimestamp', 'soldTimestamp'];
+  function cellValid(head, v) {
+    v = String(v == null ? '' : v).trim(); if (!v) return null;
+    if (QTY.indexOf(head) >= 0) { var q = I.parseNumber(v); return q != null && Number.isInteger(q) && q >= 0; }
+    if (PRICE.indexOf(head) >= 0) { var p = I.parseNumber(v); return p != null && p > 0; }
+    if (CON.indexOf(head) >= 0) return !!I.normalizeSymbol(v);
+    if (TIME.indexOf(head) >= 0) return !!I.parseTimestamp(v, {});
+    if (head === 'B/S') return !!I.parseSide(v, 'fills');
+    if (head === 'pnl') return I.parseNumber(v) != null;
+    return true;
+  }
+  function scoreTable(t) { if (!t || !t.ok) return -1; var sc = 0; t.rows.forEach(function (r, i) { r.forEach(function (v, j) { var ok = cellValid(t.headers[j], v); if (ok === true) sc += t.lowConf[i][j] ? 1 : 2; else if (ok === false) sc -= 2; }); }); return sc; }
+  function isClean(t) { return t && t.ok && t.rows.every(function (r, i) { return r.every(function (v, j) { return cellValid(t.headers[j], v) !== false && !t.lowConf[i][j]; }); }); }
+  // Several readings of the same picture with the same shape: keep, per cell, the valid value read with the most confidence.
+  function mergeTables(list, minConf) {
+    minConf = minConf == null ? 80 : minConf; var ok = list.filter(function (t) { return t && t.ok; }); if (!ok.length) return list[0];
+    ok.sort(function (a, b) { return scoreTable(b) - scoreTable(a); }); var base = ok[0];
+    var same = ok.filter(function (t) { return t.headers.join('|') === base.headers.join('|') && t.rows.length === base.rows.length; });
+    var out = { ok: true, headers: base.headers, rows: [], lowConf: [], conf: [], unreadable: base.unreadable, delimiter: 'ocr', passes: same.length };
+    base.rows.forEach(function (r, i) {
+      var row = [], lo = [], cf = [];
+      r.forEach(function (v, j) {
+        var best = null; same.forEach(function (t) { var val = t.rows[i][j], c = t.conf ? t.conf[i][j] : (t.lowConf[i][j] ? 0 : 100), good = cellValid(base.headers[j], val); var rank = (good === true ? 2 : good === null ? 1 : 0) * 1000 + c; if (!best || rank > best.rank) best = { v: val, c: c, rank: rank, good: good }; });
+        row.push(best.v); cf.push(best.c); lo.push(!!best.v && (best.c < minConf || best.good === false));
+      });
+      out.rows.push(row); out.lowConf.push(lo); out.conf.push(cf);
+    });
+    return out;
   }
   function fromLines(lines, minConf) {
     minConf = minConf == null ? 80 : minConf; var hi = -1, headers = null;
@@ -238,7 +328,7 @@
   /* ---------- 6. summary-only reports: keep the numbers as a reference ---------- */
   function summaryOf(parsed) { return { headers: parsed.headers.slice(0, 40), rows: parsed.rows.slice(0, 200).map(function (r) { return r.slice(0, 40).map(function (v) { return String(v).slice(0, 60); }); }) }; }
 
-  var api = { LAYOUTS: LAYOUTS, detect: detect, read: read, enricher: enricher, reconcile: reconcile, sessionAt: sessionAt, fromLines: fromLines, parsePasted: parsePasted, headerFromLine: headerFromLine, summaryOf: summaryOf };
+  var api = { LAYOUTS: LAYOUTS, detect: detect, read: read, enricher: enricher, reconcile: reconcile, sessionAt: sessionAt, fromLines: fromLines, fromWords: fromWords, mergeTables: mergeTables, scoreTable: scoreTable, isClean: isClean, cellValid: cellValid, toLines: toLines, parsePasted: parsePasted, headerFromLine: headerFromLine, summaryOf: summaryOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.TTTradovate = api;
 })(typeof window !== 'undefined' ? window : globalThis);
