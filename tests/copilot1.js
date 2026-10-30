@@ -120,7 +120,7 @@ se=S(); say(se,'review my day'); r=say(se,'stop'); ok('routine can be stopped',/
 se=S(); say(se,'start post trade review'); for(let k=0;k<2;k++) say(se,'next'); r=say(se,'I followed my plan but cut a winner early'); ok('post lesson captured',/save/i.test(r.reply),r.reply); r=say(se,'yes'); ok('saving a reflection requires confirmation',r.confirm&&!r.actions.length,r.reply); r=say(se,'yes'); ok('reflection saved only after yes',r.actions[0]&&r.actions[0].type==='saveReflection');
 se=S(); r=say(se,'weekly review'); ok('weekly review starts',/weekly review/i.test(r.reply));
 // ---- app guide / registry
-r=say(S(),"what's new in TRC"); ok('what is new mentions latest release',new RegExp(R0.APP_VERSION.replace(/\./g,'\\.')).test(r.reply)&&/Smart Import/.test(r.reply),r.reply);
+r=say(S(),"what's new in TRC"); ok('what is new mentions latest release',new RegExp(R0.APP_VERSION.replace(/\./g,'\\.')).test(r.reply)&&r.reply.indexOf(R0.RELEASES[0].title)>=0,r.reply);
 r=say(S(),'teach me the risk center'); ok('teach me starts a tour for a real feature',r.actions[0].type==='tour'&&r.actions[0].feature==='risk',r);
 r=say(S(),'walk me through the journal'); ok('walk me through',r.actions[0].feature==='journal');
 r=say(S(),'how do I add another account'); ok('add account highlights button',r.actions.some(a=>a.type==='highlight'&&/a-new/.test(a.selector)));

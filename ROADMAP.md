@@ -1,6 +1,6 @@
 # TRC roadmap and status
 
-Last updated with release 2.0.0 (2026-10-30). Honest status; check here before building anything.
+Last updated with release 2.0.1 (2026-10-30). Honest status; check here before building anything.
 
 ## Completed
 - Risk calculator (contracts from stop and dollar range; NNQ, NES, MNQ, NQ, MES, MGC, GC, ES with CME point values), remembered inputs, copy result.
@@ -12,6 +12,8 @@ Last updated with release 2.0.0 (2026-10-30). Honest status; check here before b
 
 - **Release 2.0.0:** Tradovate Smart Import (Orders, Performance, fills lists, summary reports; CSV, pasted tables, on-device screenshot reading with review grid; FIFO fill grouping with scale-ins, partial exits and reversals; reconciliation against the report's P&L; account mapping incl. evaluation/funded/live/sim with remembered choices; your own commission per contract; duplicate and possible-duplicate protection; select/deselect; history with ranges, counts, saved copies, summary references and rollback). Install TRC guide and TRC Home Screen name. Startup screen (no forced delay) with reduced/off settings, shared loading components, backup reminder, diagnostics and repair app files. Copilot understands "import my tradovate report" and "install the app".
 
+- **Release 2.0.1:** bottom navigation pinned to the visible bottom on phones (visual-viewport pinning for address-bar/toolbar changes, hidden while the keyboard is open, own compositing layer, safe-area and `dvh` units, focused fields kept clear via scroll padding). Regression suite `tests/nav1e2e.js`.
+
 ## Partially implemented
 - Tradovate layouts follow header lists published by journal vendors; not yet checked against a real Tradovate export. Orders with several fill prices (average with more than 2 decimals) are listed for manual entry or the Performance report.
 - Screenshot reading tested on synthetic Orders tables (desktop and phone, dark and light). Real Tradovate screenshots, other report tables and low-resolution images may need more corrections in the review grid.
@@ -21,6 +23,7 @@ Last updated with release 2.0.0 (2026-10-30). Honest status; check here before b
 - Mobile tab strips with 6+ tabs scroll sideways (by design) rather than wrapping.
 
 ## Known bugs / needs manual verification
+- Bottom navigation on real devices: scroll long Journal/Accounts pages on iPhone Safari, the installed TRC app, Chrome on Android and Samsung Internet; open the keyboard in a form. Address-bar and keyboard behaviour were simulated, not tested on a phone.
 - Import a real Tradovate Performance and Orders CSV and a real screenshot; compare totals with Tradovate.
 - Confirm the Home Screen icon label says TRC on iPhone/iPad Safari, Android Chrome and Samsung Internet.
 - Not verified on a physical iPhone, an installed home-screen app, VoiceOver or Android in this environment (all automated tests ran in headless Chromium with mocked speech APIs). Please test: install to home screen, update bar, microphone prompt, spoken replies, keyboard-open layout of the Copilot panel.
