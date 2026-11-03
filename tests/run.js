@@ -12,9 +12,10 @@ const isBrowser = f => /require\(['"](playwright|\.\/_pw)['"]\)/.test(fs.readFil
 let list = all.filter(f => !args.length || args.some(a => a === 'core' ? !isBrowser(f) : a === 'e2e' ? isBrowser(f) : f.startsWith(a)));
 function run(f, base) { return new Promise(res => { const c = cp.spawn(process.execPath, [path.join(__dirname, f)], { env: Object.assign({}, process.env, { TT_BASE: base }) }); let out = ''; const k = setTimeout(() => c.kill(), 600000); c.stdout.on('data', d => out += d); c.stderr.on('data', d => out += d); c.on('close', code => { clearTimeout(k); res({ status: code, out: out }); }); }); }
 srv.listen(0, '127.0.0.1', async () => {
-  const base = 'http://127.0.0.1:' + srv.address().port; let bad = 0; const t0 = Date.now();
-  for (const f of list) { const t = Date.now(), r = await run(f, base), out = r.out, fails = (out.match(/^FAIL/gm) || []).length, last = out.trim().split('\n').filter(l => /passed|PASSED|FAILED/.test(l)).pop() || '';
+  const base = 'http://127.0.0.1:' + srv.address().port; let bad = 0, skipped = 0; const t0 = Date.now();
+  for (const f of list) { const t = Date.now(), r = await run(f, base), out = r.out, fails = (out.match(/^FAIL/gm) || []).length, last = out.trim().split('\n').filter(l => /passed|PASSED|FAILED|SKIPPED/.test(l)).pop() || '';
     const ok = r.status === 0 && !fails; if (!ok) { bad++; console.log(out.split('\n').filter(l => /^FAIL|Error/.test(l)).slice(0, 8).join('\n')); }
-    console.log((ok ? 'PASS ' : 'FAIL ') + f.padEnd(14) + String(Math.round((Date.now() - t) / 100) / 10).padStart(6) + 's  ' + last.slice(0, 80)); }
-  console.log('\n' + (list.length - bad) + ' of ' + list.length + ' suites passed in ' + Math.round((Date.now() - t0) / 1000) + 's' + (bad ? ' - ' + bad + ' FAILED' : '')); srv.close(); process.exit(bad ? 1 : 0);
+    if (ok && /^SKIPPED/.test(last)) skipped++;
+    console.log((ok ? (/^SKIPPED/.test(last) ? 'SKIP ' : 'PASS ') : 'FAIL ') + f.padEnd(14) + String(Math.round((Date.now() - t) / 100) / 10).padStart(6) + 's  ' + last.slice(0, 80)); }
+  console.log('\n' + (list.length - bad - skipped) + ' of ' + list.length + ' suites passed' + (skipped ? ', ' + skipped + ' skipped (not verified here)' : '') + ' in ' + Math.round((Date.now() - t0) / 1000) + 's' + (bad ? ' - ' + bad + ' FAILED' : '')); srv.close(); process.exit(bad ? 1 : 0);
 });

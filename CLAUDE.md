@@ -4,8 +4,9 @@ These rules apply to **every** session, feature, fix and refactor. They are enfo
 (`node scripts/predeploy.js`). If a rule and a request conflict, stop and ask the owner; never quietly bend a rule.
 
 ## What this project is
-A free, local-first futures trading management app on GitHub Pages: vanilla JS, no build step, no dependencies, no accounts,
-no servers. All data lives on the person's device (IndexedDB/localStorage). Classic `<script>` globals (`TTRegistry`, `TTStore`, `TTNav`...).
+A free, local-first futures trading management app on GitHub Pages: vanilla JS, no build step, no dependencies, no servers of our own.
+All data lives on the person's device (IndexedDB/localStorage). Optional TRC logins (owner-approved 2026-11-02) sync a signed-in person's
+own data through ONE free Supabase project (cloud/supabase.sql, assets/cloud.js); guests stay device-only. Classic `<script>` globals (`TTRegistry`, `TTStore`, `TTNav`...).
 Pure "core" modules (`*-core.js`) are Node-testable; UI modules are tested with Playwright in `tests/`.
 
 Map: `assets/registry-core.js` (single source of truth for features) -> `experience-core.js/.js` (search, hub, dashboard, tours, help, What's New)
@@ -15,8 +16,12 @@ Map: `assets/registry-core.js` (single source of truth for features) -> `experie
 ## Non-negotiables
 - Never invent data. Unknown = `null` shown as "—", never `$0`. Never invent a firm's rules, balances or statistics.
 - Never silently delete or overwrite user data. Destructive or important changes need an explicit confirmation and, where possible, UNDO.
-- Never store brokerage passwords, API keys or secrets. Never add order execution. TRC is read-only about brokers (CSV import only).
-- Never send private trading data to any third party. The only network request in the app is the service worker fetching our own files.
+- Never store brokerage passwords, API keys or secrets. TRC login passwords go only to Supabase Auth; TRC stores session tokens, never passwords. Never add order execution. TRC is read-only about brokers (CSV import only).
+- Never send private trading data to any third party. Network requests: the service worker fetching our own files, and cloud.js talking to the
+  configured Supabase project ONLY for a signed-in person's own data (CSP connect-src limits this). Screenshots are never uploaded.
+- Cloud rules: server-enforced row-level security (owner = auth.uid()), no direct table writes (all writes via trc_push with compare-and-swap),
+  never last-write-wins for conflicting records, never claim "saved to cloud" before the server confirmed, never put the service_role/secret key
+  anywhere in the repository, never claim end-to-end encryption. Each login has its own local database on the device (cloud-boot.js).
 - Never claim a test passed unless it was actually run and passed. Report failures honestly.
 - Never remove, replace or disable working functionality without explicit authorisation. Never replace real functionality with placeholders.
 - Never merge unfinished work to `main`. Make a backup branch of `main` before each merge (`backup-main-before-<name>`).
@@ -76,7 +81,8 @@ GitHub issue the person submits. **Nothing is sent automatically** and diagnosti
 
 ## Keep everything free
 No paid APIs, subscriptions, billing-enabled cloud services or accounts. Check a service's real free limits before relying on it and write them down. If a capability cannot be done reliably
-for free (live market data, broker APIs, server-side speech/LLM, cross-device sync), say so in `ROADMAP.md` under Technical limitations instead of faking it.
+for free (live market data, broker APIs, server-side speech/LLM), say so. Cross-device sync uses the Supabase free plan; its limits
+(500 MB, pause after 7 days idle, no backups, few built-in emails) are documented in CLOUD-SETUP.md and `ROADMAP.md` (Technical limitations) and must stay visible to people. Never fake a capability.
 
 ## Release gate
 Run `node scripts/predeploy.js` (static checks + every unit and browser suite). It prints **SAFE TO DEPLOY** or **DO NOT DEPLOY**. If anything critical fails, do not merge to `main` and do

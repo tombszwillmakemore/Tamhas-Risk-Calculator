@@ -145,4 +145,8 @@ const stats=P.createSession().handle('mute',{}); ok('mute action',stats.actions[
 for (const q of ['import my tradovate report','upload my trades csv','import a screenshot of my orders']) { const r=P.createSession().handle(q,{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('import intent: "'+q+'"',a&&a.view==='import'&&!r.unknown,r.reply); }
 for (const q of ['install the app','how do I install trc','add it to my home screen']) { const r=P.createSession().handle(q,{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('install intent: "'+q+'"',a&&a.view==='install',r.reply); }
 ok('import intent never claims it imported anything',!/imported \d|trades? (were|was) imported/i.test(P.createSession().handle('import my trades',{}).reply));
+// release 2.1.0: TRC login and sync
+for (const q of ['sign in','log in','create a trc login','am i synced']) { const r=P.createSession().handle(q,{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('login intent: "'+q+'"',a&&a.view==='account',r.reply); }
+{ const r=P.createSession().handle('sync now',{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('sync now -> account screen with the sync action, no premature success claim',a&&a.view==='account'&&a.act==='sync'&&!/synced|saved to the cloud\./i.test(r.reply.split(':')[0]),r.reply); }
+{ const r=P.createSession().handle('log out',{}); ok('log out: Copilot does not sign out by itself',/will not sign you out myself/.test(r.reply),r.reply); }
 console.log(`${p} passed, ${f} failed`); process.exit(f?1:0);

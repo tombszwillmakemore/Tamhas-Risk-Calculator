@@ -9,12 +9,14 @@
 <meta name="application-name" content="TRC">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#03050c">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <title>Tamhas Trading</title>
 <script src="assets/theme-boot.js"></script>
+<script src="assets/cloud-config.js"></script>
+<script src="assets/cloud-boot.js"></script>
 <style>
 #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#03050c;color:#e8f1ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;opacity:0;animation:spIn .35s ease-out .15s forwards,spFail .3s ease-in 6s forwards}
 [data-theme=light] #splash{background:#eef3fb;color:#0d1b3a}
@@ -238,6 +240,11 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
       <div id="hpRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
+    <section class="view" id="view-account">
+      <div class="welcome" style="padding-bottom:12px"><small>LOGIN &amp; SYNC</small><h1 style="font-size:26px">TRC login</h1></div>
+      <div id="cloudRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
+    </section>
+
     <section class="view" id="view-install">
       <div class="welcome" style="padding-bottom:12px"><small>MOBILE</small><h1 style="font-size:26px">Install TRC</h1></div>
       <div id="installRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
@@ -277,6 +284,11 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
           <button class="btn" id="resetSessions" type="button" style="color:var(--muted);border-color:var(--line)">RESET</button>
         </div>
         <div class="saved" id="sessionMsg" aria-live="polite"></div>
+      </div>
+      <div class="panel">
+        <h2>TRC login &amp; cloud sync</h2>
+        <p class="note" style="margin-top:0">Optional. Sign in to use the same journal on your phone, tablet and computer. Without a login everything stays on this device.</p>
+        <button type="button" class="btn" data-go="account">OPEN TRC LOGIN</button>
       </div>
       <div class="panel">
         <h2>Animations</h2>
@@ -335,6 +347,8 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
 <script src="assets/copilot-boot.js"></script>
 <script src="assets/analytics.js"></script>
 <script src="assets/import.js"></script>
+<script src="assets/sync-core.js"></script>
+<script src="assets/cloud.js"></script>
 <script src="assets/platform-core.js"></script>
 <script src="assets/platform.js"></script>
 <script src="assets/pwa.js"></script>

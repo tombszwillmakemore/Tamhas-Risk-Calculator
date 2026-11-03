@@ -39,7 +39,7 @@ try {
   r = sql(as(A, "select public.trc_push((select jsonb_agg(jsonb_build_object('kind','trade','id','x'||g,'hash','aaaaaaaaaaaaaaaa','data','{}'::jsonb)) from generate_series(1,501) g), 1, 'x');")); ok('batch over 500 refused', !r.ok && /batch too large/.test(r.out), r.out);
   // ---- isolation
   r = sql(as(B, "select count(*) from public.trc_records;")); ok('B sees none of A\'s rows', r.out.split('\n').pop() === '0', r.out);
-  r = sql(as(B, "select count(*) from public.trc_pull(0,0,1000);")); ok('B pull returns none of A\'s rows', r.out.split('\n').pop() === '0', r.out);
+  r = sql(as(B, "select count(*) from jsonb_array_elements(public.trc_pull(0,0,1000));")); ok('B pull returns none of A\'s rows', r.out.split('\n').pop() === '0', r.out);
   p = push(B, [item('t2', 1, { pnl: 1e6 })]); ok('B pushing A\'s record id creates B\'s own row (A\'s untouched)', p[0].status === 'applied', JSON.stringify(p));
   r = sql(as(A, "select data->>'pnl' from public.trc_records where id='t2';")); ok('A\'s t2 unchanged', r.out.split('\n').pop() === '-50', r.out);
   r = sql(as(B, "update public.trc_records set data='{\"pnl\":0}' where id='t2';")); ok('direct UPDATE refused', !r.ok && /permission denied/.test(r.out), r.out);
@@ -49,23 +49,23 @@ try {
   // ---- anonymous
   r = sql(anon("select count(*) from public.trc_records;")); ok('anonymous: no table access', !r.ok && /permission denied/.test(r.out), r.out);
   r = sql(anon("select public.trc_push('[]'::jsonb,1,null);")); ok('anonymous: cannot call push', !r.ok && /permission denied/.test(r.out), r.out);
-  r = sql(anon("select count(*) from public.trc_pull(0,0,10);")); ok('anonymous: cannot call pull', !r.ok && /permission denied/.test(r.out), r.out);
+  r = sql(anon("select public.trc_pull(0,0,10);")); ok('anonymous: cannot call pull', !r.ok && /permission denied/.test(r.out), r.out);
   r = sql(anon("select public.trc_delete_account();")); ok('anonymous: cannot delete accounts', !r.ok && /permission denied/.test(r.out), r.out);
   r = sql("begin; set local role authenticated; select public.trc_push('[]'::jsonb,1,null); commit;"); ok('authenticated role without a user id is refused', !r.ok && /not signed in/.test(r.out), r.out);
   // ---- pull: order, cursor, never skips a late commit
-  r = sql(as(A, "select string_agg(x->>'id', ',' order by (x->>'tx')::bigint, (x->>'rev')::bigint) from public.trc_pull(0,0,1000) x;")); ok('A pull returns A\'s rows in commit order', /t2/.test(r.out) && /t1/.test(r.out) && !/evil/.test(r.out), r.out);
-  const rows = sql(as(A, "select json_agg(x) from public.trc_pull(0,0,1000) x;")).out.split('\n').pop(), list = JSON.parse(rows), last = list[list.length - 1];
-  r = sql(as(A, "select count(*) from public.trc_pull(" + last.tx + "," + last.rev + ",1000);")); ok('pull after the last cursor returns nothing new', r.out.split('\n').pop() === '0', r.out);
+  r = sql(as(A, "select string_agg(x->>'id', ',') from jsonb_array_elements(public.trc_pull(0,0,1000)) x;")); ok('A pull returns A\'s rows in commit order', /t2/.test(r.out) && /t1/.test(r.out) && !/evil/.test(r.out), r.out);
+  const rows = sql(as(A, "select public.trc_pull(0,0,1000);")).out.split('\n').pop(), list = JSON.parse(rows), last = list[list.length - 1];
+  r = sql(as(A, "select jsonb_array_length(public.trc_pull(" + last.tx + "," + last.rev + ",1000));")); ok('pull after the last cursor returns nothing new', r.out.split('\n').pop() === '0', r.out);
   // late commit: transaction 1 starts and writes but does not commit; transaction 2 writes and commits; a pull now must not move
   // its cursor past transaction 1's change.
   const slowFile = path.join(dir, 'slow.sql'); fs.writeFileSync(slowFile, as(A, "select public.trc_push('" + JSON.stringify([item('late', null, { n: 1 })]) + "'::jsonb,1,'slow'); select pg_sleep(2);")); fs.chmodSync(slowFile, 0o644);
   cp.execSync('(' + PSQL + ' -f ' + slowFile + ' >/dev/null 2>&1 &)');
   cp.execSync('sleep 0.7');
   push(A, [item('quick', null, { n: 2 })]);
-  const mid = JSON.parse(sql(as(A, "select coalesce(json_agg(x),'[]') from public.trc_pull(" + last.tx + "," + last.rev + ",1000) x;")).out.split('\n').pop());
+  const mid = JSON.parse(sql(as(A, "select public.trc_pull(" + last.tx + "," + last.rev + ",1000);")).out.split('\n').pop());
   ok('while an older transaction is still open, newer changes are held back (no cursor jump)', !mid.some(x => x.id === 'quick'), JSON.stringify(mid.map(x => x.id)));
   cp.execSync('sleep 2.5');
-  const after = JSON.parse(sql(as(A, "select coalesce(json_agg(x),'[]') from public.trc_pull(" + last.tx + "," + last.rev + ",1000) x;")).out.split('\n').pop());
+  const after = JSON.parse(sql(as(A, "select public.trc_pull(" + last.tx + "," + last.rev + ",1000);")).out.split('\n').pop());
   ok('after it commits, both changes arrive, the late one first', after.map(x => x.id).join() === 'late,quick', JSON.stringify(after.map(x => x.id)));
   // ---- quota
   r = sql("create or replace function public.trc_limits() returns jsonb language sql immutable as $$ select '{\"max_records\": 6, \"max_bytes\": 52428800, \"max_batch\": 500}'::jsonb $$;");

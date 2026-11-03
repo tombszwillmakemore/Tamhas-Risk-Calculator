@@ -442,6 +442,13 @@
       if (!dry && ctx.depth === 0) { var sc = (data.prefs && data.prefs.shortcuts || []).filter(function (x) { return norm(x.phrase) === n; })[0]; if (sc) { ctx.depth = 1; var r0 = parse(sc.command, data); ctx.depth = 0; return r0; } }
       // Smart Import and Install TRC (release 2.0.0): plain requests that do not start with "open". Tour/teach requests go on to the tour handler.
       var teachReq = /\b(tour|teach|walk me through|show me how|guide me)\b/.test(n);
+      // TRC login and cloud sync (release 2.1.0)
+      if (!teachReq && /^(sign ?in|log ?in|sign ?up|log ?out|sign ?out|sync( now| my (data|trades|journal))?|am i synced|is (it|my data) synced|create (a |an )?(trc )?(login|account)( for sync| to sync)?|open (my )?(trc )?login|cloud sync)$/.test(n)) {
+        ctx.last = 'nav'; ctx.topic = { type: 'feature', id: 'account' };
+        if (/^sync/.test(n)) return R('Sync now: uploading and downloading your changes. The cloud button at the top shows when the server has confirmed them.', { actions: [{ type: 'navigate', view: 'account', act: 'sync', ok: 'Opened TRC login and sync.', fail: 'I could not open it.' }] });
+        if (/out$/.test(n)) return R('To sign out, open TRC login and press Sign out. I will not sign you out myself, because unsynced changes need your decision.', { actions: [{ type: 'navigate', view: 'account', ok: 'Opened TRC login and sync.', fail: 'I could not open it.' }] });
+        return navTo(REG.byId('account'));
+      }
       if (!teachReq && /\b(import|upload|bring in|load)\b.*\b(trades?|reports?|csv|screenshots?|tradovate|files?|fills|orders|performance)\b/.test(n)) { ctx.last = 'nav'; ctx.topic = { type: 'feature', id: 'import' }; return navTo(REG.byId('import')); }
       if (!teachReq && /\binstall\b.*\b(app|trc|it|this)\b|\badd\b.*\bhome ?screen\b/.test(n)) { ctx.last = 'nav'; ctx.topic = { type: 'feature', id: 'install' }; return navTo(REG.byId('install')); }
       /* pending confirmation */

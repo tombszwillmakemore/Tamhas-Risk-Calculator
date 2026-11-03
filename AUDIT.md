@@ -79,3 +79,21 @@ Also present and tested: legacy classic calculator page (`calculator-classic.htm
 3. Voice on a real device (automated browsers have no microphone; only the command grammar was tested).
 4. Screen reader (VoiceOver/TalkBack) and colour contrast by eye.
 5. GitHub Pages serving the new version after the merge (cannot be checked from here).
+
+
+## Account system (release 2.1.0) - acceptance test (spec Part 17), recorded honestly
+| Step | Against the local stand-in (real SQL, real browsers) | Against the real Supabase project |
+|---|---|---|
+| 1-2 Create User A, log in | Passed (cloud1e2e) | Not verified (project not created yet) |
+| 3-4 Add records, confirm cloud storage | Passed (server row counts checked) | Not verified |
+| 5-6 Second device sees the same records | Passed | Not verified |
+| 7-8 Edit syncs to the other device | Passed | Not verified |
+| 9-12 Offline edit, reconnect, nothing lost or duplicated | Passed (exact server count) | Not verified |
+| 13-15 Sign out, User B on the same device sees nothing of A; B's token cannot read A | Passed | Server rules: covered by cloudlive.js once secrets exist |
+| 16-17 Export A's data, integrity check | Passed (export parses as a valid backup with every trade) | Not verified |
+| 18 Delete a disposable account and its data | Passed (wrong password refused; other people untouched) | Not verified |
+| Real phones (iPhone Safari, installed app, Android, Samsung) | - | Not verified |
+
+Known limits: email links open in the phone's browser, not inside the installed app (sign in once in the app with the password); signing out
+while offline ends the session on the device only until it expires; the free plan pauses after 7 days idle and keeps no backups; data is
+encrypted in transit and protected by per-person rules, not end-to-end encrypted.

@@ -18,7 +18,13 @@ const code = fs.readdirSync(path.join(root, 'assets')).filter(x => /\.js$/.test(
 const bad = (re) => code.filter(([n, t]) => re.test(t)).map(([n]) => n);
 ok('no eval / new Function / document.write', bad(/\beval\s*\(|new Function\s*\(|document\.write\s*\(/).length === 0, bad(/\beval\s*\(|new Function\s*\(|document\.write\s*\(/));
 ok('no hard-coded secrets, passwords, API keys or tokens', bad(/(api[_-]?key|secret|passw(or)?d|token|bearer)\s*[:=]\s*['"][A-Za-z0-9_\-\/+=]{12,}/i).length === 0, bad(/(api[_-]?key|secret|passw(or)?d|token|bearer)\s*[:=]\s*['"][A-Za-z0-9_\-\/+=]{12,}/i));
-ok('the only network call is the service worker fetching our own files (no data leaves the device)', code.filter(([n, t]) => /\bfetch\s*\(|XMLHttpRequest|sendBeacon|new WebSocket|EventSource/.test(t)).map(([n]) => n).join() === 'sw.js');
+const netUsers = code.filter(([n, t]) => /\bfetch\s*\(|XMLHttpRequest|sendBeacon|new WebSocket|EventSource/.test(t)).map(([n]) => n).sort().join();
+ok('network calls only in the service worker (own files) and cloud.js (the configured Supabase project, signed-in people only)', netUsers === 'cloud.js,sw.js', netUsers);
+const cl = rd('assets/cloud.js'); ok('cloud.js only ever fetches BASE + path (the configured project)', (cl.match(/fetch\(/g) || []).length === 1 && /fetch\(BASE \+ path/.test(cl));
+ok('CSP allows only our own origin and Supabase for network calls', /connect-src 'self' https:\/\/\*\.supabase\.co;/.test(html));
+const cfg = rd('assets/cloud-config.js'), keyM = cfg.match(/anonKey:\s*'([^']*)'/), claims = (() => { try { return keyM && keyM[1] ? JSON.parse(Buffer.from(keyM[1].split('.')[1] || '', 'base64').toString()) : null; } catch (e) { return null; } })();
+ok('cloud-config.js holds no service_role / secret key (only the public anon or publishable key)', !(keyM && /^sb_secret_/i.test(keyM[1])) && !(claims && claims.role && claims.role !== 'anon'), claims);
+ok('cloud SQL never grants table writes to app roles', !/grant\s+(insert|update|delete|all)[^;]*on\s+public\.trc_records\s+to/i.test(rd('cloud/supabase.sql')));
 ok('no brokerage, API-key or order-execution code', bad(/placeOrder|submitOrder|brokerApi|createOrder\s*\(|tradovate\.com\/v1|api\.tradovate|ninjatrader\.com\/api/i).length === 0);
 ok('external links in the app all use https and noopener', ![...html.matchAll(/<a[^>]+href="http:\/\//g)].length);
 const priv = fs.readdirSync(root).filter(x => /\.(md|json|html|js)$/.test(x)).concat(fs.readdirSync(path.join(root, 'assets')).map(x => 'assets/' + x)).filter(x => fs.statSync(path.join(root, x)).isFile()).filter(x => /@(gmail|yahoo|hotmail|outlook|icloud)\.com|tiktoktamhas/i.test(rd(x)));

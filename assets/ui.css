@@ -152,3 +152,17 @@ html[data-anim=reduced] *, html[data-anim=reduced] *::before, html[data-anim=red
 @media (min-width: 900px) { .upd-bar { bottom: 24px; left: calc(50% + var(--side-w) / 2); } }
 
 .ui-wrapped { overflow-wrap: anywhere; line-height: 1.2; }
+
+/* ---------- TRC login & sync ---------- */
+.sync-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--muted); font: inherit; font-size: 10.5px; letter-spacing: .1em; cursor: pointer; white-space: nowrap; }
+.sync-chip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; flex: none; }
+.sync-chip[data-state=saved] { color: var(--good); border-color: rgba(37,226,154,.45); }
+.sync-chip[data-state=syncing] { color: var(--cyan); } .sync-chip[data-state=syncing] svg { animation: uiPulse 1.2s ease-in-out infinite; }
+.sync-chip[data-state=attention], .sync-chip[data-state=failed], .sync-chip[data-state=expired], .sync-chip[data-state=old] { color: var(--bad); border-color: rgba(255,93,122,.5); }
+.sync-chip[data-state=pending], .sync-chip[data-state=offline] { color: var(--warn); }
+@keyframes uiPulse { 50% { opacity: .35; } }
+@media (max-width: 420px) { .sync-chip span { display: none; } .sync-chip { width: 44px; justify-content: center; padding: 0; } }
+@media (prefers-reduced-motion: reduce) { .sync-chip svg { animation: none !important; } }
+.cl-pw { display: flex; gap: 8px; align-items: stretch; } .cl-pw input { flex: 1; min-width: 0; } .cl-pw .btn { flex: none; min-width: 64px; }
+.cl-why { margin: 6px 0; padding-left: 18px; } .cl-why li { margin: 2px 0; }
+.btn.danger, .btn.ghost.danger { border-color: rgba(255,93,122,.6); color: var(--bad); }

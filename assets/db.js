@@ -7,7 +7,8 @@
    original is left untouched. Unreadable data is quarantined (kept), never deleted. */
 (function (root) {
   'use strict';
-  var DB_NAME = 'tt-platform', SCHEMA_VERSION = 3, LEGACY_KEY = 'tt.journal.v1', DEFAULT_ACCOUNT_ID = 'acct-default';
+  // Each TRC login has its own database on the device ('tt-platform~u-<id>'); guest data stays in 'tt-platform' (see cloud-boot.js).
+  var DB_NAME = 'tt-platform' + (root.TT_DB_SUFFIX || ''), SCHEMA_VERSION = 3, LEGACY_KEY = 'tt.journal.v1', DEFAULT_ACCOUNT_ID = 'acct-default';
   var dbp = null, readyp = null;
 
   function open() {

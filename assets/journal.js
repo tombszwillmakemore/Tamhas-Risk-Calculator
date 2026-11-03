@@ -84,7 +84,7 @@
       if (this._p) return this._p;
       this._p = new Promise(function (res, rej) {
         if (!window.indexedDB) { rej(new Error('IndexedDB unavailable')); return; }
-        var rq; try { rq = indexedDB.open('tt-journal', 1); } catch (e) { rej(e); return; }
+        var rq; try { rq = indexedDB.open('tt-journal' + (window.TT_DB_SUFFIX || ''), 1); } catch (e) { rej(e); return; }
         rq.onupgradeneeded = function () { rq.result.createObjectStore('shots'); };
         rq.onsuccess = function () { res(rq.result); };
         rq.onerror = function () { rej(rq.error || new Error('open failed')); };

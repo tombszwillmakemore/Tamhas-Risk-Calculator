@@ -125,17 +125,20 @@ begin
   return out;
 end $$;
 
--- Changes after (since_tx, since_rev), only from transactions that can no longer be overtaken by an older one still running,
+-- Changes after (since_tx, since_rev), as one JSON array, only from transactions that can no longer be overtaken by an older one still running,
 -- so a device never skips a change that commits late. Returns at most lim rows (max 1000) in order.
+drop function if exists public.trc_pull(bigint, bigint, integer);
 create or replace function public.trc_pull(since_tx bigint default 0, since_rev bigint default 0, lim integer default 500)
-returns setof jsonb language sql stable security definer set search_path = '' as $$
-  select to_jsonb(t) - 'owner'
-    from public.trc_records t
-   where t.owner = auth.uid()
-     and (t.tx, t.rev) > (coalesce(since_tx, 0), coalesce(since_rev, 0))
-     and t.tx < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
-   order by t.tx, t.rev
-   limit greatest(1, least(coalesce(lim, 500), 1000))
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select coalesce(jsonb_agg(x.r order by x.tx, x.rev), '[]'::jsonb) from (
+    select to_jsonb(t) - 'owner' as r, t.tx, t.rev
+      from public.trc_records t
+     where t.owner = auth.uid()
+       and (t.tx, t.rev) > (coalesce(since_tx, 0), coalesce(since_rev, 0))
+       and t.tx < pg_snapshot_xmin(pg_current_snapshot())::text::bigint
+     order by t.tx, t.rev
+     limit greatest(1, least(coalesce(lim, 500), 1000))
+  ) x
 $$;
 
 create or replace function public.trc_usage() returns jsonb language sql stable security definer set search_path = '' as $$
