@@ -363,7 +363,7 @@
     extra = extra || {};
     return JSON.stringify({ app: 'tamhas-trading', kind: 'journal-backup', version: 3, exportedAt: new Date().toISOString(), trades: trades, shots: shots || {}, accounts: extra.accounts || [], ledger: extra.ledger || [], docs: extra.docs || [] });
   }
-  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
+  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot', 'withdrawal', 'adjustment'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
   function cleanAccounts(list) {
     var out = [], skipped = 0, seen = {};
     (Array.isArray(list) ? list : []).slice(0, 2000).forEach(function (a) {
@@ -377,13 +377,14 @@
     (Array.isArray(list) ? list : []).slice(0, 200000).forEach(function (l) {
       var ok = l && typeof l === 'object' && typeof l.id === 'string' && l.id && !seen[l.id] && typeof l.accountId === 'string' && l.accountId && LEDGER_TYPES.indexOf(l.type) >= 0 && typeof l.at === 'number' && isFinite(l.at);
       if (ok && l.type !== 'snapshot') ok = Number.isInteger(l.amountCents) && l.amountCents > 0;
+      if (ok && l.type === 'adjustment') ok = l.dir === 'up' || l.dir === 'down';
       if (ok && l.type === 'snapshot') ok = ['balanceCents', 'equityCents', 'thresholdCents', 'hwmCents'].every(function (k) { return l[k] == null || Number.isInteger(l[k]); });
       if (!ok) { skipped++; return; } seen[l.id] = 1; out.push(l);
     });
     return { list: out, skipped: skipped };
   }
   // Generic documents (expenses, strategies, plans, goals, templates, preferences...). Unknown kinds are skipped, not guessed at.
-  var DOC_KINDS = ['expense', 'recurring', 'strategy', 'backtest', 'plan', 'checklist', 'reflection', 'goal', 'template', 'review', 'import', 'pref', 'filter', 'field', 'tagdef', 'dashboard', 'routine', 'payoutplan', 'note', 'risklimit'];
+  var DOC_KINDS = ['expense', 'recurring', 'strategy', 'backtest', 'plan', 'checklist', 'reflection', 'goal', 'template', 'review', 'import', 'pref', 'filter', 'field', 'tagdef', 'dashboard', 'routine', 'payoutplan', 'note', 'risklimit', 'dupe'];
   function cleanDocs(list) {
     var out = [], skipped = 0, seen = {};
     (Array.isArray(list) ? list : []).slice(0, 50000).forEach(function (d) {
@@ -493,7 +494,7 @@
 
   var api = { moneyCandidates: moneyCandidates, countCandidates: countCandidates, SESSIONS: SESSIONS, STORE_KEY: STORE_KEY, normalizeTrade: normalizeTrade, compute: compute, analyze: analyze, plOf: plOf,
     stats: stats, breakdown: breakdown, dailyMap: dailyMap, summaryForDate: summaryForDate, todaySummary: todaySummary,
-    filterRows: filterRows, cleanLabels: cleanLabels, GRADES: GRADES, cleanCustom: cleanCustom, toCsv: toCsv, CSV_COLS: CSV_COLS, INST_LIST_TEXT: INST.list.map(function (i) { return i.id; }).join(', '), serializeBackup: serializeBackup, parseBackup: parseBackup, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
+    filterRows: filterRows, cleanLabels: cleanLabels, GRADES: GRADES, cleanCustom: cleanCustom, toCsv: toCsv, CSV_COLS: CSV_COLS, INST_LIST_TEXT: INST.list.map(function (i) { return i.id; }).join(', '), serializeBackup: serializeBackup, parseBackup: parseBackup, cleanLedger: cleanLedger, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
     parseStored: parseStored, serializeStored: serializeStored, mergeTrades: mergeTrades, fmtMoney: fmtMoney, fmtCompact: fmtCompact,
     order: order, num: num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

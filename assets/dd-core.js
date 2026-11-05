@@ -22,8 +22,10 @@
   var MODEL_LABEL = { 'static': 'Static', 'eod-trailing': 'End-of-day trailing', 'intraday-trailing': 'Intraday trailing' };
   var CONF = ['verified input', 'user-entered', 'estimated', 'unavailable'];
   var FEE_KINDS = ['evaluation', 'activation', 'reset', 'data', 'platform', 'other'];
-  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot'];
-  var SIGN = { payout: -1, deposit: 1, 'transfer-in': 1, 'transfer-out': -1 };
+  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot', 'withdrawal', 'adjustment'];
+  var SIGN = { payout: -1, deposit: 1, 'transfer-in': 1, 'transfer-out': -1, withdrawal: -1 };
+  // A manual balance adjustment carries its own direction ('up' adds to the balance, 'down' takes away) and a required reason.
+  function signOf(l) { return l.type === 'adjustment' ? (l.dir === 'down' ? -1 : 1) : (SIGN[l.type] || 0); }
 
   function worst(a, b) { return CONF[Math.max(CONF.indexOf(a), CONF.indexOf(b))]; }
   function isDate(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s + 'T00:00:00Z')) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s; }
@@ -110,6 +112,10 @@
     } else if (LEDGER_TYPES.indexOf(f.type) >= 0) {
       var amt = parseMoney(f.amount); if (amt == null) e.push('Amount must be a positive dollar amount.'); r.amountCents = amt;
       if (f.type === 'fee') r.feeKind = FEE_KINDS.indexOf(f.feeKind) >= 0 ? f.feeKind : (e.push('Choose a fee type.'), null);
+      if (f.type === 'adjustment') {
+        r.dir = f.dir === 'down' ? 'down' : f.dir === 'up' ? 'up' : (e.push('Choose whether the adjustment adds to or takes from the balance.'), null);
+        if (!String(f.note || '').trim()) e.push('Give a reason for the adjustment (it is kept in the history).');
+      }
       if (f.type === 'payout' && f.received != null && String(f.received).trim() !== '') {   // optional: what actually reached you after the firm's split (never guessed)
         var rc = parseMoney(f.received, { allowZero: true });
         if (rc == null) e.push('Amount received must be a dollar amount (or leave it blank).'); else if (amt != null && rc > amt) e.push('Amount received cannot be more than the amount withdrawn.'); else r.receivedCents = rc;
@@ -119,7 +125,7 @@
     if (f.transferId) r.transferId = String(f.transferId).slice(0, 60);
     return { ok: e.length === 0, errors: e, record: r };
   }
-  function dupKey(r) { return [r.accountId, r.type, r.date || r.at, r.amountCents == null ? '' : r.amountCents, r.feeKind || '', r.ref || '', r.balanceCents == null ? '' : r.balanceCents, r.thresholdCents == null ? '' : r.thresholdCents].join('|'); }
+  function dupKey(r) { return [r.accountId, r.type, r.date || r.at, r.amountCents == null ? '' : r.amountCents, r.feeKind || '', r.dir || '', r.ref || '', r.balanceCents == null ? '' : r.balanceCents, r.thresholdCents == null ? '' : r.thresholdCents].join('|'); }
   function findDuplicate(list, rec) { var k = dupKey(rec); return list.filter(function (x) { return !x.voided && x.accountId === rec.accountId && dupKey(x) === k; })[0] || null; }
   function usable(l) { return l && !l.voided && LEDGER_TYPES.indexOf(l.type) >= 0 && typeof l.at === 'number' && isFinite(l.at); }
 
@@ -158,7 +164,7 @@
       if (l.type === 'fee') return;
       var day = dayOf(l.at);
       if (l.type === 'snapshot') ev.push({ k: 'snap', day: day, inst: l.at, rec: l, c: l.createdAt || l.at, id: l.id });
-      else if (Number.isInteger(l.amountCents) && l.amountCents > 0) ev.push({ k: 'cash', day: day, inst: l.at, amt: SIGN[l.type] * l.amountCents, type: l.type, c: l.createdAt || l.at, id: l.id });
+      else if (Number.isInteger(l.amountCents) && l.amountCents > 0) ev.push({ k: 'cash', day: day, inst: l.at, amt: signOf(l) * l.amountCents, type: l.type, c: l.createdAt || l.at, id: l.id });
       else counts.invalidSkipped++;
     });
     ev = ev.filter(function (e) {
@@ -323,7 +329,7 @@
     return { untilDay: civilDate(Date.parse(day + 'T12:00:00Z') - 86400000, 'UTC') };
   }
 
-  var api = { MODELS: MODELS, BASES: BASES, MODEL_LABEL: MODEL_LABEL, CONF: CONF, FEE_KINDS: FEE_KINDS, LEDGER_TYPES: LEDGER_TYPES,
+  var api = { signOf: signOf, MODELS: MODELS, BASES: BASES, MODEL_LABEL: MODEL_LABEL, CONF: CONF, FEE_KINDS: FEE_KINDS, LEDGER_TYPES: LEDGER_TYPES,
     parseMoney: parseMoney, validateSettings: validateSettings, validateLedger: validateLedger, findDuplicate: findDuplicate, dupKey: dupKey, evaluate: evaluate,
     tradingDay: tradingDay, civilDate: civilDate, sumFees: sumFees, normalizeDd: normalizeDd, activeVersion: activeVersion, confirmVersion: confirmVersion,
     diffSettings: diffSettings, versionWindow: versionWindow, fmt: fmt, isDate: isDate, isHM: isHM };

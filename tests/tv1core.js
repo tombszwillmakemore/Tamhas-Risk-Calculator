@@ -32,7 +32,8 @@ eq('orders: account mapped', t1.trade.accountId, 'acct-a'); eq('orders: provenan
 eq('orders: canceled with 0 filled skipped and counted', r.rd.skipped, { canceled: 1 });
 ok('orders: reconcile warns about missing commissions', r.rec.items.some(x => x.level === 'warn' && /no commissions/.test(x.text)), r.rec);
 eq('orders: date range', [r.rd.info.from, r.rd.info.to], ['2026-10-21', '2026-10-21']);
-ok('orders: stable keys use order ids', t1.keys.every(k => /^tv:o:DEMO1234:900[134]$/.test(k)), t1.keys);
+ok('orders: stable keys use order ids (no account or file in the key)', t1.keys.every(k => /^tv:O:900[134]$/.test(k)), t1.keys);
+ok('orders: older key format kept as alternates', t1.alts.every(k => /^tv:o:DEMO1234:900[134]$/.test(k)), t1.alts);
 
 // ---- re-import of the same report = all duplicates; overlapping report = partial skipped
 const keys = new Set(t1.keys); r = run(orders, 'orders', { accountMap: { DEMO1234: 'acct-a' } }, keys);
@@ -76,7 +77,7 @@ eq('perf: MGC gross (+2.0 -4.1) x $10 = -$21.00, file says the same', [mgc.c.gro
 eq('perf: MNQ short (sold first) +10.50 x $2 = $21.00', [mnq.trade.side, mnq.c.grossCents, mnq.filePnlCents], ['short', 2100, 2100]);
 eq('perf: reported file total', r.rd.info.reportedPnlCents, 0);
 ok('perf: reconciliation all good on P&L', r.rec.items.some(x => /All 2 closed trades match/.test(x.text)), r.rec.items);
-ok('perf: keys use fill ids', mgc.keys.indexOf('tv:pf::5101') >= 0, mgc.keys);
+ok('perf: keys use fill ids', mgc.keys.indexOf('tv:F:5101') >= 0 && mgc.alts.indexOf('tv:pf::5101') >= 0, [mgc.keys, mgc.alts]);
 // a wrong pnl in the file is caught before import
 const perfBad = I.parseCsv(fs.readFileSync(F + 'tradovate-performance-synthetic.csv', 'utf8').replace('$21.00', '$25.00'));
 r = run(perfBad, 'performance', { defaultAccountId: 'a' }); ok('perf: mismatch flagged as a problem', r.rec.level === 'bad' && r.rec.items.some(x => /do not match/.test(x.text)), r.rec.items);

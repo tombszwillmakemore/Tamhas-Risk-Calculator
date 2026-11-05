@@ -72,7 +72,7 @@ const T=(rows)=>I.parseCsv('entry,exit,symbol,side,qty,ep,xp,fee,pnl\n'+rows.map
 r=I.plan(T([['2026-10-21 09:30:00','2026-10-21 09:40:00','MNQZ6','Long',2,100,101.5,'1.00','5.00'],['2026-10-21 10:30:00','2026-10-22 09:40:00','MNQZ6','Short',1,100,99,'','1.00'],['2026-10-21 11:00:00','','MNQZ6','Long',1,100,'','','']]),TO,new Set(),J);
 eq('trades mode: 3 trades',r.trades.length,3); eq('exit on next day carries its date',r.trades[1].trade.exits[0].date,'2026-10-22'); eq('no exit price -> open trade',r.trades[2].c.status,'open');
 ok('reconciliation: file P&L $5.00 matches net (gross $6 - fees $1)',r.reconcile.matched===1&&r.reconcile.checked===2,r.reconcile); eq('second trade: file $1.00 vs gross $4 mismatch reported',r.reconcile.mismatched.length,1);
-ok('trade keys present for duplicate detection',r.trades.every(x=>x.trade.srcKeys&&x.trade.srcKeys.length===1&&/^t1:/.test(x.trade.srcKeys[0])));
+ok('trade keys present for duplicate detection',r.trades.every(x=>x.trade.srcKeys&&x.trade.srcKeys.length===1&&/^t2:/.test(x.trade.srcKeys[0])));
 // auto-detection
 const hdr=['Time','Symbol','Side','Qty','Price','Commission','Account']; eq('mode detect: fills',I.detectMode(hdr),'fills'); eq('mode detect: trades',I.detectMode(['Entry price','Exit price','Instrument']),'trades');
 eq('suggestMapping fills',I.suggestMapping(hdr,'fills'),{time:0,symbol:1,side:2,qty:3,price:4,fees:5,account:6}); eq('suggest never reuses a column',Object.values(I.suggestMapping(['Time','Time'],'fills')).length,1);

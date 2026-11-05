@@ -10,6 +10,7 @@
   'use strict';
   var INST = root.TTInstruments || (typeof require !== 'undefined' ? require('./instruments.js') : null);
   var SES = root.TTSessions || (typeof require !== 'undefined' ? require('./sessions.js') : null);
+  var DD = root.TTDedupe || (typeof require !== 'undefined' ? require('./dedupe-core.js') : null);
   var LIMITS = { rows: 250000, chars: 40000000, fillsPerTrade: 200 };
 
   /* ---------- CSV parsing (RFC 4180: quoted fields, escaped quotes, newlines inside quotes) ---------- */
@@ -166,7 +167,7 @@
 
   // opts: {mode, mapping, dateOrder, fileTz, targetTz, defaultAccountId, accountMap:{fileName->id}, feesPerContract}
   function readFills(parsed, opts) {
-    var map = opts.mapping, fills = [], problems = {}, unsupported = {}, occ = {};
+    var map = opts.mapping, fills = [], problems = {}, unsupported = {}, occ = {}, occ2 = {};
     parsed.rows.forEach(function (row, i) {
       var line = i + 2;
       var sym = cell(row, map, 'symbol'), c = normalizeSymbol(sym);
@@ -178,8 +179,10 @@
       var ts = parseTimestamp(cell(row, map, 'time'), opts); if (!ts) { bump(problems, 'time could not be read (check the date order and time zone settings)', line); return; }
       var fee = feeCents(cell(row, map, 'fees'), q, opts); if (fee.error) { bump(problems, fee.error, line); return; }
       var acctRaw = cell(row, map, 'account'), acct = acctRaw && opts.accountMap && opts.accountMap[acctRaw] ? opts.accountMap[acctRaw] : opts.defaultAccountId;
+      // key: format-independent (no raw strings, no row numbers). alt: the key earlier versions saved, so their imports are still recognised.
       var rawKey = [acctRaw, sym.toUpperCase(), side, q, pr, cell(row, map, 'time'), cell(row, map, 'id')].join('\u001f'), base = hash(rawKey), n = occ[base] || 0; occ[base] = n + 1;
-      fills.push({ line: line, order: i, contract: c, side: side, qty: q, price: pr, feeCents: fee.cents, ts: ts, account: acct, accountRaw: acctRaw, key: 'f1:' + base + '#' + n });
+      var key = DD.contentKey('f2:', [DD.acctKey(acctRaw), cell(row, map, 'id'), DD.contractKey(sym, c), side, q, DD.priceKey(pr), DD.instantKey(ts)], occ2);
+      fills.push({ line: line, order: i, contract: c, side: side, qty: q, price: pr, feeCents: fee.cents, ts: ts, account: acct, accountRaw: acctRaw, key: key, alt: 'f1:' + base + '#' + n });
     });
     return { fills: fills, problems: problems, unsupported: unsupported };
   }
@@ -191,18 +194,18 @@
     fills.forEach(function (f) { var k = (f.account || '') + '\u001f' + f.contract; (groups[k] || (groups[k] = [])).push(f); });
     Object.keys(groups).forEach(function (k) {
       var list = groups[k].slice().sort(function (a, b) { return (sortKey(a) - sortKey(b)) || (a.ts.sec - b.ts.sec) || (a.order - b.order); }), pos = 0, cur = null;
-      function start(f, qty, feePart, side) { cur = { account: f.account, contract: f.contract, side: side, entries: [{ qty: qty, price: f.price, ts: f.ts }], exits: [], fees: feePart, feesKnown: feePart != null, keys: [f.key], lines: [f.line] }; }
+      function start(f, qty, feePart, side) { cur = { account: f.account, contract: f.contract, side: side, entries: [{ qty: qty, price: f.price, ts: f.ts }], exits: [], fees: feePart, feesKnown: feePart != null, keys: [f.key], alts: [f.alt || null], lines: [f.line] }; }
       function addFee(feePart) { if (feePart == null) cur.feesKnown = false; else if (cur.feesKnown) cur.fees = (cur.fees || 0) + feePart; }
       list.forEach(function (f) {
         var sq = f.side === 'buy' ? f.qty : -f.qty;
         if (pos === 0) { start(f, f.qty, f.feeCents, sq > 0 ? 'long' : 'short'); pos = sq; return; }
-        if ((pos > 0) === (sq > 0)) { cur.entries.push({ qty: f.qty, price: f.price, ts: f.ts }); addFee(f.feeCents); cur.keys.push(f.key); cur.lines.push(f.line); pos += sq; return; }
+        if ((pos > 0) === (sq > 0)) { cur.entries.push({ qty: f.qty, price: f.price, ts: f.ts }); addFee(f.feeCents); cur.keys.push(f.key); cur.alts.push(f.alt || null); cur.lines.push(f.line); pos += sq; return; }
         var close = Math.min(Math.abs(sq), Math.abs(pos)), rest = Math.abs(sq) - close;
         var feeClose = f.feeCents == null ? null : (rest ? Math.round(f.feeCents * close / f.qty) : f.feeCents), feeRest = f.feeCents == null ? null : f.feeCents - (feeClose || 0);
-        cur.exits.push({ qty: close, price: f.price, ts: f.ts }); addFee(feeClose); cur.keys.push(f.key); cur.lines.push(f.line);
+        cur.exits.push({ qty: close, price: f.price, ts: f.ts }); addFee(feeClose); cur.keys.push(f.key); cur.alts.push(f.alt || null); cur.lines.push(f.line);
         pos += sq > 0 ? close : -close;
         if (pos === 0) { out.push(cur); cur = null; }
-        if (rest > 0) { start(f, rest, feeRest, sq > 0 ? 'long' : 'short'); cur.keys = [f.key]; cur.lines = [f.line]; pos = sq > 0 ? rest : -rest; }
+        if (rest > 0) { start(f, rest, feeRest, sq > 0 ? 'long' : 'short'); cur.keys = [f.key]; cur.alts = [f.alt || null]; cur.lines = [f.line]; pos = sq > 0 ? rest : -rest; }
       });
       if (cur) { cur.openAtEnd = true; out.push(cur); }
     });
@@ -222,7 +225,7 @@
   }
 
   function readTrades(parsed, opts) {
-    var map = opts.mapping, trades = [], problems = {}, unsupported = {}, occ = {};
+    var map = opts.mapping, trades = [], problems = {}, unsupported = {}, occ = {}, occ2 = {};
     parsed.rows.forEach(function (row, i) {
       var line = i + 2, sym = cell(row, map, 'symbol'), c = normalizeSymbol(sym);
       if (!c) { var k = sym || '(blank)'; unsupported[k] = (unsupported[k] || 0) + 1; return; }
@@ -238,11 +241,12 @@
       var pnlRaw = cell(row, map, 'pnl'), pnl = pnlRaw === '' ? null : parseNumber(pnlRaw);
       var acctRaw = cell(row, map, 'account'), acct = acctRaw && opts.accountMap && opts.accountMap[acctRaw] ? opts.accountMap[acctRaw] : opts.defaultAccountId;
       var base = hash([acctRaw, sym.toUpperCase(), side, q, ep, xp == null ? '' : xp, cell(row, map, 'entryTime'), xRaw, cell(row, map, 'id')].join('\u001f')), n = occ[base] || 0; occ[base] = n + 1;
-      var raw = { date: et.date, time: et.hasTime ? et.time : '', contract: c, side: side, contracts: q, entry: ep, accountId: acct || undefined, exits: [], srcKeys: ['t1:' + base + '#' + n] };
+      var key2 = DD.contentKey('t2:', [DD.acctKey(acctRaw), cell(row, map, 'id'), DD.contractKey(sym, c), side, q, DD.priceKey(ep), xp == null ? '' : DD.priceKey(xp), DD.instantKey(et), DD.instantKey(xt)], occ2);
+      var raw = { date: et.date, time: et.hasTime ? et.time : '', contract: c, side: side, contracts: q, entry: ep, accountId: acct || undefined, exits: [], srcKeys: [key2] };
       if (xp != null) { var ex = { qty: q, price: xp }; if (xt && xt.hasTime) ex.time = xt.time; if (xt && xt.date !== et.date) ex.date = xt.date; raw.exits.push(ex); }
       if (fee.cents != null) raw.feesCents = fee.cents;
       if (opts.batchId) raw.importBatch = opts.batchId;
-      trades.push({ raw: raw, line: line, filePnlCents: pnl == null ? null : Math.round(pnl * 100), key: raw.srcKeys[0] });
+      trades.push({ raw: raw, line: line, filePnlCents: pnl == null ? null : Math.round(pnl * 100), key: key2, alt: 't1:' + base + '#' + n });
     });
     return { trades: trades, problems: problems, unsupported: unsupported };
   }
@@ -256,7 +260,7 @@
     var items;
     if (opts.mode === 'trades') {
       var rt = readTrades(parsed, opts); res.problems = rt.problems; res.unsupported = rt.unsupported;
-      items = rt.trades.map(function (t) { return { raw: t.raw, keys: [t.key], line: t.line, filePnlCents: t.filePnlCents }; });
+      items = rt.trades.map(function (t) { return { raw: t.raw, keys: [t.key], alts: [t.alt], line: t.line, filePnlCents: t.filePnlCents }; });
     } else {
       var rf = opts.preRead || readFills(parsed, opts); res.problems = rf.problems; res.unsupported = rf.unsupported; res.fills = rf.fills.length;
       var pk = opts.pnlByKey, amb = opts.ambiguousKeys;
@@ -264,39 +268,50 @@
         if (p.entries.length + p.exits.length > LIMITS.fillsPerTrade) { res.tooBig++; return null; }
         if (p.openAtEnd) res.openAtEnd++;
         var fp = null; if (pk) { var any = false, sum = 0; p.keys.forEach(function (k) { if (pk[k] != null) { any = true; sum += pk[k]; } }); if (any) fp = sum; }
-        return { raw: toRawTrade(p, opts), keys: p.keys, line: p.lines[0], filePnlCents: fp, ambiguous: !!(amb && p.keys.some(function (k) { return amb.has ? amb.has(k) : amb[k]; })), openAtEnd: !!p.openAtEnd };
+        return { raw: toRawTrade(p, opts), keys: p.keys, alts: p.alts, line: p.lines[0], filePnlCents: fp, ambiguous: !!(amb && p.keys.some(function (k) { return amb.has ? amb.has(k) : amb[k]; })), openAtEnd: !!p.openAtEnd };
       }).filter(Boolean);
     }
-    res.possible = []; res.ambiguous = [];
+    res.possible = []; res.ambiguous = []; res.exact = []; res.updates = []; res.conflicts = [];
+    var dd = opts.dedupe;      // {ix: TTDedupe.index(...), src: id of this file} -> full classification (new path)
     items.forEach(function (it) {
-      var known = it.keys.filter(has).length;
-      if (known === it.keys.length) { res.duplicates++; return; }
-      if (known > 0) { res.partial.push({ line: it.line, known: known, of: it.keys.length }); return; }
+      if (!dd) {   // older callers: keys only
+        var known = it.keys.filter(function (k, i) { return has(k) || (it.alts && it.alts[i] && has(it.alts[i])); }).length;
+        if (known === it.keys.length) { res.duplicates++; return; }
+        if (known > 0) { res.partial.push({ line: it.line, known: known, of: it.keys.length }); return; }
+      }
       if (opts.enrich) opts.enrich(it.raw, it.keys);
       var n = journal.normalizeTrade(it.raw);
       if (!n.ok) { res.invalid.push({ line: it.line, reason: n.errors[0] }); return; }
+      if (dd) { var did = DD.tradeId(it.keys, n.trade.accountId); if (did && !dd.ix.trades.has(did)) n.trade.id = did; }
       var c = journal.analyze([n.trade])[0].c;
       if (it.filePnlCents != null && c.isClosed) {
         res.reconcile.checked++;
         var ok = Math.abs(c.grossCents - it.filePnlCents) <= 1 || (c.netCents != null && Math.abs(c.netCents - it.filePnlCents) <= 1);
         if (ok) res.reconcile.matched++; else if (res.reconcile.mismatched.length < 20) res.reconcile.mismatched.push({ line: it.line, file: it.filePnlCents, gross: c.grossCents, net: c.netCents });
       }
-      var entry = { trade: n.trade, c: c, line: it.line, keys: it.keys, filePnlCents: it.filePnlCents == null ? null : it.filePnlCents, fp: fingerprint(n.trade) };
+      var entry = { trade: n.trade, c: c, line: it.line, keys: it.keys, alts: it.alts || [], filePnlCents: it.filePnlCents == null ? null : it.filePnlCents, fp: fingerprint(n.trade), openAtEnd: !!it.openAtEnd };
+      var allowed = opts.allowFp && opts.allowFp[entry.fp];
+      if (dd) {
+        var d = DD.classify(dd.ix, { trade: n.trade, keys: it.keys, alts: it.alts || [], src: dd.src }); entry.d = d;
+        if (d.cls === 'exact') { res.exact.push(entry); res.duplicates++; return; }
+        if (d.cls === 'updated') { res.updates.push(entry); return; }
+        if (d.cls === 'conflict') { res.conflicts.push(entry); return; }
+        if (d.cls === 'possible' && !allowed) { res.possible.push(entry); return; }
+        if (it.ambiguous && !allowed) { entry.d = Object.assign({}, d, { cls: 'possible', why: 'ambiguous', reason: 'A buy and a sell in the same second without ids, so the order of the fills is uncertain. Check the entry and exit.', conf: 'low' }); res.ambiguous.push(entry); return; }
+        DD.add(dd.ix, n.trade, { src: dd.src, planned: true, closed: c.isClosed });
+        res.trades.push(entry); return;
+      }
       // Second line of defence: a trade with the same account, contract, side, time, size and prices as one already saved (for example
       // the same trades imported from a different report, or typed in by hand) is held back as a possible duplicate - never silently added.
-      if (opts.fingerprints && (opts.fingerprints.has ? opts.fingerprints.has(entry.fp) : opts.fingerprints[entry.fp]) && !(opts.allowFp && opts.allowFp[entry.fp])) { res.possible.push(entry); return; }
-      if (it.ambiguous && !(opts.allowFp && opts.allowFp[entry.fp])) { res.ambiguous.push(entry); return; }
+      if (opts.fingerprints && (opts.fingerprints.has ? opts.fingerprints.has(entry.fp) : opts.fingerprints[entry.fp]) && !allowed) { res.possible.push(entry); return; }
+      if (it.ambiguous && !allowed) { res.ambiguous.push(entry); return; }
       res.trades.push(entry);
     });
     return res;
   }
 
   // What a trade looks like regardless of where it came from: account, contract, side, entry time, every fill's size and price.
-  function fingerprint(t) {
-    var en = t.entries && t.entries.length ? t.entries : [{ qty: t.contracts, price: t.entry }];
-    return hash([t.accountId || '', t.contract, t.side, t.date, t.time || '', en.map(function (x) { return x.qty + '@' + Number(x.price).toFixed(2); }).join(','),
-      (t.exits || []).map(function (x) { return x.qty + '@' + Number(x.price).toFixed(2); }).join(',')].join('|'));
-  }
+  function fingerprint(t) { return DD.fingerprint(t); }
   var api = { fingerprint: fingerprint, LIMITS: LIMITS, FIELDS: FIELDS, parseCsv: parseCsv, detectDelimiter: detectDelimiter, detectMode: detectMode, suggestMapping: suggestMapping, headerSignature: headerSignature,
     parseNumber: parseNumber, parseSide: parseSide, parseTimestamp: parseTimestamp, normalizeSymbol: normalizeSymbol, readFills: readFills, readTrades: readTrades, pairFills: pairFills,
     toRawTrade: toRawTrade, plan: plan, hash: hash, tradeHash: tradeHash, validTz: validTz };
