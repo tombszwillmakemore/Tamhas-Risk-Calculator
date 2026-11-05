@@ -29,7 +29,7 @@
   function itemText(it) { return typeof it === 'string' ? it : (it && (it.text || it.label)) || ''; }
   function getSnap() {
     if (snap && Date.now() - snap.at < 15000) return Promise.resolve(snap.v);
-    return DB.ready().then(function () { return Promise.all([DB.getAll('trades'), DB.getAll('accounts'), ST.list('risklimit'), ST.list('plan'), ST.list('checklist'), ST.list('reflection')]); }).then(function (r) {
+    return DB.ready().then(function () { return Promise.all([DB.getAll('trades'), DB.getAll('accounts'), ST.list('risklimit'), ST.list('plan'), ST.list('checklist'), ST.list('reflection'), DB.getAll('ledger'), DB.getByIndex('docs', 'kind', 'import')]); }).then(function (r) {
       var ok = []; r[0].forEach(function (raw) { var n = C.normalizeTrade(raw); if (n.ok) ok.push(n.trade); });
       var accts = r[1].filter(function (a) { return !a.archived; }).map(function (a) { return { id: a.id, name: a.name, firmSlug: a.firmSlug || '', productName: a.productName || '' }; });
       var limits = {}; r[2].forEach(function (d) { limits[d.accountId] = d.limits || {}; });
@@ -39,10 +39,14 @@
       var wk = new Date(); wk.setDate(wk.getDate() - 7); var wkKey = wk.getFullYear() + '-' + String(wk.getMonth() + 1).padStart(2, '0') + '-' + String(wk.getDate()).padStart(2, '0');
       var a0 = accts.filter(function (a) { return a.id === DEF; })[0] || accts[0];
       var v = { rows: C.analyze(ok), accounts: accts, limits: limits, plan: ptxt, checklists: pre ? [{ title: pre.name, items: (pre.items || []).map(itemText) }] : [], recentReflections: r[5].filter(function (x) { return x.date >= wkKey; }).length, accountId: a0 ? a0.id : DEF, accountName: accts.length > 1 && a0 ? a0.name : '' };
+      // Money answers use the same engine as the Cashflow screen (TTCash.summarize), for accounts that have the data for it.
+      var CC = window.TTCash, AC = window.TTAccountsCore; v.cash = [];
+      if (CC) r[1].filter(function (a) { return !a.archived; }).forEach(function (a0) { var a = AC ? AC.normalizeAccount(a0) : a0; if (!(r[6].some(function (l) { return l.type === 'cash' && l.accountId === a.id; }) || ((a.category === 'live' || a.category === 'sim') && a.startingBalanceCents != null))) return;
+        var sm = CC.summarize(a, r[6], v.rows, { imports: r[7] }), labels = {}; Object.keys(CC.CATS).forEach(function (k) { labels[k] = CC.label(k).toLowerCase(); }); v.cash.push({ id: a.id, name: a.name, s: sm, statusLabel: CC.STATUS[sm.status], labels: labels }); });
       snap = { at: Date.now(), v: v }; return v;
     });
   }
-  ['tt:journal-changed', 'tt:accounts-changed'].forEach(function (e) { window.addEventListener(e, function () { snap = null; }); });
+  ['tt:journal-changed', 'tt:accounts-changed', 'tt:ledger-changed'].forEach(function (e) { window.addEventListener(e, function () { snap = null; }); });
   function todayKey() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function curView() { var a = document.querySelector('.view.active'); return a ? a.id.replace('view-', '') : 'home'; }
 

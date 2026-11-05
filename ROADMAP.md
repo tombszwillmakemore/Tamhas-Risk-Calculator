@@ -1,6 +1,6 @@
 # TRC roadmap and status
 
-Last updated with release 2.2.0 (2026-11-05, on `dev-free-platform`, not merged). Honest status; check here before building anything.
+Last updated with release 2.3.0 (2026-11-05). Honest status; check here before building anything.
 
 ## Completed
 - Risk calculator (contracts from stop and dollar range; NNQ, NES, MNQ, NQ, MES, MGC, GC, ES with CME point values), remembered inputs, copy result.
@@ -18,7 +18,10 @@ Last updated with release 2.2.0 (2026-11-05, on `dev-free-platform`, not merged)
 
 - **Release 2.2.0 (on dev, not merged):** duplicate-proof imports (format-independent execution keys, six classes, multiset fingerprints, time-shift and open-position checks, deterministic trade ids), import preview with classes and estimated P&L change, Import Review / Duplicate Archive with undoable decisions and a journal duplicate scan, import history with batch ids and undo that also reverses updates; five account types, personal live / demo accounts with a cash-flow ledger (deposits, withdrawals, signed adjustments, broker-balance reconciliation, no prop rules); journal compare-and-swap saves, undo delete, duplicate warning, double-save guard, duplicate-aware backup restore; server-side duplicate guard in `trc_push`; identical imports from two devices merge during sync. Rules in `DATA-INTEGRITY.md`.
 
+- **Release 2.3.0:** Cashflow. One exact accounting engine, Tradovate Cash History import (preview, held rows, corrections, undo), safe ZIP and encoding intake, reconciliation states with freshness, overview, profit-vs-balance bridge, fees by type, period tables, transaction explorer with source rows and safe export, Copilot answers, Risk Center fee estimate. See `CASHFLOW-REPORT.md`.
+
 ## Partially implemented
+- Cashflow: Tradovate Cash History adapter built from documented field names, not yet tested on a real export file. XLSX and PDF statements are not opened; other brokers' cash statements have no adapter yet. There is no currency conversion. Large files are processed on the main thread.
 - Personal accounts: balances are in US dollars only (no currency conversion; non-USD accounts show the balance as unknown). Unrealized P&L is not available (no live prices). The account card's NET figure counts all trades in the account, while the balance counts only trades on or after the starting date.
 - Duplicate detection without ids relies on the time to the second; reports that only give minutes fall back to the fingerprint (minute + every fill), and reports with different time zones are held as "possible", never merged.
 - Cloud accounts: switched off until the owner creates the free Supabase project and fills assets/cloud-config.js. Verified on real PostgreSQL and in browsers against a local stand-in; not yet against the real Supabase service.
@@ -31,6 +34,7 @@ Last updated with release 2.2.0 (2026-11-05, on `dev-free-platform`, not merged)
 - Mobile tab strips with 6+ tabs scroll sideways (by design) rather than wrapping.
 
 ## Known bugs / needs manual verification
+- 2.3.0: import a real Tradovate Cash History plus Performance report for the same period; confirm Cashflow says Reconciled and matches Tradovate's cash balance. Check Cashflow on a real iPhone and in the installed app.
 - 2.2.0: import overlapping REAL Tradovate weekly and monthly reports (Performance and Orders) and confirm the counts; create a personal live account on a real iPhone and the installed app; check Import Review's comparison table with large system text.
 - 2.2.0 cloud: the duplicate guard and the key index need the updated `cloud/supabase.sql` to be run once in the Supabase SQL editor (it is idempotent).
 - Cloud: real Supabase project end to end (sign-up email arrives, link opens TRC, two real devices sync, sign-in from the installed iPhone app). Email links open in the phone's browser rather than the installed app; signing in once in the app with the password covers that.

@@ -131,7 +131,27 @@ balance **$165**, net trading P&L **+$25**.
 - Two devices that imported the same trade with only import metadata differing (import time, batch id) are recognised
   as the same trade during sync instead of raising a conflict.
 
-## 8. Known limitations
+## 8. Cash accounting (release 2.3.0)
+
+One engine (`assets/cash-core.js`, `TTCash.summarize`) produces every money figure. The account panel, Cashflow, the dashboard card and
+Copilot all use it.
+
+- **Authority rule.** Inside the period an imported Cash History covers, the Cash History is the only source of cash. Journal trades and
+  your own deposits, withdrawals and fees there are listed as "not counted", never added twice. Outside that period, journal trades
+  (net of known fees) and your entries are used.
+- **Formula.** Balance = opening + gross trading P&L − trading fees + deposits − withdrawals − account fees + credits ± transfers ±
+  adjustments and other. Net trading P&L = gross − trading fees (commission, exchange, clearing, NFA, routing).
+- **Exactness.** Amounts are parsed as text into integer minor units. Rounding happens only when a file has more decimals than the
+  currency allows: half away from zero, counted and shown, with the original text kept.
+- **Statuses.** Reconciled · Partially reconciled · Estimated · Outdated (last broker balance more than 30 days old) · Discrepancy
+  detected · Insufficient data · Import error. A matching balance does not by itself prove every record; duplicates and account
+  assignment are checked separately.
+- **No inference.** An unknown opening balance is not zero. An unknown type is held. An ambiguous sign or decimal mark is asked.
+  TRC never adds a balancing entry.
+
+Details, formats and test results: `CASHFLOW-REPORT.md`.
+
+## 9. Known limitations
 
 - Fill ids are assumed to be unique across a person's Tradovate accounts (they are system ids). If two accounts ever
   report the same id, the record is held as a conflict rather than guessed.

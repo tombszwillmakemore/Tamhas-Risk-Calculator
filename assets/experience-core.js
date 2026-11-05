@@ -23,7 +23,7 @@
     { id: 'news', label: 'Market events and sessions', pick: ['intel'] }
   ];
   var WIDGETS = [
-    { id: 'continue', label: 'Continue where you left off' }, { id: 'actions', label: 'Quick actions' }, { id: 'today', label: "Today's trading" }, { id: 'pnl', label: "Today's P&L" },
+    { id: 'continue', label: 'Continue where you left off' }, { id: 'actions', label: 'Quick actions' }, { id: 'today', label: "Today's trading" }, { id: 'pnl', label: "Today's P&L" }, { id: 'cash', label: 'Account balances' },
     { id: 'favorites', label: 'Favorites' }, { id: 'quickrisk', label: 'Quick risk calculator' }, { id: 'week', label: 'This week' }, { id: 'recentTrades', label: 'Recent trades' },
     { id: 'recents', label: 'Recently used' }, { id: 'sessions', label: 'Market sessions' }, { id: 'next', label: 'Next event' }, { id: 'tools', label: 'All tools' }, { id: 'news', label: "What's new" }
   ];

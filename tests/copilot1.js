@@ -124,6 +124,21 @@ r=say(S(),"what's new in TRC"); ok('what is new mentions latest release',new Reg
 r=say(S(),'teach me the risk center'); ok('teach me starts a tour for a real feature',r.actions[0].type==='tour'&&r.actions[0].feature==='risk',r);
 r=say(S(),'walk me through the journal'); ok('walk me through',r.actions[0].feature==='journal');
 r=say(S(),'how do I add another account'); ok('add account highlights button',r.actions.some(a=>a.type==='highlight'&&/a-new/.test(a.selector)));
+// ---- Cashflow answers come from the accounting engine's summaries (the same ones the Cashflow screen shows)
+{ global.TTSessions=require(A('sessions.js')); global.TTInstruments=require(A('instruments.js')); global.TTDedupe=require(A('dedupe-core.js')); const IM=require(A('import-core.js')); global.TTImport=IM; const CC=require(A('cash-core.js')), AC=require(A('accounts-core.js')); const G=require('./_cashgen.js');
+  const parsed=IM.parseCsv(G.cashCsv(G.regressionRows(),{opening:100})), det=CC.detect(parsed), rd=CC.read(parsed,det,{interp:CC.interpret(parsed,det.cols),accountMap:{'DEMO-L1':'acct-l'},fileTz:'as-is'}), led=rd.entries.map(e=>CC.toLedger(e,'b',1));
+  const acc=AC.normalizeAccount(AC.newAccount({id:'acct-l',name:'Tradovate live',category:'live',startingBalance:'100',startedOn:'2026-11-01'},1).account), sm=CC.summarize(acc,led,[],{now:Date.parse('2026-11-07T00:00:00Z')});
+  const cd=()=>Object.assign(data(),{cash:[{id:'acct-l',name:'Tradovate live',s:sm,statusLabel:CC.STATUS[sm.status],labels:{commission:'commissions',exchange_fee:'exchange fees'}}]});
+  let q=say(S(),'what is my account balance',cd()); ok('cash: balance $143.14 from the engine, labelled not live',/\$143\.14/.test(q.reply)&&/not a live balance/.test(q.reply)&&/Reconciled/.test(q.reply),q.reply);
+  q=say(S(),'how much have i paid in fees',cd()); ok('cash: total fees $60.16',/Total fees: \$60\.16/.test(q.reply),q.reply);
+  q=say(S(),'how much did commissions cost me',cd()); ok('cash: commissions $24.96',/Commissions: \$24\.96/.test(q.reply),q.reply);
+  q=say(S(),'why is my profit different from my balance',cd()); ok('cash: explains net vs balance',/\$43\.14/.test(q.reply)&&/starting balance \$100\.00/.test(q.reply),q.reply);
+  q=say(S(),'find my largest trading expense',cd()); ok('cash: largest fee type is commissions',/commissions: \$24\.96/.test(q.reply),q.reply);
+  q=say(S(),'are my imports accurate',cd()); ok('cash: reconciliation status',/^Reconciled/.test(q.reply),q.reply);
+  q=say(S(),'what is my live balance right now',cd()); ok('cash: explains there is no live connection',/no live connection/.test(q.reply),q.reply);
+  q=say(S(),'what is my account balance',data()); ok('cash: no data -> says so, never guesses',/will not guess/.test(q.reply)&&!/\$/.test(q.reply),q.reply);
+  q=say(S(),'delete my deposits',cd()); ok('cash: never deletes financial records by voice',!q.actions.some(a=>/delete|write|set/.test(a.type)),q);
+}
 r=say(S(),'add a personal live account'); ok('add a personal live account opens Accounts and points at the add button',r.actions.some(a=>a.type==='highlight'&&/a-new/.test(a.selector)));
 r=say(S(),'show my duplicates'); ok('show my duplicates opens Import Review',r.actions.some(a=>a.type==='navigate'&&a.view==='review'),r);
 r=say(S(),'help me set up my dashboard'); ok('dashboard customize',r.actions[0].type==='customize');
