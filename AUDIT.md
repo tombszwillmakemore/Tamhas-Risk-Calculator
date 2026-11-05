@@ -97,3 +97,35 @@ Also present and tested: legacy classic calculator page (`calculator-classic.htm
 Known limits: email links open in the phone's browser, not inside the installed app (sign in once in the app with the password); signing out
 while offline ends the session on the device only until it expires; the free plan pauses after 7 days idle and keeps no backups; data is
 encrypted in transit and protected by per-person rules, not end-to-end encrypted.
+
+
+## Release 2.2.0 - reliability audit (duplicate-proof journal, live accounts, whole app)
+
+Method: each feature was checked against the 20 questions of the brief (wrong data, duplicates, accidental deletion, overwrites, silent
+failure, misunderstanding, stale display, offline, refresh, small phones, large numbers, missing values, money maths, cross-feature
+consistency, privacy, updates, large data, beginners, recovery, cross-device). Only defects that were reproduced are listed as fixed; each
+has a regression test. This does not claim that all possible defects are gone.
+
+| # | Area | Defect found (reproduced) | Root cause | Fix | Test |
+|---|---|---|---|---|---|
+| 1 | Import | Reports without ids: the same trades from a longer report could be held back or doubled | Keys included the row number and raw strings | Format-independent keys + legacy alternates | `dd1core.js` (rows, columns, ms, symbol spelling) |
+| 2 | Import | A trade open at the end of one report could not be completed by a later report (skipped as "partly imported") | Partial overlap had no "update" path | Classified as updated (more fills), applied with consent | `dd1core.js`, `dd2e2e.js` |
+| 3 | Import | Same trades in another report type were only "possible" duplicates; fee-bearing reports could not add fees to existing trades | Fingerprint match had no exact/updated outcome | Fingerprint multiset -> exact; fees -> updated | `dd1core.js` |
+| 4 | Import | Same fill ids imported into another account produced new trades | Account was part of the key | Ids are global; another account -> conflict | `dd1core.js` (Scenario F) |
+| 5 | Import | Two tabs could save the same import twice | No cross-tab lock | Web Lock + plan rebuilt inside the lock | `dd2e2e.js` (two tabs) |
+| 6 | Import | Undo import did not reverse fee/fill updates | Only added trades were tracked | Before-copies + after-hash per update | `dd1core.js` |
+| 7 | Screenshots | Words could be grouped into the wrong lines | `.sort()` was inside a trailing comment | Sort restored | `tv1core.js`, OCR suites |
+| 8 | Journal | A journal screen left open overwrote trades changed by an import, Import Review, another tab or a sync | `persist()` wrote every trade it held | Compare-and-swap writes only of changed trades; stale -> reload + message, form kept | `lv2e2e.js` |
+| 9 | Journal | The journal showed old trades after changes made on other screens | No refresh on return | Reload when the journal is opened or the app becomes visible (not while editing) | `lv2e2e.js` |
+| 10 | Journal | Delete could not be undone; the same trade could be typed twice without warning | Missing safeguards | UNDO DELETE (2 min), duplicate confirm, double-save guard, beforeunload on unsaved form | `lv2e2e.js` |
+| 11 | Backup | Merge restore added trades already present under another id | Merge compared ids only | Duplicate engine on merge restore; look-alikes go to Import Review's journal scan | covered by `dd1core.js` scan + restore path |
+| 12 | Accounts | No way to model a personal live account: deposits looked like profit, withdrawals like losses, prop rules/tracker shown | Prop-only model | Five types, live ledger, cash flow separate from performance | `lv1core.js`, `lv2e2e.js` |
+| 13 | Accounts | A starting balance of $0 was refused | Validation required > 0 | 0 allowed, negatives refused, edits logged | `lv1core.js` |
+| 14 | Cloud | Two devices importing the same report would create two trades (random ids) or a conflict (different import time) | Random ids; import metadata in the hash comparison | Deterministic ids; import metadata ignored for identical trades; server refuses a second trade with the same executions | `synccore.js`, `cloudsql.js` |
+| 15 | Fees | Typing a negative fee gave an unclear error | Message | Explains that fees are always entered as positive | core suites |
+
+Checked with no defect reproduced: dashboard, calendar and analytics read only the trades store (archived duplicates cannot reach them);
+risk calculator inputs; settings; onboarding and tours (registry tests); search (registry tests); offline start (p1e2e); layout at 320-1600px
+for the calendar (cal1e2e) and at 390/1280px for Import, Import Review and Accounts (dd2e2e, lv2e2e).
+
+Not verified here (no device available): physical iPhone Safari, the installed home-screen app, Android, VoiceOver; real Tradovate files.

@@ -1,6 +1,6 @@
 # TRC roadmap and status
 
-Last updated with release 2.1.0 (2026-11-02). Honest status; check here before building anything.
+Last updated with release 2.2.0 (2026-11-05, on `dev-free-platform`, not merged). Honest status; check here before building anything.
 
 ## Completed
 - Risk calculator (contracts from stop and dollar range; NNQ, NES, MNQ, NQ, MES, MGC, GC, ES with CME point values), remembered inputs, copy result.
@@ -16,7 +16,11 @@ Last updated with release 2.1.0 (2026-11-02). Honest status; check here before b
 
 - **Release 2.1.0 (built, waiting for the Supabase project):** optional TRC login (email + password, email confirmation, magic link, password reset, change email/password/name, sign out / sign out everywhere, delete cloud data, delete login with a fresh password check), cloud sync of trades, trading accounts, money entries and all saved items/preferences (hash-based change detection, compare-and-swap push, gap-free pull, tombstones, conflicts kept for the person to decide, format guard for old app versions), per-login local databases and settings on each device, guest-data migration with backup and preview, cloud export, usage display, status chip, Copilot phrases, welcome-flow and Settings entry. Setup: CLOUD-SETUP.md.
 
+- **Release 2.2.0 (on dev, not merged):** duplicate-proof imports (format-independent execution keys, six classes, multiset fingerprints, time-shift and open-position checks, deterministic trade ids), import preview with classes and estimated P&L change, Import Review / Duplicate Archive with undoable decisions and a journal duplicate scan, import history with batch ids and undo that also reverses updates; five account types, personal live / demo accounts with a cash-flow ledger (deposits, withdrawals, signed adjustments, broker-balance reconciliation, no prop rules); journal compare-and-swap saves, undo delete, duplicate warning, double-save guard, duplicate-aware backup restore; server-side duplicate guard in `trc_push`; identical imports from two devices merge during sync. Rules in `DATA-INTEGRITY.md`.
+
 ## Partially implemented
+- Personal accounts: balances are in US dollars only (no currency conversion; non-USD accounts show the balance as unknown). Unrealized P&L is not available (no live prices). The account card's NET figure counts all trades in the account, while the balance counts only trades on or after the starting date.
+- Duplicate detection without ids relies on the time to the second; reports that only give minutes fall back to the fingerprint (minute + every fill), and reports with different time zones are held as "possible", never merged.
 - Cloud accounts: switched off until the owner creates the free Supabase project and fills assets/cloud-config.js. Verified on real PostgreSQL and in browsers against a local stand-in; not yet against the real Supabase service.
 - Not built (not available or not free): passkeys, profile pictures, connected-device list, attachment/screenshot upload, server-side backups, security-notification emails beyond Supabase's own.
 - Tradovate layouts follow header lists published by journal vendors; not yet checked against a real Tradovate export. Orders with several fill prices (average with more than 2 decimals) are listed for manual entry or the Performance report.
@@ -27,6 +31,8 @@ Last updated with release 2.1.0 (2026-11-02). Honest status; check here before b
 - Mobile tab strips with 6+ tabs scroll sideways (by design) rather than wrapping.
 
 ## Known bugs / needs manual verification
+- 2.2.0: import overlapping REAL Tradovate weekly and monthly reports (Performance and Orders) and confirm the counts; create a personal live account on a real iPhone and the installed app; check Import Review's comparison table with large system text.
+- 2.2.0 cloud: the duplicate guard and the key index need the updated `cloud/supabase.sql` to be run once in the Supabase SQL editor (it is idempotent).
 - Cloud: real Supabase project end to end (sign-up email arrives, link opens TRC, two real devices sync, sign-in from the installed iPhone app). Email links open in the phone's browser rather than the installed app; signing in once in the app with the password covers that.
 - Calendar on real phones with the system text size set to large (automated tests used browser zoom 1.3-1.5 to simulate it).
 - Bottom navigation on real devices: scroll long Journal/Accounts pages on iPhone Safari, the installed TRC app, Chrome on Android and Samsung Internet; open the keyboard in a form. Address-bar and keyboard behaviour were simulated, not tested on a phone.

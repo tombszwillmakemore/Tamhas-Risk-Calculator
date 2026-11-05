@@ -19,7 +19,8 @@
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), ST.list('import'), ST.list('template'), ST.getPref('tvImport', null)]); }).then(function (r) {
       S.accounts = r[0].map(AC.normalizeAccount).filter(function (a) { return !a.archived; }).sort(function (a, b) { return a.createdAt - b.createdAt; });
-      S.history = r[1].sort(function (a, b) { return b.at - a.at; }); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
+      S.history = r[1].sort(function (a, b) { return b.at - a.at; });
+      DB.getByIndex('docs', 'kind', 'dupe').then(function (d) { var n = d.filter(function (x) { return !x.voided && (x.status === 'review' || x.status === 'later'); }).length; if (n !== S.pendingReview) { S.pendingReview = n; if (S.step === 'file') render(); } }).catch(function () {}); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
       if (r[3] && typeof r[3] === 'object') S.pref = Object.assign(JSON.parse(JSON.stringify(DEF_PREF)), r[3], { defaults: Object.assign({}, DEF_PREF.defaults, r[3].defaults || {}) });
       if (!S.accounts.some(function (a) { return a.id === S.accountId; }) && S.accounts.length) S.accountId = S.accounts[0].id;
     }).catch(function (e) { S.err = (e && e.message) || 'Could not open the local database.'; S.loaded = true; });
@@ -32,7 +33,7 @@
 
   /* =================== start screen =================== */
   function fileStep() {
-    var h = '<div class="panel im-hero"><h2>Import trades</h2><p class="note" style="margin-top:0"><b>1</b> Export or screenshot your Tradovate report &nbsp; <b>2</b> Drop it here &nbsp; <b>3</b> Check the preview and import. Everything is processed on this device; nothing is uploaded.</p>' +
+    var h = (S.pendingReview ? '<div class="ui-banner warn" role="status">' + U.plural(S.pendingReview, 'imported record') + ' still need' + (S.pendingReview === 1 ? 's' : '') + ' your decision. They are not counted until you decide. <button type="button" class="linkbtn" data-act="im-open-review">Open Import Review</button></div>' : '') + '<div class="panel im-hero"><h2>Import trades</h2><p class="note" style="margin-top:0"><b>1</b> Export or screenshot your Tradovate report &nbsp; <b>2</b> Drop it here &nbsp; <b>3</b> Check the preview and import. Everything is processed on this device; nothing is uploaded.</p>' +
       '<label class="dropzone" id="im-drop" for="im-file" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg><b>Drop files here or tap to choose</b><span>Tradovate CSV (Orders or Performance), any trades or fills CSV, or screenshots (PNG, JPG). Several at once is fine.</span></label>' +
       '<input id="im-file" class="vh" type="file" multiple accept=".csv,.txt,.tsv,text/csv,text/plain,image/png,image/jpeg,image/webp">' +
       '<div class="ui-row im-actions"><button type="button" class="btn" data-act="im-clip">PASTE FROM CLIPBOARD</button><button type="button" class="btn ghost" data-act="im-paste-toggle" aria-expanded="' + S.pasteOpen + '">PASTE TEXT</button><button type="button" class="btn ghost" data-act="im-guide">HOW TO EXPORT FROM TRADOVATE</button></div>' +

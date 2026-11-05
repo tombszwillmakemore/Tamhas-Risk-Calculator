@@ -124,6 +124,8 @@ r=say(S(),"what's new in TRC"); ok('what is new mentions latest release',new Reg
 r=say(S(),'teach me the risk center'); ok('teach me starts a tour for a real feature',r.actions[0].type==='tour'&&r.actions[0].feature==='risk',r);
 r=say(S(),'walk me through the journal'); ok('walk me through',r.actions[0].feature==='journal');
 r=say(S(),'how do I add another account'); ok('add account highlights button',r.actions.some(a=>a.type==='highlight'&&/a-new/.test(a.selector)));
+r=say(S(),'add a personal live account'); ok('add a personal live account opens Accounts and points at the add button',r.actions.some(a=>a.type==='highlight'&&/a-new/.test(a.selector)));
+r=say(S(),'show my duplicates'); ok('show my duplicates opens Import Review',r.actions.some(a=>a.type==='navigate'&&a.view==='review'),r);
 r=say(S(),'help me set up my dashboard'); ok('dashboard customize',r.actions[0].type==='customize');
 r=say(S(),"show me features I haven't tried"); ok('untried features come from the registry and exclude visited ones',/Journal|Analytics|Accounts/.test(r.reply)&&!/Dashboard \(/.test(r.reply),r.reply);
 const wd=data(); wd.view='analytics'; r=say(S(),'what am I looking at',wd); ok('what am I looking at explains current page + highlights',/Analytics/.test(r.reply)&&r.actions.some(a=>a.type==='highlight'),r.reply);
