@@ -127,7 +127,7 @@
       if (!(Number.isInteger(fc) && fc >= 0)) { e.push('Fees must be zero or more.'); t.feesCents = null; } else t.feesCents = fc;
     } else {
       var f = num(raw.fees);
-      if (!(f >= 0) || decimals(raw.fees) > 2 || f > 100000) { e.push('Fees must be zero or more (max 2 decimals).'); t.feesCents = null; }
+      if (!(f >= 0) || decimals(raw.fees) > 2 || f > 100000) { e.push(f < 0 ? 'Enter fees as a positive amount (for example 2.50, not -2.50). They are always subtracted from the P&L.' : 'Fees must be zero or more (max 2 decimals).'); t.feesCents = null; }
       else t.feesCents = Math.round(f * 100);
     }
 
@@ -363,7 +363,7 @@
     extra = extra || {};
     return JSON.stringify({ app: 'tamhas-trading', kind: 'journal-backup', version: 3, exportedAt: new Date().toISOString(), trades: trades, shots: shots || {}, accounts: extra.accounts || [], ledger: extra.ledger || [], docs: extra.docs || [] });
   }
-  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
+  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot', 'withdrawal', 'adjustment'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
   function cleanAccounts(list) {
     var out = [], skipped = 0, seen = {};
     (Array.isArray(list) ? list : []).slice(0, 2000).forEach(function (a) {
@@ -377,13 +377,14 @@
     (Array.isArray(list) ? list : []).slice(0, 200000).forEach(function (l) {
       var ok = l && typeof l === 'object' && typeof l.id === 'string' && l.id && !seen[l.id] && typeof l.accountId === 'string' && l.accountId && LEDGER_TYPES.indexOf(l.type) >= 0 && typeof l.at === 'number' && isFinite(l.at);
       if (ok && l.type !== 'snapshot') ok = Number.isInteger(l.amountCents) && l.amountCents > 0;
+      if (ok && l.type === 'adjustment') ok = l.dir === 'up' || l.dir === 'down';
       if (ok && l.type === 'snapshot') ok = ['balanceCents', 'equityCents', 'thresholdCents', 'hwmCents'].every(function (k) { return l[k] == null || Number.isInteger(l[k]); });
       if (!ok) { skipped++; return; } seen[l.id] = 1; out.push(l);
     });
     return { list: out, skipped: skipped };
   }
   // Generic documents (expenses, strategies, plans, goals, templates, preferences...). Unknown kinds are skipped, not guessed at.
-  var DOC_KINDS = ['expense', 'recurring', 'strategy', 'backtest', 'plan', 'checklist', 'reflection', 'goal', 'template', 'review', 'import', 'pref', 'filter', 'field', 'tagdef', 'dashboard', 'routine', 'payoutplan', 'note', 'risklimit'];
+  var DOC_KINDS = ['expense', 'recurring', 'strategy', 'backtest', 'plan', 'checklist', 'reflection', 'goal', 'template', 'review', 'import', 'pref', 'filter', 'field', 'tagdef', 'dashboard', 'routine', 'payoutplan', 'note', 'risklimit', 'dupe'];
   function cleanDocs(list) {
     var out = [], skipped = 0, seen = {};
     (Array.isArray(list) ? list : []).slice(0, 50000).forEach(function (d) {
@@ -455,9 +456,45 @@
     return sign + '$' + body;
   }
 
-  var api = { SESSIONS: SESSIONS, STORE_KEY: STORE_KEY, normalizeTrade: normalizeTrade, compute: compute, analyze: analyze, plOf: plOf,
+  /* Calendar-cell representations of an amount, most precise first. The calendar measures each cell and shows the first one
+     that fits, so the value is exact whenever there is room. approx = the text is rounded; a K or M suffix shows rounding by
+     itself, other rounded values start with "~". The exact amount always stays in the day's label, tooltip and day view. */
+  function moneyCandidates(cents) {
+    if (cents == null || isNaN(cents)) return [];
+    var r = Math.round(Math.abs(cents)), sign = cents < 0 && r > 0 ? '-' : (r > 0 ? '+' : ''), out = [], seen = {};
+    function add(t, approx) { if (!seen[t]) { seen[t] = 1; out.push({ t: t, approx: approx }); } }
+    function trim(x) { return x.indexOf('.') >= 0 ? x.replace(/\.?0+$/, '') : x; }          // only zeros after the decimal point
+    function grp(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+    var whole = Math.floor(r / 100), part = r % 100;
+    var exact = '$' + grp(whole) + (part ? '.' + String(part).padStart(2, '0') : '');
+    add(sign + exact, false);
+    if (part && part % 10 === 0) add(sign + '$' + grp(whole) + '.' + (part / 10), false);          // 53.50 -> 53.5 (still exact)
+    if (!part && whole >= 1000) add(sign + '$' + whole, false);                                       // 1,250 -> 1250 (still exact)
+    function unit(v, div, suf) {
+      [2, 1, 0].forEach(function (d) { var x = v / div, s2 = trim(x.toFixed(d)), back = Math.round(parseFloat(s2) * div * 100); add(sign + '$' + s2 + suf, back !== r); });
+    }
+    if (r >= 100000 && r < 100000000) unit(r / 100, 1000, 'K');       // $1,000 up to $1M
+    if (r >= 100000000) unit(r / 100, 1e6, 'M');     // from $1,000,000
+    if (part && Math.round(r / 100) > 0) add(sign + '~$' + grp(Math.round(r / 100)), true);                                  // 69.95 -> ~+$70
+    if (r < 100000 && whole >= 950) { var k = (r / 100000); [1, 0].forEach(function (d) { var s3 = trim(k.toFixed(d)); add(sign + '$' + s3 + 'K', Math.round(parseFloat(s3) * 100000) !== r); }); }
+    // last resort for the narrowest cells: the colour already shows the direction, so drop a leading "+"
+    out.slice().forEach(function (c) { if (sign === '+') add(c.t.replace('+', ''), c.approx); });
+    var bySize = out.map(function (c, i) { return { c: c, i: i }; });
+    // keep exact ones first, then approximations from most to least digits
+    function valueOf(t) { var neg = /-/.test(t), m = t.replace(/[~+\-$,]/g, ''), mult = /K$/.test(m) ? 1e3 : /M$/.test(m) ? 1e6 : 1; return Math.round(parseFloat(m) * mult * 100) * (neg ? -1 : 1); }
+    out.forEach(function (c) { c.err = r ? Math.abs(Math.abs(valueOf(c.t)) - r) / r : 0; });
+    return bySize.sort(function (a, b) { if (a.c.approx !== b.c.approx) return a.c.approx ? 1 : -1; if (!a.c.approx) return a.c.t.length !== b.c.t.length ? b.c.t.length - a.c.t.length : a.i - b.i; return b.c.t.length - a.c.t.length || a.i - b.i; }).map(function (x) { return x.c; });
+  }
+  function countCandidates(n) {
+    if (!(n >= 0)) return [];
+    var g = String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','), k = n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k' : null;
+    var out = [g + ' trade' + (n === 1 ? '' : 's'), g + ' tr', String(n) + ' tr', g]; if (k) out.push(k + ' tr', k); out.push(String(n));
+    return out.filter(function (x, i) { return out.indexOf(x) === i; });
+  }
+
+  var api = { moneyCandidates: moneyCandidates, countCandidates: countCandidates, SESSIONS: SESSIONS, STORE_KEY: STORE_KEY, normalizeTrade: normalizeTrade, compute: compute, analyze: analyze, plOf: plOf,
     stats: stats, breakdown: breakdown, dailyMap: dailyMap, summaryForDate: summaryForDate, todaySummary: todaySummary,
-    filterRows: filterRows, cleanLabels: cleanLabels, GRADES: GRADES, cleanCustom: cleanCustom, toCsv: toCsv, CSV_COLS: CSV_COLS, INST_LIST_TEXT: INST.list.map(function (i) { return i.id; }).join(', '), serializeBackup: serializeBackup, parseBackup: parseBackup, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
+    filterRows: filterRows, cleanLabels: cleanLabels, GRADES: GRADES, cleanCustom: cleanCustom, toCsv: toCsv, CSV_COLS: CSV_COLS, INST_LIST_TEXT: INST.list.map(function (i) { return i.id; }).join(', '), serializeBackup: serializeBackup, parseBackup: parseBackup, cleanLedger: cleanLedger, cleanDocs: cleanDocs, DOC_KINDS: DOC_KINDS,
     parseStored: parseStored, serializeStored: serializeStored, mergeTrades: mergeTrades, fmtMoney: fmtMoney, fmtCompact: fmtCompact,
     order: order, num: num };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

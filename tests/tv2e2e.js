@@ -48,7 +48,7 @@ const H = 'orderId,Account,B/S,Contract,Product,avgPrice,filledQty,Fill Time,Sta
 
     // 2. same report again: remembered account, everything a duplicate
     await p.evaluate(() => TTNav.go('import')); await p.waitForSelector('#im-file'); await p.setInputFiles('#im-file', FX + 'tradovate-orders-synthetic.csv'); await p.waitForSelector('[data-act=im-cancel]');
-    t = await txt(p); ok(T + 're-import: account remembered (no blocker)', !/Choose a journal account/.test(t)); ok(T + 're-import: nothing new', /Nothing new to import/.test(t) && /Already in journal\s*1/.test(t), t.slice(0, 400));
+    t = await txt(p); ok(T + 're-import: account remembered (no blocker)', !/Choose a journal account/.test(t)); ok(T + 're-import: nothing new', /Will be added: 0 trades/.test(t) && /Exact duplicates \(skipped\)\s*1/.test(t), t.slice(0, 400));
     await p.click('[data-act=im-cancel]');
 
     // 3. Performance report: no account column -> must choose; reconciliation matches
@@ -74,8 +74,8 @@ const H = 'orderId,Account,B/S,Contract,Product,avgPrice,filledQty,Fill Time,Sta
     ok(T + 'paste: recognised and remembered account used', /Tradovate Orders report/.test(await txt(p)) && !(await p.isDisabled('[data-act=im-tv-commit]')));
     ok(T + 'paste: $10.00 trade', /\+\$10\.00/.test(await txt(p)));
     // untick it -> nothing to import
-    await p.uncheck('[data-on]'); await until(p, () => !document.querySelector('[data-act=im-tv-commit]') || /IMPORT 0/.test(document.getElementById('iRoot').innerText) || /Nothing new/.test(document.getElementById('iRoot').innerText) || /Ready to import\s*0/.test(document.getElementById('iRoot').innerText));
-    ok(T + 'paste: unticked trade is excluded', /Ready to import\s*0/.test(await txt(p)));
+    await p.uncheck('[data-on]'); await until(p, () => !document.querySelector('[data-act=im-tv-commit]') || /IMPORT 0/.test(document.getElementById('iRoot').innerText) || /Nothing new/.test(document.getElementById('iRoot').innerText) || /Will be added: 0 trades/.test(document.getElementById('iRoot').innerText));
+    ok(T + 'paste: unticked trade is excluded', /Will be added: 0 trades/.test(await txt(p)));
     await p.click('[data-act=im-cancel]');
 
     // 6. fee settings: your commission per contract is applied and labelled
@@ -91,7 +91,7 @@ const H = 'orderId,Account,B/S,Contract,Product,avgPrice,filledQty,Fill Time,Sta
     await p.click('[data-act=im-rollback] >> nth=0'); await p.click('.ui-dlg [data-r=ok]'); await until(p, async () => (await TTDB.getAll('trades')).length < 999);
     await until(p, async () => (await TTDB.getAll('trades')).length === 3);
     ok(T + 'rollback removes only that import', (await p.evaluate(async () => (await TTDB.getAll('trades')).length)) === before - 1, before);
-    ok(T + 'history shows rolled back + counts', /rolled back/.test(await txt(p)) && /found/.test(await txt(p)));
+    ok(T + 'history shows the undone import + counts', /undone/i.test(await txt(p)) && /found/.test(await txt(p)));
 
     // 8. summary-only report kept as reference, no trades
     await p.setInputFiles('#im-file', W('summary.csv', 'Account,Net Liq,Cash Balance,Total PnL\nDEMO1234,50120.50,50000.00,120.50\n')); await p.waitForSelector('[data-act=im-tv-commit]');
@@ -137,7 +137,7 @@ const H = 'orderId,Account,B/S,Contract,Product,avgPrice,filledQty,Fill Time,Sta
     await p.click('[data-act=im-tv-commit]'); await p.waitForSelector('.im-done'); ok(T + 'imported', /Imported\s*1/.test(await txt(p)));
     // the same trades arriving from the CSV report are recognised as possible duplicates
     await p.click('[data-act=im-cancel]'); await p.setInputFiles('#im-file', FX + 'tradovate-orders-synthetic.csv'); await p.waitForSelector('[data-act=im-cancel]');
-    ok(T + 'CSV of the same trades -> held as possible duplicate', /Needs your review \(1\)/.test(await txt(p)) && /Ready to import\s*0/.test(await txt(p)), (await txt(p)).slice(0, 500));
+    ok(T + 'CSV of the same trades -> recognised as already imported (same order ids)', /Exact duplicates \(skipped\)\s*1/.test(await txt(p)) && /Will be added: 0 trades/.test(await txt(p)), (await txt(p)).slice(0, 500));
     ok(T + 'nothing was requested from other sites', !ext.length, ext); ok(T + 'no page errors', !errors.length, errors);
     await ctx.close();
   }

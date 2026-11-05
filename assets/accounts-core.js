@@ -36,16 +36,50 @@
 
   function cleanName(n) { return str(n).replace(/\s+/g, ' ').trim().slice(0, 60); }
 
+  // Money typed by a person -> whole cents, or null when blank. Pushes a readable error instead of guessing.
+  function moneyIn(raw, label, e, o) {
+    o = o || {}; var v = str(raw).trim(); if (v === '') return null;
+    var neg = /^\(.*\)$/.test(v) || /^-/.test(v), n = Number(v.replace(/[()$,\s+-]/g, ''));
+    if (!isFinite(n) || v.replace(/[()$,\s+\-.0-9]/g, '') !== '' || Math.abs(Math.round(n * 100) - n * 100) > 1e-6) { e.push(label + ' must be a dollar amount with at most 2 decimals.'); return null; }
+    if (neg) { e.push(label + ' cannot be negative.'); return null; }
+    if (!o.zero && n === 0) { e.push(label + ' must be more than 0.'); return null; }
+    if (o.max && n > o.max) { e.push(label + ' is too large.'); return null; }
+    return Math.round(n * 100);
+  }
+  var CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'CHF', 'JPY'];
+  // Personal-account details. None are required. The alias is a nickname or the last few digits, never a full account number or password.
+  function personalFields(input, e) {
+    var cur = str(input.currency || 'USD').trim().toUpperCase(); if (CURRENCIES.indexOf(cur) < 0) { e.push('Choose a currency from the list.'); cur = 'USD'; }
+    var alias = str(input.accountAlias).trim().slice(0, 40);
+    if (/\d{7,}/.test(alias.replace(/[\s-]/g, ''))) e.push('Use a nickname or the last 4 digits for the account alias, not the full account number.');
+    var com = moneyIn(input.commission, 'Commission per contract', e, { zero: true, max: 100 }), exf = moneyIn(input.exchangeFee, 'Exchange and regulatory fees per contract', e, { zero: true, max: 100 });
+    var dl = moneyIn(input.dailyLossAlert, 'Daily loss alert', e, { max: 1e9 });
+    return { broker: str(input.broker).trim().slice(0, 40) || null, currency: cur, accountAlias: alias, commissionCents: com, exchangeFeeCents: exf, riskAlert: dl != null ? { dailyLossCents: dl } : null };
+  }
+  // Editing an account's details later. Every change (including the starting balance) is kept in changeLog with the old and new value.
+  var EDITABLE = { name: 'Name', startingBalanceCents: 'Starting balance', startedOn: 'Starting date', broker: 'Broker', currency: 'Currency', accountAlias: 'Account alias', commissionCents: 'Commission per contract', exchangeFeeCents: 'Exchange and regulatory fees per contract', riskAlert: 'Daily loss alert' };
+  function editDetails(acct, input, note, now) {
+    var e = [], next = {};
+    if (input.name != null) { var nm = cleanName(input.name); if (!nm) e.push('Give the account a name.'); else next.name = nm; }
+    if (input.startingBalance !== undefined) next.startingBalanceCents = moneyIn(input.startingBalance, 'Starting balance', e, { zero: true, max: 1e12 });
+    if (input.startedOn !== undefined) { if (/^\d{4}-\d{2}-\d{2}$/.test(str(input.startedOn))) next.startedOn = input.startedOn; else e.push('Starting date must be a real date.'); }
+    var p = personalFields(Object.assign({ currency: acct.currency || 'USD' }, input), e);
+    ['broker', 'currency', 'accountAlias'].forEach(function (k) { if (input[k === 'accountAlias' ? 'accountAlias' : k] !== undefined) next[k] = p[k]; });
+    if (input.commission !== undefined) next.commissionCents = p.commissionCents; if (input.exchangeFee !== undefined) next.exchangeFeeCents = p.exchangeFeeCents; if (input.dailyLossAlert !== undefined) next.riskAlert = p.riskAlert;
+    if (e.length) return { ok: false, errors: e };
+    var t = now == null ? Date.now() : now, log = [];
+    Object.keys(next).forEach(function (k) { if (JSON.stringify(acct[k] == null ? null : acct[k]) !== JSON.stringify(next[k] == null ? null : next[k])) log.push({ at: t, field: k, label: EDITABLE[k] || k, from: acct[k] == null ? null : acct[k], to: next[k] == null ? null : next[k], note: str(note).slice(0, 200) }); });
+    if (!log.length) return { ok: true, account: acct, unchanged: true };
+    return { ok: true, account: Object.assign({}, acct, next, { changeLog: (acct.changeLog || []).concat(log) }), changes: log };
+  }
+
   // Builds a new account record. Returns {ok, account} or {ok:false, errors}.
   function newAccount(input, now) {
     input = input || {}; var e = [], name = cleanName(input.name);
     if (!name) e.push('Give the account a name.');
     var cat = CATEGORIES.indexOf(input.category) >= 0 ? input.category : null; if (!cat) e.push('Choose an account type.');
-    var bal = null;
-    if (str(input.startingBalance).trim() !== '') {
-      var n = Number(str(input.startingBalance).replace(/[$,\s]/g, ''));
-      if (!(n > 0) || !isFinite(n) || Math.round(n * 100) !== n * 100 && Math.abs(Math.round(n * 100) - n * 100) > 1e-6) e.push('Starting balance must be a positive dollar amount.'); else bal = Math.round(n * 100);
-    }
+    var bal = moneyIn(input.startingBalance, 'Starting balance', e, { zero: true, max: 1e12 });
+    var pers = personalFields(input, e);
     if (e.length) return { ok: false, errors: e };
     var statuses = STATUSES[cat], status = statuses.indexOf(input.status) >= 0 ? input.status : statuses[0];
     var t = now == null ? Date.now() : now;
@@ -54,7 +88,8 @@
       createdAt: t, startedOn: /^\d{4}-\d{2}-\d{2}$/.test(str(input.startedOn)) ? input.startedOn : ymd(t), startingBalanceCents: bal, note: str(input.note).slice(0, 500),
       firmSlug: input.firmSlug || null, productName: input.productName || null,
       template: input.template ? { slug: input.template.slug, product: input.template.product, researchedOn: input.template.researchedOn } : null,
-      rules: input.rules || {}, ruleHistory: [], statusHistory: [{ at: t, status: status, note: 'Created' }]
+      rules: input.rules || {}, ruleHistory: [], statusHistory: [{ at: t, status: status, note: 'Created' }],
+      broker: pers.broker, currency: pers.currency, accountAlias: pers.accountAlias, commissionCents: pers.commissionCents, exchangeFeeCents: pers.exchangeFeeCents, riskAlert: pers.riskAlert, changeLog: []
     } };
   }
 
@@ -101,7 +136,8 @@
   // Accounts saved by earlier versions (e.g. the default account) lack newer fields. Fill them in without losing anything.
   function normalizeAccount(a) {
     var cat = CATEGORIES.indexOf(a.category) >= 0 ? a.category : 'other', allowed = STATUSES[cat];
-    return Object.assign({ note: '', startingBalanceCents: null, firmSlug: null, productName: null, template: null, startedOn: ymd(a.createdAt || Date.now()) }, a, {
+    return Object.assign({ note: '', startingBalanceCents: null, firmSlug: null, productName: null, template: null, startedOn: ymd(a.createdAt || Date.now()), broker: null, currency: 'USD', accountAlias: '', commissionCents: null, exchangeFeeCents: null, riskAlert: null }, a, {
+      changeLog: Array.isArray(a.changeLog) ? a.changeLog : [],
       category: cat, status: allowed.indexOf(a.status) >= 0 ? a.status : allowed[0], archived: !!a.archived,
       dd: a.dd && typeof a.dd === 'object' ? { draft: a.dd.draft && typeof a.dd.draft === 'object' ? a.dd.draft : null, versions: Array.isArray(a.dd.versions) ? a.dd.versions : [] } : { draft: null, versions: [] },
       payoutRules: a.payoutRules && typeof a.payoutRules === 'object' && !Array.isArray(a.payoutRules) ? a.payoutRules : {},
@@ -109,7 +145,7 @@
   }
 
   var api = { normalizeAccount: normalizeAccount, CATEGORIES: CATEGORIES, STATUSES: STATUSES, RULE_FIELDS: RULE_FIELDS, FIELD_LABEL: FIELD_LABEL, STALE_DAYS: STALE_DAYS,
-    templateRules: templateRules, newAccount: newAccount, editRule: editRule, setStatus: setStatus, ruleAge: ruleAge, accountStats: accountStats, daysBetween: daysBetween, ymd: ymd };
+    templateRules: templateRules, newAccount: newAccount, editDetails: editDetails, moneyIn: moneyIn, CURRENCIES: CURRENCIES, editRule: editRule, setStatus: setStatus, ruleAge: ruleAge, accountStats: accountStats, daysBetween: daysBetween, ymd: ymd };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.TTAccountsCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -6,7 +6,7 @@
 (function () {
   'use strict';
   var root = document.getElementById('iRoot'); if (!root) return;
-  var I = window.TTImport, TV = window.TTTradovate, J = window.TTJournalCore, U = window.TTUI, DB = window.TTDB, ST = window.TTStore, AC = window.TTAccountsCore, INST = window.TTInstruments;
+  var I = window.TTImport, DD = window.TTDedupe, TV = window.TTTradovate, J = window.TTJournalCore, U = window.TTUI, DB = window.TTDB, ST = window.TTStore, AC = window.TTAccountsCore, INST = window.TTInstruments;
   var esc = U.esc, $ = function (s, r) { return (r || root).querySelector(s); };
   var BROWSER_TZ = (function () { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } })();
   var TZS = [['as-is', 'No conversion (times are already in my journal time zone)'], ['UTC', 'UTC'], ['America/New_York', 'US Eastern (New York)'], ['America/Chicago', 'US Central (Chicago)'], ['America/Denver', 'US Mountain (Denver)'], ['America/Los_Angeles', 'US Pacific (Los Angeles)'], ['Europe/London', 'London'], ['Europe/Berlin', 'Central Europe (Berlin)'], ['Asia/Tokyo', 'Tokyo'], ['Australia/Sydney', 'Sydney']];
@@ -14,25 +14,26 @@
   var DEF_PREF = { fileTz: 'as-is', dateOrder: 'mdy', accountMap: {}, noAcct: '', feeTemplate: {}, applyFees: true, autoSession: true, defaults: { strategy: '', tags: '' }, keepCopy: false, remember: true };
   var COPY_LIMIT = 1500000;
   var S = { step: 'file', loaded: false, err: null, accounts: [], history: [], templates: [], fileName: '', fileSize: 0, parsed: null, mode: 'fills', mapping: {}, opts: { dateOrder: 'mdy', fileTz: 'as-is', feesPerContract: false }, accountId: 'acct-default', accountMap: {}, plan: null, tplName: '', usedTemplate: null, busy: false, msg: '',
-    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, guideOpen: false, nearMiss: null };
+    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, upd: {}, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, guideOpen: false, nearMiss: null };
 
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), ST.list('import'), ST.list('template'), ST.getPref('tvImport', null)]); }).then(function (r) {
       S.accounts = r[0].map(AC.normalizeAccount).filter(function (a) { return !a.archived; }).sort(function (a, b) { return a.createdAt - b.createdAt; });
-      S.history = r[1].sort(function (a, b) { return b.at - a.at; }); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
+      S.history = r[1].sort(function (a, b) { return b.at - a.at; });
+      DB.getByIndex('docs', 'kind', 'dupe').then(function (d) { var n = d.filter(function (x) { return !x.voided && (x.status === 'review' || x.status === 'later'); }).length; if (n !== S.pendingReview) { S.pendingReview = n; if (S.step === 'file') render(); } }).catch(function () {}); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
       if (r[3] && typeof r[3] === 'object') S.pref = Object.assign(JSON.parse(JSON.stringify(DEF_PREF)), r[3], { defaults: Object.assign({}, DEF_PREF.defaults, r[3].defaults || {}) });
       if (!S.accounts.some(function (a) { return a.id === S.accountId; }) && S.accounts.length) S.accountId = S.accounts[0].id;
     }).catch(function (e) { S.err = (e && e.message) || 'Could not open the local database.'; S.loaded = true; });
   }
   function savePref() { return ST.setPref('tvImport', S.pref).catch(function () {}); }
   function acctName(id) { var a = S.accounts.filter(function (x) { return x.id === id; })[0]; return a ? a.name : (id || '—'); }
-  function acctLabel(a) { return a.name + ' · ' + (a.category === 'prop' ? (a.status === 'funded' ? 'funded' : a.status === 'evaluation' ? 'evaluation' : 'prop') : a.category === 'sim' ? 'simulation' : a.category); }
+  function acctLabel(a) { return a.name + ' · ' + (window.TTLiveCore ? window.TTLiveCore.typeLabel(a).toLowerCase() : a.category); }
   function sessionsCfg() { try { var v = JSON.parse(localStorage.getItem('tt.sessions.v1') || 'null'); if (Array.isArray(v) && v.length) return v; } catch (e) {} return window.TTSessions ? window.TTSessions.DEFAULTS : []; }
   function money(c) { return c == null ? 'Unavailable' : J.fmtMoney(c); }
 
   /* =================== start screen =================== */
   function fileStep() {
-    var h = '<div class="panel im-hero"><h2>Import trades</h2><p class="note" style="margin-top:0"><b>1</b> Export or screenshot your Tradovate report &nbsp; <b>2</b> Drop it here &nbsp; <b>3</b> Check the preview and import. Everything is processed on this device; nothing is uploaded.</p>' +
+    var h = (S.pendingReview ? '<div class="ui-banner warn" role="status">' + U.plural(S.pendingReview, 'imported record') + ' still need' + (S.pendingReview === 1 ? 's' : '') + ' your decision. They are not counted until you decide. <button type="button" class="linkbtn" data-act="im-open-review">Open Import Review</button></div>' : '') + '<div class="panel im-hero"><h2>Import trades</h2><p class="note" style="margin-top:0"><b>1</b> Export or screenshot your Tradovate report &nbsp; <b>2</b> Drop it here &nbsp; <b>3</b> Check the preview and import. Everything is processed on this device; nothing is uploaded.</p>' +
       '<label class="dropzone" id="im-drop" for="im-file" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/></svg><b>Drop files here or tap to choose</b><span>Tradovate CSV (Orders or Performance), any trades or fills CSV, or screenshots (PNG, JPG). Several at once is fine.</span></label>' +
       '<input id="im-file" class="vh" type="file" multiple accept=".csv,.txt,.tsv,text/csv,text/plain,image/png,image/jpeg,image/webp">' +
       '<div class="ui-row im-actions"><button type="button" class="btn" data-act="im-clip">PASTE FROM CLIPBOARD</button><button type="button" class="btn ghost" data-act="im-paste-toggle" aria-expanded="' + S.pasteOpen + '">PASTE TEXT</button><button type="button" class="btn ghost" data-act="im-guide">HOW TO EXPORT FROM TRADOVATE</button></div>' +
@@ -71,24 +72,97 @@
   }
   function historyPanel() {
     if (!S.history.length) return '';
-    return '<div class="panel"><h2>Import history</h2><ul class="ui-list">' + S.history.map(function (h) {
-      var rb = h.rolledBack, c = h.counts || {}, nr = (c.possible || 0) + (c.ambiguous || 0) + (c.problems || 0) + (c.partial || 0);
-      var badge = h.mode === 'summary' ? '<span class="ui-badge">reference</span>' : rb ? '<span class="ui-badge warn">rolled back</span>' : nr ? '<span class="ui-badge warn">imported · ' + nr + ' to review</span>' : '<span class="ui-badge good">imported</span>';
+    return '<div class="panel" id="im-history"><h2>Import history</h2><ul class="ui-list">' + S.history.map(function (h) {
+      var rb = h.rolledBack, c = h.counts || {}, nr = c.review != null ? c.review : (c.possible || 0) + (c.ambiguous || 0) + (c.partial || 0), bad = c.invalid != null ? c.invalid : (c.problems || 0);
+      var badge = h.mode === 'summary' ? '<span class="ui-badge">reference</span>' : rb ? '<span class="ui-badge warn">undone</span>' : nr ? '<span class="ui-badge warn">' + nr + ' to review</span>' : (c.trades || c.updated) ? '<span class="ui-badge good">imported</span>' : '<span class="ui-badge">nothing new</span>';
       return '<li class="m-row"><div><b>' + esc(h.fileName || 'file') + '</b> ' + badge + '<div class="note" style="margin:2px 0 0">' + esc(new Date(h.at).toLocaleString()) + ' · ' + esc(h.report ? h.report.map(function (r) { return REPORT_NAME[r] || r; }).join(' + ') : h.mode) +
-        (h.from ? ' · trades ' + esc(h.from) + (h.to && h.to !== h.from ? ' to ' + esc(h.to) : '') : '') + ' · ' + esc((h.accountIds || [h.accountId]).filter(Boolean).map(acctName).join(', ')) +
-        (h.mode === 'summary' ? '' : '<br>' + (c.detected != null ? c.detected + ' found · ' : '') + U.plural(c.trades || 0, 'imported', 'imported') + ' · ' + ((c.duplicates || 0) + (c.deselected || 0)) + ' skipped' + (nr ? ' · ' + nr + ' need review' : '')) +
-        (rb ? '<br>Rolled back ' + esc(new Date(rb.at).toLocaleString()) + ': ' + rb.removed + ' removed' + (rb.kept ? ', ' + rb.kept + ' kept (edited or have screenshots)' : '') : '') + '</div></div><div class="ui-row">' +
+        (h.from ? ' · trades ' + esc(h.from) + (h.to && h.to !== h.from ? ' to ' + esc(h.to) : '') : '') + ' · ' + esc((h.accountIds || [h.accountId]).filter(Boolean).map(acctName).join(', ') || '—') +
+        (h.mode === 'summary' ? '' : '<br>' + (c.rows != null ? c.rows + ' rows · ' : '') + (c.detected != null ? c.detected + ' trades found · ' : '') + (c.trades || 0) + ' new · ' + (c.duplicates || 0) + ' duplicates skipped' + (c.updated ? ' · ' + c.updated + ' updated' : '') + (nr ? ' · ' + nr + ' to review' : '') + (bad ? ' · ' + bad + ' unreadable' : '') + (c.deselected ? ' · ' + c.deselected + ' unticked' : '')) +
+        '<br><small>Import id ' + esc(h.id) + '</small>' +
+        (rb ? '<br>Undone ' + esc(new Date(rb.at).toLocaleString()) + ': ' + rb.removed + ' removed' + (rb.reverted ? ', ' + rb.reverted + ' updates reversed' : '') + (rb.kept || rb.keptUpdates ? ', ' + ((rb.kept || 0) + (rb.keptUpdates || 0)) + ' kept (edited since, or have screenshots)' : '') : '') + '</div></div><div class="ui-row">' +
         (h.copies && h.copies.length ? '<button class="btn ghost sm" data-act="im-reopen" data-id="' + esc(h.id) + '">RE-OPEN</button>' : '') +
-        (h.mode === 'summary' ? '<button class="btn ghost sm" data-act="im-view-sum" data-id="' + esc(h.id) + '">VIEW</button>' : rb ? '' : '<button class="btn ghost sm" data-act="im-rollback" data-id="' + esc(h.id) + '">ROLL BACK</button>') + '</div></li>'; }).join('') + '</ul>' +
-      '<p class="note">Trades that needed review were not imported. To finish them, re-open the saved copy (if kept) or drop the same report again: trades already imported are recognised and skipped, and the rest appear for review.</p></div>';
+        (h.mode === 'summary' ? '<button class="btn ghost sm" data-act="im-view-sum" data-id="' + esc(h.id) + '">VIEW</button>' : rb ? '' : '<button class="btn ghost sm" data-act="im-rollback" data-id="' + esc(h.id) + '">UNDO IMPORT</button>') + '</div></li>'; }).join('') + '</ul>' +
+      '<p class="note">Skipped duplicates and records that need a decision are kept in <button type="button" class="linkbtn" data-act="im-open-review">Import Review</button>. They never count in your P&amp;L unless you restore them.</p></div>';
   }
+
+  /* =================== duplicate summary, review and commit (shared by every import method) =================== */
+  function m$(c, sign) { return c == null ? 'unknown' : J.fmtMoney(c, sign); }
+  function nUpd(plans) { var n = 0; plans.forEach(function (p) { p.updates.forEach(function (x) { if (DD.wantsUpdate(x, S.upd)) n++; }); }); return n; }
+  function commitLabel(nNew, nU) { return nNew && nU ? 'IMPORT ' + U.plural(nNew, 'NEW TRADE') + ' + ' + nU + ' UPDATE' + (nU === 1 ? '' : 'S') : nNew ? 'IMPORT ' + U.plural(nNew, 'NEW TRADE') : 'APPLY ' + nU + ' UPDATE' + (nU === 1 ? '' : 'S'); }
+  function rowText(t, c) { return t.date + (t.time ? ' ' + t.time : '') + ' · ' + t.contract + ' ' + t.side + ' ' + t.contracts + ' · ' + (c && c.isClosed ? m$(c.grossCents, true) + ' gross' : 'open'); }
+  function dupSummary(plans, unreadable) {
+    var n = { det: 0, nw: 0, ex: 0, up: 0, po: 0, co: 0 }, add = [], upNet = 0, upKnown = true, unc = [];
+    plans.forEach(function (p) {
+      n.nw += p.trades.length; n.ex += p.exact.length; n.up += p.updates.length; n.po += p.possible.length + p.ambiguous.length; n.co += p.conflicts.length;
+      p.trades.forEach(function (x) { if (!S.off[x.fp]) add.push({ trade: x.trade, c: x.c }); });
+      p.updates.forEach(function (x) {
+        if (!DD.wantsUpdate(x, S.upd)) return; var ex = S.ex && S.ex.cur[x.d.existingId]; if (!ex) return;
+        var before = J.compute(ex), after = J.compute(DD.applyUpdate(ex, x.trade, x.d.mode));
+        if (before.netCents == null || after.netCents == null) { if (after.grossCents !== before.grossCents) upKnown = false; } else upNet += after.netCents - before.netCents;
+      });
+      p.possible.concat(p.ambiguous, p.conflicts).forEach(function (x) { unc.push({ trade: x.trade, c: x.c }); });
+    });
+    n.det = n.nw + n.ex + n.up + n.po + n.co;
+    var im = DD.impact(add), ui = DD.impact(unc);
+    var h = '<div class="panel im-sum" role="status" aria-live="polite"><h2>Import preview</h2><ul class="ui-list im-cls">' +
+      '<li><span>Trades detected</span><b>' + n.det + '</b></li><li class="good"><span>New trades</span><b>' + n.nw + '</b></li><li><span>Exact duplicates (skipped)</span><b>' + n.ex + '</b></li>' +
+      '<li class="' + (n.up ? 'warn' : '') + '"><span>Updated information offered</span><b>' + n.up + '</b></li><li class="' + (n.po ? 'warn' : '') + '"><span>Possible duplicates (held)</span><b>' + n.po + '</b></li>' +
+      '<li class="' + (n.co ? 'bad' : '') + '"><span>Conflicting records (held)</span><b>' + n.co + '</b></li><li class="' + (unreadable ? 'bad' : '') + '"><span>Rows that could not be read</span><b>' + (unreadable || 0) + '</b></li></ul>' +
+      '<p class="im-will"><b>Will be added: ' + U.plural(add.length, 'trade') + '</b>' + (nUpd(plans) ? ' · ' + nUpd(plans) + ' existing trade' + (nUpd(plans) === 1 ? '' : 's') + ' updated' : '') + '</p>' +
+      '<p class="note">Estimated change to your journal P&amp;L: <b>' + (im.closed ? m$(im.grossCents, true) + ' gross' : 'none') + '</b>' + (im.closed ? ' · net ' + (im.netCents == null ? '<b>unknown</b> (' + im.feesUnknown + ' without fees)' : '<b>' + m$(im.netCents, true) + '</b>') : '') +
+      (nUpd(plans) ? ' · updates change net by ' + (upKnown ? '<b>' + m$(upNet, true) + '</b>' : '<b>an unknown amount</b>') : '') + (im.open ? ' · ' + U.plural(im.open, 'open position') + ' (no P&amp;L yet)' : '') + '. Confirmed values come from closed trades with known fees.</p>' +
+      (unc.length ? '<p class="note warnline">Uncertain and NOT counted: ' + U.plural(unc.length, 'held record') + (ui.closed ? ' worth ' + m$(ui.grossCents, true) + ' gross if they were separate trades' : '') + '. Decide in Import Review; nothing is added until you do.</p>' : '') + '</div>';
+    var cross = crossAccount(plans); if (cross) h += '<div class="ui-banner warn">' + esc(cross) + '</div>';
+    return h;
+  }
+  // Same trades already in ANOTHER account (copy trading is normal; a wrong account choice is not). Never blocks, only warns.
+  function crossAccount(plans) {
+    if (!S.ex) return null; var other = {}, byFp = {}, n = 0, hit = 0;
+    S.ex.list.forEach(function (t) { var k = DD.fingerprint(Object.assign({}, t, { accountId: '' })); (byFp[k] || (byFp[k] = [])).push(t.accountId || 'acct-default'); });
+    plans.forEach(function (p) { p.trades.forEach(function (x) { n++; var a = x.trade.accountId || 'acct-default', l = byFp[DD.fingerprint(Object.assign({}, x.trade, { accountId: '' }))] || []; var o = l.filter(function (y) { return y !== a; })[0]; if (o) { hit++; other[o] = 1; } }); });
+    if (n < 3 || hit < n / 2) return null;
+    return hit + ' of these ' + n + ' new trades are identical to trades already in ' + Object.keys(other).map(acctName).join(', ') + '. If you trade the same signals in several accounts this is normal. Otherwise check that you chose the right account above.';
+  }
+  function dupPanels(plans) {
+    var h = '', ups = [], rev = [], con = [], ex = [];
+    plans.forEach(function (p) { ups = ups.concat(p.updates); rev = rev.concat(p.possible, p.ambiguous); con = con.concat(p.conflicts); ex = ex.concat(p.exact); });
+    if (ups.length) h += '<div class="panel"><h2>Updated information (' + ups.length + ')</h2><p class="note" style="margin-top:0">These trades are already in your journal. Ticked updates change only trading facts (fees or fills); your notes, tags and screenshots stay. Untick to keep the journal as it is; unticked ones wait in Import Review.</p><ul class="ui-list">' +
+      ups.map(function (x) { var k = DD.updKey(x), on = DD.wantsUpdate(x, S.upd), exT = S.ex && S.ex.cur[x.d.existingId]; return '<li><label class="ui-chk" style="margin:0"><input type="checkbox" data-upd="' + esc(k) + '"' + (on ? ' checked' : '') + '><span><b>' + esc(rowText(x.trade, x.c)) + '</b><div class="note" style="margin:2px 0 0">' + esc(x.d.reason) +
+        (x.d.mode === 'fees' && exT ? ' Fees: ' + esc(exT.feesCents == null ? 'unknown' : J.fmtMoney(exT.feesCents)) + ' → ' + esc(J.fmtMoney(x.trade.feesCents)) + '.' : '') + '</div></span></label></li>'; }).join('') + '</ul></div>';
+    if (rev.length || con.length) h += '<div class="panel"><h2>Needs your decision (' + (rev.length + con.length) + ')</h2><p class="note" style="margin-top:0">Held back and saved to Import Review, where you can compare them side by side. Tick a possible duplicate only if you are sure it is a separate trade.</p><ul class="ui-list">' +
+      rev.map(function (x) { return '<li><label class="ui-chk" style="margin:0"><input type="checkbox" data-allow="' + esc(x.fp) + '"' + (S.allow[x.fp] ? ' checked' : '') + '><span><b>' + esc(rowText(x.trade, x.c)) + '</b> <span class="ui-badge warn">possible · ' + esc(x.d.conf) + '</span><div class="note" style="margin:2px 0 0">' + esc(x.d.reason) + ' Tick to import it as a separate trade.</div></span></label></li>'; }).join('') +
+      con.map(function (x) { return '<li><span><b>' + esc(rowText(x.trade, x.c)) + '</b> <span class="ui-badge bad">conflict</span><div class="note" style="margin:2px 0 0">' + esc(x.d.reason) + (x.d.fields ? ' Differs in: ' + esc(x.d.fields.join(', ')) + '.' : '') + '</div></span></li>'; }).join('') +
+      '</ul>' + (rev.length ? '<button type="button" class="btn ghost sm" data-act="im-recheck">UPDATE PREVIEW</button>' : '') + '</div>';
+    if (ex.length) h += '<details class="panel im-exact"><summary>Exact duplicates skipped (' + ex.length + ')</summary><p class="note">Already in your journal, so they are not added again and not counted twice. Each is recorded in Import Review.</p><ul class="ui-list">' +
+      ex.slice(0, 60).map(function (x) { return '<li><span>' + esc(rowText(x.trade, x.c)) + '<div class="note" style="margin:2px 0 0">' + esc(x.d.reason) + ' Certainty: ' + esc(x.d.conf) + '.</div></span></li>'; }).join('') + (ex.length > 60 ? '<li><span class="note">…and ' + (ex.length - 60) + ' more</span></li>' : '') + '</ul></details>';
+    return h;
+  }
+  function newBatchId() { return 'imp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  // Writes one import in a single transaction: new trades, accepted updates, archive records and the history entry. All or nothing.
+  function saveImport(batchId, plans, meta, allowEmpty) {
+    var now = Date.now(), out = DD.buildCommit(plans, { off: S.off, upd: S.upd }, { batchId: batchId, now: now, current: S.ex.cur });
+    if (!out.puts.length && !out.dupes.length && !allowEmpty) throw new Error('nothing');
+    var accts = {}; out.puts.forEach(function (t) { accts[t.accountId || DB.DEFAULT_ACCOUNT_ID] = 1; });
+    var doc = Object.assign({ id: batchId, kind: 'import', at: now, createdAt: now, updatedAt: now, accountId: Object.keys(accts)[0] || null, accountIds: Object.keys(accts), counts: out.counts, tradeIds: out.tradeIds, hashes: out.hashes, updates: out.updates,
+      dupeIds: out.dupes.map(function (d) { return d.id; }), rolledBack: null, result: out.counts.trades || out.counts.updated ? 'imported' : out.counts.duplicates ? 'nothing new' : 'saved' }, meta);
+    var ops = out.puts.map(function (t) { return { store: 'trades', type: 'put', value: t }; }).concat(out.dupes.map(function (d) { return { store: 'docs', type: 'put', value: d }; }));
+    ops.push({ store: 'docs', type: 'put', value: doc }); ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: now, type: 'import', details: { batchId: batchId, trades: out.counts.trades, updated: out.counts.updated, duplicates: out.counts.duplicates, review: out.counts.review, file: doc.fileName } } });
+    return DB.batch(ops).then(function () { return { c: out.counts, ids: out.tradeIds, batchId: batchId }; });
+  }
+  function doneMsg(r) {
+    var c = r.c, parts = [];
+    if (c.trades) parts.push('Imported ' + U.plural(c.trades, 'trade')); if (c.updated) parts.push(U.plural(c.updated, 'trade') + ' updated');
+    if (c.duplicates) parts.push(U.plural(c.duplicates, 'duplicate') + ' skipped'); if (c.review) parts.push(c.review + ' held for review');
+    return parts.length ? parts.join(' · ') + '.' : (r.sums ? 'Summary saved.' : 'Nothing was added.');
+  }
+  function afterSave() { ST.invalidate(); S.busy = false; try { window.dispatchEvent(new Event('tt:journal-changed')); window.dispatchEvent(new Event('tt:dupes-changed')); } catch (e) {} if (window.TTJournal) window.TTJournal.reload(); }
 
   /* =================== reading what you give it =================== */
   function readText(file) { return new Promise(function (res, rej) { var rd = new FileReader(); rd.onerror = function () { rej(new Error('Could not read ' + file.name + '.')); }; rd.onload = function () { res(String(rd.result)); }; rd.readAsText(file); }); }
   function isImage(f) { return /^image\//.test(f.type || '') || /\.(png|jpe?g|webp)$/i.test(f.name || ''); }
   function intake(items) {
     // items: [{file}|{text, name}|{image: blob, name}]
-    S.msg = ''; S.nearMiss = null; S.sources = []; S.queue = []; S.done = null; S.tv = null; S.pick = {}; S.noAcct = {}; S.allow = {}; S.off = {}; S.userTotal = ''; S.okMismatch = false; S.showN = 50;
+    S.msg = ''; S.nearMiss = null; S.sources = []; S.queue = []; S.done = null; S.tv = null; S.pick = {}; S.noAcct = {}; S.allow = {}; S.off = {}; S.upd = {}; S.userTotal = ''; S.okMismatch = false; S.showN = 50;
     var jobs = items.map(function (it) {
       if (it.image || (it.file && isImage(it.file))) { S.queue.push({ name: it.name || (it.file && it.file.name) || 'screenshot.png', blob: it.image || it.file }); return Promise.resolve(); }
       if (it.file && it.file.size > I.LIMITS.chars) return Promise.reject(new Error(it.file.name + ' is larger than ' + (I.LIMITS.chars / 1e6) + ' MB.'));
@@ -150,22 +224,33 @@
   function reviewCollect() { root.querySelectorAll('[data-cell]').forEach(function (e) { var p = e.getAttribute('data-cell').split(':'); S.review.rows[+p[0]][+p[1]] = e.value.trim(); }); }
 
   /* =================== Tradovate preview =================== */
+  // Everything the duplicate engine needs about the journal as it is saved right now (read fresh for every preview and again inside the save).
   function existingIndex() {
-    return DB.getAll('trades').then(function (list) { var keys = new Set(), fps = new Set(); list.forEach(function (t) { (t.srcKeys || []).forEach(function (k) { keys.add(k); }); var n = J.normalizeTrade(t); if (n.ok) fps.add(I.fingerprint(n.trade)); }); return { keys: keys, fps: fps }; });
+    return DB.getAll('trades').then(function (list) { var ok = [], cur = {}; list.forEach(function (t) { var n = J.normalizeTrade(t); if (n.ok) { ok.push(n.trade); cur[n.trade.id] = n.trade; } }); return { ix: DD.index(ok, J.compute), list: ok, cur: cur }; });
+  }
+  // One import at a time across tabs (two tabs saving the same report cannot both add it): the plan is rebuilt and saved inside the lock.
+  function withLock(fn) { try { if (navigator.locks && navigator.locks.request) return navigator.locks.request('trc-import', fn); } catch (e) {} return fn(); }
+  // A report without fees going into an account with its own commission settings gets ESTIMATED fees (marked as such). Real fees from a
+  // later report replace them (offered as "real fees" in the preview).
+  function withAccountFees(fn) {
+    return function (raw, keys) {
+      fn(raw, keys); if (raw.feesCents != null || !window.TTLiveCore) return;
+      var a = S.accounts.filter(function (x) { return x.id === raw.accountId; })[0], est = a ? window.TTLiveCore.estimateFees(a, raw) : null;
+      if (est != null) { raw.feesCents = est; raw.feeSource = 'template'; }
+    };
   }
   function accountMapNow() { var m = Object.assign({}, S.pref.accountMap || {}); Object.keys(S.pick).forEach(function (k) { if (S.pick[k]) m[k] = S.pick[k]; }); return m; }
   function feeTpl() { return S.pref.feeTemplate || {}; }
   function buildTv(batchId) {
-    return existingIndex().then(function (ix) {
-      var out = [], keys = ix.keys, fps = ix.fps, map = accountMapNow(), tv = S.sources.filter(function (s) { return s.det.report !== 'summary'; });
+    return existingIndex().then(function (ex) {
+      var out = [], map = accountMapNow(); S.ex = ex; var tv = S.sources.filter(function (s) { return s.det.report !== 'summary'; });
       var defaults = { strategy: (S.pref.defaults.strategy || '').trim(), tags: (S.pref.defaults.tags || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean) };
       tv.forEach(function (src) {
         var o = { report: src.det.report, fileTz: S.pref.fileTz, dateOrder: S.pref.dateOrder, targetTz: BROWSER_TZ, accountMap: map, defaultAccountId: S.noAcct[src.id] || null, feeTemplate: feeTpl(), applyFeeTemplate: !!S.pref.applyFees,
           autoSession: !!S.pref.autoSession, sessions: sessionsCfg(), defaults: defaults.strategy || defaults.tags.length ? defaults : null, allowFp: S.allow };
         if (batchId) o.batchId = batchId;
         var rd = TV.read(src.parsed, src.det.report, o);
-        var p = I.plan(src.parsed, Object.assign({}, o, { mode: 'fills', preRead: rd, pnlByKey: rd.pnlByKey, ambiguousKeys: rd.ambiguousKeys, enrich: TV.enricher(rd, o), fingerprints: fps }), keys, J);
-        p.trades.forEach(function (x) { x.keys.forEach(function (k) { keys.add(k); }); fps.add(x.fp); });
+        var p = I.plan(src.parsed, Object.assign({}, o, { mode: 'fills', preRead: rd, pnlByKey: rd.pnlByKey, ambiguousKeys: rd.ambiguousKeys, enrich: withAccountFees(TV.enricher(rd, o)), dedupe: { ix: ex.ix, src: src.id } }), null, J);
         var ut = tv.length === 1 && S.userTotal.trim() !== '' ? I.parseNumber(S.userTotal) : null;
         out.push({ src: src, rd: rd, plan: p, rec: TV.reconcile(p, rd, ut == null ? null : Math.round(ut * 100)), noAcctCol: !Object.keys(rd.info.accounts).length });
       });
@@ -184,7 +269,7 @@
   function included() { var all = []; (S.tv || []).forEach(function (x) { x.plan.trades.forEach(function (t) { if (!S.off[t.fp]) all.push(t); }); }); return all; }
   function acctOptions(sel, withNew) {
     return '<option value="">— choose —</option>' + S.accounts.map(function (a) { return '<option value="' + esc(a.id) + '"' + (sel === a.id ? ' selected' : '') + '>' + esc(acctLabel(a)) + '</option>'; }).join('') +
-      (withNew ? '<optgroup label="Create a new account"><option value="__new:evaluation">New prop evaluation account</option><option value="__new:funded">New prop funded account</option><option value="__new:live">New live account</option><option value="__new:sim">New simulation account</option></optgroup>' : '');
+      (withNew ? '<optgroup label="Create a new account"><option value="__new:evaluation">New prop evaluation account</option><option value="__new:funded">New prop funded account</option><option value="__new:live">New personal live account</option><option value="__new:sim">New personal demo / paper account</option></optgroup>' : '');
   }
   function tvStep() {
     var m = J.fmtMoney, tv = S.tv, inc = included(), map = accountMapNow(), bl = blockers();
@@ -193,8 +278,7 @@
     var h = '<div class="ui-sec"><h2>Preview</h2><button class="btn ghost sm" data-act="im-cancel">‹ START AGAIN</button></div>';
     h += '<div class="panel"><ul class="ui-list">' + tv.map(function (x) { return '<li><span><b>' + esc(x.src.name) + '</b><div class="note" style="margin:2px 0 0">' + esc(x.src.det.title) + ' · ' + esc(x.src.det.basis) + (x.rd.info.from ? ' · trades ' + esc(x.rd.info.from) + (x.rd.info.to !== x.rd.info.from ? ' to ' + esc(x.rd.info.to) : '') : '') + '</div></span><span class="ui-badge' + (x.src.det.verified === 'published' ? ' good' : ' warn') + '">' + esc(REPORT_NAME[x.src.det.report]) + '</span></li>'; }).join('') + '</ul>' +
       S.sources.filter(function (s) { return s.det.report === 'summary'; }).map(function (s) { return '<p class="note">' + esc(s.name) + ' is a summary report with no individual trades. It will be saved as a reference next to this import.</p>'; }).join('') + (S.nearMiss ? '<p class="note warnline">' + esc(S.nearMiss) + '</p>' : '') + '</div>';
-    h += '<div class="ui-grid g2">' + U.stat('Ready to import', String(inc.length), U.plural(inc.length, 'new trade'), inc.length ? 'pos' : 'dim') + U.stat('Already in journal', String(tot.dup), 'skipped as duplicates') +
-      U.stat('Need your review', String(tot.poss + tot.amb + tot.partial), 'not imported unless you include them') + U.stat('Could not be read', String(tot.prob + tot.uns), 'rows left out, reasons below') + '</div>';
+    h += dupSummary(tv.map(function (x) { return x.plan; }), tot.prob + tot.uns);
     // accounts
     var ra = rawAccounts(), na = tv.filter(function (x) { return x.noAcctCol; });
     if (ra.length || na.length) {
@@ -212,10 +296,7 @@
     if (Object.keys(probs).length) h += '<div class="ui-banner bad"><b>Rows that could not be read</b><ul class="ui-list">' + Object.keys(probs).map(function (k) { return '<li><span>' + esc(k) + '</span><b>' + probs[k] + '</b></li>'; }).join('') + '</ul></div>';
     if (Object.keys(uns).length) h += '<div class="ui-banner warn"><b>Contracts not supported yet (skipped):</b> ' + Object.keys(uns).slice(0, 12).map(function (k) { return esc(k) + ' × ' + uns[k]; }).join(', ') + '. Supported: ' + esc(J.INST_LIST_TEXT) + '.</div>';
     if (tot.open) h += '<div class="ui-banner warn">' + U.plural(tot.open, 'position') + ' still open at the end of the report ' + (tot.open === 1 ? 'is' : 'are') + ' imported as open trades. Add the exit later or import a report that includes it.</div>';
-    if (tot.partial) h += '<div class="ui-banner warn"><b>' + U.plural(tot.partial, 'trade') + ' partly imported before</b> (this report overlaps an earlier one). They are skipped so nothing is doubled. Roll back the earlier import and import the larger report to include them.</div>';
-    // review list
-    var rev = []; tv.forEach(function (x) { x.plan.possible.forEach(function (t) { rev.push({ t: t, why: 'Looks the same as a trade already in your journal (same account, contract, time, size and prices) - maybe from another report or entered by hand.' }); }); x.plan.ambiguous.forEach(function (t) { rev.push({ t: t, why: 'Buy and sell in the same second without ids, so the order of fills is uncertain. Check the entry and exit.' }); }); });
-    if (rev.length) h += '<div class="panel"><h2>Needs your review (' + rev.length + ')</h2><p class="note" style="margin-top:0">These are not imported unless you tick them.</p><ul class="ui-list">' + rev.map(function (r, i) { var t = r.t; return '<li><label class="ui-chk" style="margin:0"><input type="checkbox" data-allow="' + esc(t.fp) + '"' + (S.allow[t.fp] ? ' checked' : '') + '><span><b>' + esc(t.trade.date + ' ' + (t.trade.time || '') + ' ' + t.trade.contract + ' ' + t.trade.side + ' ' + t.trade.contracts) + '</b> · ' + esc(t.c.grossCents == null ? 'open' : m(t.c.grossCents, true)) + '<div class="note" style="margin:2px 0 0">' + esc(r.why) + '</div></span></label></li>'; }).join('') + '</ul><button type="button" class="btn ghost sm" data-act="im-recheck">UPDATE PREVIEW</button></div>';
+    h += dupPanels(tv.map(function (x) { return x.plan; }));
     // table
     var all = []; tv.forEach(function (x) { x.plan.trades.forEach(function (t) { all.push(t); }); });
     if (all.length) {
@@ -225,40 +306,40 @@
         (all.length > S.showN ? '<button type="button" class="btn ghost wide" data-act="im-more">SHOW ' + Math.min(50, all.length - S.showN) + ' MORE (' + (all.length - S.showN) + ' hidden)</button>' : '') + '</div>';
     }
     h += '<div class="panel">' + (bl.length ? '<div class="ui-banner warn" role="alert"><b>Before importing:</b><ul class="ui-list">' + bl.map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') + '</ul></div>' : '') +
-      (inc.length ? '<p class="note" style="margin-top:0">One step, all or nothing. You can roll it back from the import history afterwards.</p><button class="btn wide" data-act="im-tv-commit"' + (S.busy || bl.length ? ' disabled' : '') + '>IMPORT ' + U.plural(inc.length, 'TRADE') + '</button>' : (S.sources.some(function (s) { return s.det.report === 'summary'; }) ? '<button class="btn wide" data-act="im-tv-commit"' + (S.busy ? ' disabled' : '') + '>SAVE SUMMARY AS REFERENCE</button>' : U.empty('Nothing new to import', 'Every trade in this report is already in your journal, needs review, or could not be read. See the notes above.'))) + '</div>';
-    return h;
+      (inc.length || nUpd(tv.map(function (x) { return x.plan; })) ? '<p class="note" style="margin-top:0">One step, all or nothing. Duplicates are skipped and kept in Import Review. You can undo this import from the import history afterwards.</p><button class="btn wide" data-act="im-tv-commit"' + (S.busy || bl.length ? ' disabled' : '') + '>' + commitLabel(inc.length, nUpd(tv.map(function (x) { return x.plan; }))) + '</button><div class="ui-row" style="margin-top:8px"><button type="button" class="btn ghost sm" data-act="im-cancel">CANCEL IMPORT</button><button type="button" class="btn ghost sm" data-act="im-hist">IMPORT HISTORY</button></div>' : (S.sources.some(function (s) { return s.det.report === 'summary'; }) ? '<button class="btn wide" data-act="im-tv-commit"' + (S.busy ? ' disabled' : '') + '>SAVE SUMMARY AS REFERENCE</button>' :
+        tv.some(function (x) { return x.plan.exact.length || x.plan.updates.length || x.plan.possible.length || x.plan.conflicts.length || x.plan.ambiguous.length; }) ? '<p class="note" style="margin-top:0">Nothing new to add. Finishing records the skipped duplicates and held records in Import Review and the import history.</p><button class="btn wide" data-act="im-tv-commit"' + (S.busy || bl.length ? ' disabled' : '') + '>SKIP DUPLICATES AND FINISH</button><div class="ui-row" style="margin-top:8px"><button type="button" class="btn ghost sm" data-act="im-cancel">CANCEL IMPORT</button></div>' : U.empty('Nothing new to import', 'Every trade in this report is already in your journal, needs review, or could not be read. See the notes above.'))) + '</div>';
+    return h + historyPanel();
   }
   function tvCommit() {
     if (S.busy) return; var bl = blockers(); if (bl.length) { render(); return; }
     S.busy = true; render();
-    var batchId = 'imp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), offBefore = Object.assign({}, S.off);
-    buildTv(batchId).then(function () {
-      var now = Date.now(), ops = [], hashes = {}, ids = [], inc = [], accts = {}, from = null, to = null, c = { rows: 0, detected: 0, trades: 0, duplicates: 0, possible: 0, ambiguous: 0, partial: 0, problems: 0, unsupported: 0, deselected: 0 };
-      S.off = offBefore;
-      S.tv.forEach(function (x) { var p = x.plan; c.rows += p.rows; c.duplicates += p.duplicates; c.possible += p.possible.length; c.ambiguous += p.ambiguous.length; c.partial += p.partial.length; c.problems += Object.keys(p.problems).reduce(function (a, k) { return a + p.problems[k].n; }, 0) + p.invalid.length + p.tooBig; c.unsupported += Object.keys(p.unsupported).length;
-        c.detected += p.trades.length + p.duplicates + p.possible.length + p.ambiguous.length + p.partial.length;
-        p.trades.forEach(function (t) { if (S.off[t.fp]) { c.deselected++; return; } inc.push(t); }); if (x.rd.info.from && (!from || x.rd.info.from < from)) from = x.rd.info.from; if (x.rd.info.to && (!to || x.rd.info.to > to)) to = x.rd.info.to; });
-      inc.forEach(function (x) { var t = x.trade; t.createdAt = now; ops.push({ store: 'trades', type: 'put', value: t }); hashes[t.id] = I.tradeHash(t); ids.push(t.id); accts[t.accountId] = 1; });
-      c.trades = ids.length;
-      var sums = S.sources.filter(function (s) { return s.det.report === 'summary'; }).map(function (s) { return { name: s.name, data: TV.summaryOf(s.parsed) }; });
-      var copies = S.pref.keepCopy ? S.sources.filter(function (s) { return s.text && s.text.length <= COPY_LIMIT; }).map(function (s) { return { name: s.name, text: s.text }; }) : [];
-      var doc = { id: batchId, kind: 'import', at: now, createdAt: now, updatedAt: now, mode: ids.length ? 'tradovate' : 'summary', broker: 'tradovate', report: S.sources.map(function (s) { return s.det.report; }), fileName: S.sources.map(function (s) { return s.name; }).join(', ').slice(0, 200),
-        files: S.sources.map(function (s) { return { name: s.name, report: s.det.report, size: s.size, kind: s.kind }; }), fileSize: S.sources.reduce(function (a, s) { return a + (s.size || 0); }, 0), accountId: Object.keys(accts)[0] || null, accountIds: Object.keys(accts), from: from, to: to,
-        options: { fileTz: S.pref.fileTz, dateOrder: S.pref.dateOrder, applyFees: !!S.pref.applyFees }, counts: c, tradeIds: ids, hashes: hashes, rolledBack: null, summaries: sums, copies: copies,
-        reconcile: S.tv.map(function (x) { return { file: x.src.name, level: x.rec.level, items: x.rec.items.map(function (i) { return i.level + ': ' + i.text; }) }; }) };
-      if (!ids.length && !sums.length) throw new Error('nothing');
-      ops.push({ store: 'docs', type: 'put', value: doc }); ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: now, type: 'import', details: { batchId: batchId, trades: ids.length, file: doc.fileName, broker: 'tradovate' } } });
-      if (S.pref.remember) { var m = accountMapNow(); S.pref.accountMap = m; }
-      return DB.batch(ops).then(function () { return savePref(); }).then(function () { return { c: c, ids: ids, sums: sums.length }; });
+    var batchId = newBatchId(), offBefore = Object.assign({}, S.off);
+    withLock(function () {
+      return buildTv(batchId).then(function () {     // re-checked against the journal as it is now, inside the lock
+        S.off = offBefore; var from = null, to = null;
+        S.tv.forEach(function (x) { if (x.rd.info.from && (!from || x.rd.info.from < from)) from = x.rd.info.from; if (x.rd.info.to && (!to || x.rd.info.to > to)) to = x.rd.info.to; });
+        var sums = S.sources.filter(function (s) { return s.det.report === 'summary'; }).map(function (s) { return { name: s.name, data: TV.summaryOf(s.parsed) }; });
+        var copies = S.pref.keepCopy ? S.sources.filter(function (s) { return s.text && s.text.length <= COPY_LIMIT; }).map(function (s) { return { name: s.name, text: s.text }; }) : [];
+        var plans = S.tv.map(function (x) { return { file: x.src.name, report: x.src.det.report, plan: x.plan }; });
+        var meta = { mode: plans.some(function (p) { return p.plan.trades.length || p.plan.exact.length || p.plan.updates.length; }) ? 'tradovate' : 'summary', broker: 'tradovate', report: S.sources.map(function (s) { return s.det.report; }), fileName: S.sources.map(function (s) { return s.name; }).join(', ').slice(0, 200),
+          files: S.sources.map(function (s) { return { name: s.name, report: s.det.report, size: s.size, kind: s.kind }; }), fileSize: S.sources.reduce(function (a, s) { return a + (s.size || 0); }, 0), from: from, to: to,
+          options: { fileTz: S.pref.fileTz, dateOrder: S.pref.dateOrder, applyFees: !!S.pref.applyFees }, summaries: sums, copies: copies,
+          sourceIds: S.tv.map(function (x) { return { file: x.src.name, accounts: Object.keys(x.rd.info.accounts) }; }),
+          reconcile: S.tv.map(function (x) { return { file: x.src.name, level: x.rec.level, items: x.rec.items.map(function (i) { return i.level + ': ' + i.text; }) }; }) };
+        if (S.pref.remember) { var m = accountMapNow(); S.pref.accountMap = m; }
+        return saveImport(batchId, plans, meta, sums.length > 0).then(function (r) { r.sums = sums.length; return savePref().then(function () { return r; }); });
+      });
     }).then(function (r) {
-      ST.invalidate(); S.busy = false; try { window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} if (window.TTJournal) window.TTJournal.reload();
-      U.toast(r.ids.length ? 'Imported ' + U.plural(r.ids.length, 'trade') + '.' : 'Summary saved.');
+      afterSave();
+      U.toast(doneMsg(r));
       S.done = r; S.step = 'done'; S.tv = null; return load();
     }).then(function () { render(); window.scrollTo(0, 0); }).catch(function (e) { S.busy = false; U.toast(e && e.message === 'nothing' ? 'Nothing new to import.' : 'Could not save the import. Nothing was changed.', true); render(); });
   }
   function doneStep() {
-    var c = S.done.c, nr = c.possible + c.ambiguous + c.partial;
-    return '<div class="panel im-done" role="status"><h2>Import finished</h2><div class="ui-grid g2">' + U.stat('Imported', String(c.trades), 'trades added to your journal', c.trades ? 'pos' : 'dim') + U.stat('Skipped', String(c.duplicates + c.deselected), 'already in journal or unticked') + U.stat('Needed review', String(nr), 'not imported') + U.stat('Unreadable', String(c.problems), 'rows left out') + '</div>' +
+    var c = S.done.c, nr = c.review || 0;
+    return '<div class="panel im-done" role="status"><h2>Import finished</h2><div class="ui-grid g2">' + U.stat('Imported', String(c.trades), 'new trades added', c.trades ? 'pos' : 'dim') + U.stat('Duplicates skipped', String(c.duplicates), 'already in your journal' + (c.deselected ? ' · ' + c.deselected + ' unticked' : '')) +
+      U.stat('Updated', String(c.updated || 0), 'existing trades') + U.stat('To review', String(nr), 'held, not counted') + U.stat('Unreadable', String(c.invalid || 0), 'rows left out') + '</div>' +
+      (nr ? '<div class="ui-banner warn">' + U.plural(nr, 'record') + ' need' + (nr === 1 ? 's' : '') + ' your decision. <button type="button" class="linkbtn" data-act="im-open-review">Open Import Review</button></div>' : '') +
       (S.done.sums ? '<p class="note">' + U.plural(S.done.sums, 'summary report') + ' saved as reference in the import history.</p>' : '') +
       (c.trades ? '<p class="note">Your journal, calendar, dashboard, analytics and account trackers now include these trades. Notes, tags, emotions and screenshots are optional: add them any time from the journal.</p>' : '') +
       '<div class="ui-row" style="margin-top:12px">' + (c.trades ? '<button class="btn" data-act="im-goto-journal">VIEW IN JOURNAL</button>' : '') + '<button class="btn ghost" data-act="im-cancel">IMPORT ANOTHER</button></div></div>' + historyPanel();
@@ -298,11 +379,8 @@
   }
   function previewStep() {
     var p = S.plan, m = J.fmtMoney, h = '<div class="ui-sec"><h2>Preview</h2><button class="btn ghost sm" data-act="im-back">‹ BACK TO MAPPING</button></div>';
-    h += '<div class="ui-grid g2">' + U.stat('Will be imported', String(p.trades.length), U.plural(p.trades.length, 'new trade'), p.trades.length ? 'pos' : 'dim') + U.stat('Already imported', String(p.duplicates + p.possible.length), 'skipped as duplicates') +
-      U.stat('Rows in file', String(p.rows), p.fills != null ? p.fills + ' readable fills' : '') + U.stat('Need attention', String(Object.keys(p.problems).reduce(function (a, k) { return a + p.problems[k].n; }, 0) + p.invalid.length + p.partial.length + p.tooBig), 'rows or trades left out') + '</div>';
-    if (p.possible.length) h += '<div class="ui-banner warn">' + U.plural(p.possible.length, 'trade') + ' look the same as trades already in your journal (same account, contract, time, size and prices) and are skipped.</div>';
+    h += dupSummary([p], Object.keys(p.problems).reduce(function (a, k) { return a + p.problems[k].n; }, 0) + p.invalid.length + p.tooBig) + dupPanels([p]);
     if (p.openAtEnd) h += '<div class="ui-banner warn">' + U.plural(p.openAtEnd, 'position') + ' still open at the end of the file. ' + (p.openAtEnd === 1 ? 'It is' : 'They are') + ' imported as open trades (no exit yet). If your exits are in a later export, import that file after rolling this one back, or edit the trade.</div>';
-    if (p.partial.length) h += '<div class="ui-banner warn"><b>' + U.plural(p.partial.length, 'trade') + ' partly imported before.</b> Some of their fills are already in your journal and some are new (overlapping exports). They are skipped so nothing is half-imported or doubled. Roll back the earlier import and re-import the larger file to include them.</div>';
     if (p.tooBig) h += '<div class="ui-banner warn">' + U.plural(p.tooBig, 'trade') + ' would have more than ' + I.LIMITS.fillsPerTrade + ' fills and were left out.</div>';
     var us = Object.keys(p.unsupported); if (us.length) h += '<div class="ui-banner warn"><b>Contracts not supported yet (skipped):</b> ' + us.slice(0, 12).map(function (k) { return esc(k) + ' × ' + p.unsupported[k]; }).join(', ') + (us.length > 12 ? ', …' : '') + '. Only contracts with verified point values can be imported (' + esc(J.INST_LIST_TEXT) + ').</div>';
     var pk = Object.keys(p.problems); if (pk.length) h += '<div class="ui-banner bad"><b>Rows that could not be read</b><ul class="ui-list">' + pk.map(function (k) { return '<li><span>' + esc(k) + '<div class="note" style="margin:2px 0 0">first at file line ' + p.problems[k].rows.join(', ') + '</div></span><b>' + p.problems[k].n + '</b></li>'; }).join('') + '</ul></div>';
@@ -312,12 +390,13 @@
       h += '<div class="panel"><h2>First ' + Math.min(12, p.trades.length) + ' of ' + p.trades.length + '</h2><div class="ui-table-wrap"><table class="ui-table"><thead><tr><th>Date</th><th>Contract</th><th>Qty</th><th>Entry</th><th>Exits</th><th>Gross</th><th>Fees</th></tr></thead><tbody>' + p.trades.slice(0, 12).map(function (x) {
         var t = x.trade, c = x.c; return '<tr><td>' + esc(t.date + (t.time ? ' ' + t.time : '')) + '</td><td>' + esc(t.contract) + ' ' + esc(t.side) + '</td><td>' + t.contracts + (t.entries ? ' <small class="note">' + t.entries.length + ' fills</small>' : '') + '</td><td>' + esc(String(t.entry)) + '</td><td>' + (t.exits.length ? t.exits.length : '—') + (c.status !== 'closed' ? ' <small class="note">' + esc(c.status) + '</small>' : '') + '</td><td class="' + U.cls(c.grossCents) + '">' + (c.grossCents == null ? '—' : esc(m(c.grossCents, true))) + '</td><td>' + (c.feesCents == null ? '<small class="note">not entered</small>' : esc(m(c.feesCents))) + '</td></tr>'; }).join('') + '</tbody></table></div></div>';
       h += '<div class="panel"><p class="note" style="margin-top:0">Trades go into <b>' + esc(acctName(S.accountId)) + '</b>' + (Object.keys(S.accountMap).length ? ' (or the account you matched for each name)' : '') + '. You can roll this import back afterwards from the import history. Take a backup first if you like (Journal › Backup).</p>' +
-        '<button class="btn wide" data-act="im-commit"' + (S.busy ? ' disabled' : '') + '>IMPORT ' + U.plural(p.trades.length, 'TRADE') + '</button></div>';
-    } else h += U.empty('Nothing new to import', 'Every readable trade in this file is already in your journal, or the rows could not be read. Check the notes above.');
-    return h;
+        '<button class="btn wide" data-act="im-commit"' + (S.busy ? ' disabled' : '') + '>' + commitLabel(p.trades.filter(function (x) { return !S.off[x.fp]; }).length, nUpd([p])) + '</button><div class="ui-row" style="margin-top:8px"><button type="button" class="btn ghost sm" data-act="im-cancel">CANCEL IMPORT</button><button type="button" class="btn ghost sm" data-act="im-hist">IMPORT HISTORY</button></div></div>';
+    } else if (nUpd([p]) || p.exact.length || p.possible.length || p.conflicts.length) h += '<div class="panel"><button class="btn wide" data-act="im-commit"' + (S.busy ? ' disabled' : '') + '>' + (nUpd([p]) ? commitLabel(0, nUpd([p])) : 'SKIP DUPLICATES AND FINISH') + '</button><p class="note">Nothing new is added. The duplicates and held records are saved to Import Review.</p></div>';
+    else h += U.empty('Nothing new to import', 'Every readable trade in this file is already in your journal, or the rows could not be read. Check the notes above.');
+    return h + historyPanel();
   }
   function readOpts(batchId, fps) {
-    var o = { mode: S.mode, mapping: S.mapping, dateOrder: S.opts.dateOrder, fileTz: S.opts.fileTz, targetTz: BROWSER_TZ, feesPerContract: !!S.opts.feesPerContract, defaultAccountId: S.accountId, accountMap: S.accountMap, fingerprints: fps };
+    var o = { mode: S.mode, mapping: S.mapping, dateOrder: S.opts.dateOrder, fileTz: S.opts.fileTz, targetTz: BROWSER_TZ, feesPerContract: !!S.opts.feesPerContract, defaultAccountId: S.accountId, accountMap: S.accountMap, dedupe: fps, allowFp: S.allow };
     if (batchId) o.batchId = batchId; return o;
   }
   function validateMapping() {
@@ -332,44 +411,41 @@
   function preview() {
     collect(); var bad = validateMapping(); if (bad) { S.msg = bad; render(); return; } S.msg = ''; S.busy = true; root.querySelector('[data-act=im-preview]').textContent = 'WORKING…';
     var tpl = S.tplName ? ST.save({ id: (S.templates.filter(function (t) { return t.name === S.tplName && t.type === 'import-mapping'; })[0] || {}).id, kind: 'template', type: 'import-mapping', name: S.tplName, signature: I.headerSignature(S.parsed.headers), mode: S.mode, mapping: S.mapping, options: S.opts }).then(function () { ST.invalidate(); return ST.list('template'); }).then(function (l) { S.templates = l.filter(function (t) { return t.type === 'import-mapping'; }); }) : Promise.resolve();
-    tpl.then(existingIndex).then(function (ix) { setTimeout(function () { S.plan = I.plan(S.parsed, readOpts('preview', ix.fps), ix.keys, J); S.step = 'preview'; S.busy = false; render(); window.scrollTo(0, 0); }, 20); }).catch(function () { S.busy = false; S.msg = 'Could not read your existing trades to check for duplicates. Nothing was imported.'; render(); });
+    tpl.then(existingIndex).then(function (ex) { S.ex = ex; setTimeout(function () { S.plan = I.plan(S.parsed, readOpts('preview', { ix: ex.ix, src: 'map' }), null, J); S.step = 'preview'; S.busy = false; render(); window.scrollTo(0, 0); }, 20); }).catch(function () { S.busy = false; S.msg = 'Could not read your existing trades to check for duplicates. Nothing was imported.'; render(); });
   }
   function commit() {
     if (S.busy) return; S.busy = true; render();
-    var batchId = 'imp-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    existingIndex().then(function (ix) {
-      var p = I.plan(S.parsed, readOpts(batchId, ix.fps), ix.keys, J), now = Date.now(), ops = [], hashes = {}, ids = [];
-      if (!p.trades.length) throw new Error('nothing');
-      p.trades.forEach(function (x) { var t = x.trade; t.createdAt = now; ops.push({ store: 'trades', type: 'put', value: t }); hashes[t.id] = I.tradeHash(t); ids.push(t.id); });
-      var dates = p.trades.map(function (x) { return x.trade.date; }).sort();
-      var doc = { id: batchId, kind: 'import', at: now, createdAt: now, updatedAt: now, fileName: S.fileName, fileSize: S.fileSize, mode: S.mode, accountId: S.accountId, mapping: S.mapping, options: S.opts, rolledBack: null, from: dates[0], to: dates[dates.length - 1],
-        counts: { rows: p.rows, detected: p.trades.length + p.duplicates + p.possible.length + p.partial.length, trades: p.trades.length, duplicates: p.duplicates + p.possible.length, partial: p.partial.length, problems: Object.keys(p.problems).reduce(function (a, k) { return a + p.problems[k].n; }, 0), unsupported: Object.keys(p.unsupported).length }, tradeIds: ids, hashes: hashes };
-      ops.push({ store: 'docs', type: 'put', value: doc }); ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: now, type: 'import', details: { batchId: batchId, trades: ids.length, file: S.fileName } } });
-      return DB.batch(ops).then(function () { return p.trades.length; });
-    }).then(function (n) {
-      ST.invalidate(); S.busy = false; U.toast('Imported ' + U.plural(n, 'trade') + '.'); try { window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} if (window.TTJournal) window.TTJournal.reload();
-      S.step = 'file'; S.parsed = null; S.plan = null; return load();
-    }).then(render).catch(function (e) { S.busy = false; U.toast(e && e.message === 'nothing' ? 'Nothing new to import.' : 'Could not save the import. Nothing was changed.', true); render(); });
+    var batchId = newBatchId();
+    withLock(function () {
+      return existingIndex().then(function (ex) {
+        S.ex = ex; var p = I.plan(S.parsed, readOpts(batchId, { ix: ex.ix, src: 'map' }), null, J);
+        var dates = p.trades.map(function (x) { return x.trade.date; }).sort();
+        var meta = { fileName: S.fileName, fileSize: S.fileSize, mode: S.mode, mapping: S.mapping, options: S.opts, from: dates[0] || null, to: dates[dates.length - 1] || null };
+        return saveImport(batchId, [{ file: S.fileName, report: 'csv', plan: p }], meta, false);
+      });
+    }).then(function (r) {
+      afterSave(); U.toast(doneMsg(r));
+      S.done = r; S.step = 'done'; S.parsed = null; S.plan = null; return load();
+    }).then(function () { render(); window.scrollTo(0, 0); }).catch(function (e) { S.busy = false; U.toast(e && e.message === 'nothing' ? 'Nothing new to import.' : 'Could not save the import. Nothing was changed.', true); render(); });
   }
+  // Undo one import: only what it changed, and only where nothing was edited since (see TTDedupe.buildRollback).
   function rollback(id) {
     var h = S.history.filter(function (x) { return x.id === id; })[0]; if (!h || h.rolledBack) return;
-    U.confirm('Roll back this import?', 'Removes the trades this import added (' + h.counts.trades + '). Trades you have edited since, or that have screenshots, are kept. Your other trades are not touched.', 'ROLL BACK', true).then(function (yes) {
+    var c = h.counts || {};
+    U.confirm('Undo this import?', 'Removes the ' + U.plural(c.trades || 0, 'trade') + ' it added' + (c.updated ? ' and reverses the ' + U.plural(c.updated, 'update') + ' it applied' : '') + '. Trades you edited since, or that have screenshots, are kept. Trades that were in your journal before are not touched.', 'UNDO IMPORT', true).then(function (yes) {
       if (!yes) return;
-      DB.getAll('trades').then(function (all) {
-        var byId = {}; all.forEach(function (t) { byId[t.id] = t; });
-        return Promise.all(h.tradeIds.map(function (tid) {
-          var t = byId[tid]; if (!t) return Promise.resolve({ id: tid, state: 'missing' });
-          if (I.tradeHash(t) !== h.hashes[tid]) return Promise.resolve({ id: tid, state: 'edited' });
-          return (window.TTJournal && window.TTJournal.hasShots ? window.TTJournal.hasShots(tid) : Promise.resolve(false)).then(function (has) { return { id: tid, state: has ? 'edited' : 'ok' }; });
-        }));
-      }).then(function (res) {
-        var del = res.filter(function (r) { return r.state === 'ok'; }).map(function (r) { return r.id; }), kept = res.filter(function (r) { return r.state === 'edited'; }).length, gone = res.filter(function (r) { return r.state === 'missing'; }).length, now = Date.now();
-        var ops = del.map(function (tid) { return { store: 'trades', type: 'del', key: tid }; });
-        var nd = Object.assign({}, h, { rolledBack: { at: now, removed: del.length, kept: kept, missing: gone }, updatedAt: now });
-        ops.push({ store: 'docs', type: 'put', value: nd }); ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: now, type: 'import-rollback', details: { batchId: id, removed: del.length, kept: kept, missing: gone } } });
-        return DB.batch(ops).then(function () { return { removed: del.length, kept: kept }; });
-      }).then(function (r) { ST.invalidate(); U.toast('Rolled back: ' + r.removed + ' removed' + (r.kept ? ', ' + r.kept + ' kept' : '') + '.'); try { window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} if (window.TTJournal) window.TTJournal.reload(); return load(); }).then(render)
-        .catch(function () { U.toast('Could not roll back. Nothing was changed.', true); });
+      withLock(function () {
+        return Promise.all([DB.getAll('trades'), DB.getByIndex('docs', 'kind', 'dupe'), DB.get('docs', id)]).then(function (r) {
+          var byId = {}; r[0].forEach(function (t) { byId[t.id] = t; }); var doc = r[2] || h;
+          var dupes = r[1].filter(function (d) { return d.batchId === id; }), shots = {};
+          return Promise.all((doc.tradeIds || []).map(function (tid) { return byId[tid] && window.TTJournal && window.TTJournal.hasShots ? window.TTJournal.hasShots(tid).then(function (x) { if (x) shots[tid] = 1; }) : null; })).then(function () {
+            var rb = DD.buildRollback(doc, byId, dupes, shots, Date.now());
+            rb.ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: Date.now(), type: 'import-rollback', details: Object.assign({ batchId: id }, rb.result) } });
+            return DB.batch(rb.ops).then(function () { return rb.result; });
+          });
+        });
+      }).then(function (r) { afterSave(); U.toast('Import undone: ' + r.removed + ' removed' + (r.reverted ? ', ' + r.reverted + ' updates reversed' : '') + (r.kept + r.keptUpdates ? ', ' + (r.kept + r.keptUpdates) + ' kept' : '') + '.'); return load(); }).then(render)
+        .catch(function () { U.toast('Could not undo the import. Nothing was changed.', true); });
     });
   }
 
@@ -402,6 +478,11 @@
       if (t.id === 'im-okmis') { S.okMismatch = t.checked; render(); return; }
       if (t.hasAttribute('data-on')) { var fp = t.getAttribute('data-on'); if (t.checked) delete S.off[fp]; else S.off[fp] = 1; render(); return; }
       if (t.hasAttribute('data-allow')) { var f2 = t.getAttribute('data-allow'); if (t.checked) S.allow[f2] = 1; else delete S.allow[f2]; return; }
+      if (t.hasAttribute('data-upd')) { S.upd[t.getAttribute('data-upd')] = t.checked; render(); return; }
+    }
+    if (S.step === 'preview') {
+      if (t.hasAttribute('data-allow')) { var f3 = t.getAttribute('data-allow'); if (t.checked) S.allow[f3] = 1; else delete S.allow[f3]; return; }
+      if (t.hasAttribute('data-upd')) { S.upd[t.getAttribute('data-upd')] = t.checked; render(); return; }
     }
     if (S.step === 'review' && t.hasAttribute('data-cell')) { reviewCollect(); var p = t.getAttribute('data-cell').split(':'), ok = TV.cellValid(S.review.headers[+p[1]], t.value); t.classList.toggle('badc', ok === false); if (ok !== false) t.classList.remove('lowc'); }
   });
@@ -417,7 +498,9 @@
     else if (a === 'im-forget') { delete S.pref.accountMap[b.getAttribute('data-raw')]; savePref().then(function () { S.settingsOpen = true; render(); }); }
     else if (a === 'im-review-ok') { reviewCollect(); var r = S.review, parsed = { ok: true, headers: r.headers, rows: r.rows.filter(function (x) { return x.some(function (v) { return v; }); }), delimiter: 'ocr' }; S.sources.push({ id: 's' + S.sources.length, name: r.name, size: 0, text: null, parsed: parsed, det: TV.detect(r.headers), kind: 'image' }); URL.revokeObjectURL(r.url); S.review = null; route(); }
     else if (a === 'im-row-del') { reviewCollect(); var i = +b.getAttribute('data-i'); S.review.rows.splice(i, 1); S.review.low.splice(i, 1); render(); }
-    else if (a === 'im-recheck') { var ti = $('#im-total'); if (ti) S.userTotal = ti.value; rebuild(); }
+    else if (a === 'im-recheck') { if (S.step === 'preview') { existingIndex().then(function (ex) { S.ex = ex; S.plan = I.plan(S.parsed, readOpts('preview', { ix: ex.ix, src: 'map' }), null, J); render(); }); return; } var ti = $('#im-total'); if (ti) S.userTotal = ti.value; rebuild(); }
+    else if (a === 'im-open-review') { if (window.TTNav) window.TTNav.go('review'); }
+    else if (a === 'im-hist') { var hp = document.getElementById('im-history'); if (hp) { hp.scrollIntoView({ block: 'start' }); hp.setAttribute('tabindex', '-1'); hp.focus({ preventScroll: true }); } else U.toast('No earlier imports yet.'); }
     else if (a === 'im-more') { S.showN += 50; render(); }
     else if (a === 'im-all-on') { S.off = {}; render(); } else if (a === 'im-all-off') { (S.tv || []).forEach(function (x) { x.plan.trades.forEach(function (t) { S.off[t.fp] = 1; }); }); render(); }
     else if (a === 'im-tv-commit') tvCommit();

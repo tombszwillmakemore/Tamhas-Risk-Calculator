@@ -120,10 +120,12 @@ se=S(); say(se,'review my day'); r=say(se,'stop'); ok('routine can be stopped',/
 se=S(); say(se,'start post trade review'); for(let k=0;k<2;k++) say(se,'next'); r=say(se,'I followed my plan but cut a winner early'); ok('post lesson captured',/save/i.test(r.reply),r.reply); r=say(se,'yes'); ok('saving a reflection requires confirmation',r.confirm&&!r.actions.length,r.reply); r=say(se,'yes'); ok('reflection saved only after yes',r.actions[0]&&r.actions[0].type==='saveReflection');
 se=S(); r=say(se,'weekly review'); ok('weekly review starts',/weekly review/i.test(r.reply));
 // ---- app guide / registry
-r=say(S(),"what's new in TRC"); ok('what is new mentions latest release',new RegExp(R0.APP_VERSION.replace(/\./g,'\\.')).test(r.reply)&&/Smart Import/.test(r.reply),r.reply);
+r=say(S(),"what's new in TRC"); ok('what is new mentions latest release',new RegExp(R0.APP_VERSION.replace(/\./g,'\\.')).test(r.reply)&&r.reply.indexOf(R0.RELEASES[0].title)>=0,r.reply);
 r=say(S(),'teach me the risk center'); ok('teach me starts a tour for a real feature',r.actions[0].type==='tour'&&r.actions[0].feature==='risk',r);
 r=say(S(),'walk me through the journal'); ok('walk me through',r.actions[0].feature==='journal');
 r=say(S(),'how do I add another account'); ok('add account highlights button',r.actions.some(a=>a.type==='highlight'&&/a-new/.test(a.selector)));
+r=say(S(),'add a personal live account'); ok('add a personal live account opens Accounts and points at the add button',r.actions.some(a=>a.type==='highlight'&&/a-new/.test(a.selector)));
+r=say(S(),'show my duplicates'); ok('show my duplicates opens Import Review',r.actions.some(a=>a.type==='navigate'&&a.view==='review'),r);
 r=say(S(),'help me set up my dashboard'); ok('dashboard customize',r.actions[0].type==='customize');
 r=say(S(),"show me features I haven't tried"); ok('untried features come from the registry and exclude visited ones',/Journal|Analytics|Accounts/.test(r.reply)&&!/Dashboard \(/.test(r.reply),r.reply);
 const wd=data(); wd.view='analytics'; r=say(S(),'what am I looking at',wd); ok('what am I looking at explains current page + highlights',/Analytics/.test(r.reply)&&r.actions.some(a=>a.type==='highlight'),r.reply);
@@ -145,4 +147,8 @@ const stats=P.createSession().handle('mute',{}); ok('mute action',stats.actions[
 for (const q of ['import my tradovate report','upload my trades csv','import a screenshot of my orders']) { const r=P.createSession().handle(q,{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('import intent: "'+q+'"',a&&a.view==='import'&&!r.unknown,r.reply); }
 for (const q of ['install the app','how do I install trc','add it to my home screen']) { const r=P.createSession().handle(q,{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('install intent: "'+q+'"',a&&a.view==='install',r.reply); }
 ok('import intent never claims it imported anything',!/imported \d|trades? (were|was) imported/i.test(P.createSession().handle('import my trades',{}).reply));
+// release 2.1.0: TRC login and sync
+for (const q of ['sign in','log in','create a trc login','am i synced']) { const r=P.createSession().handle(q,{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('login intent: "'+q+'"',a&&a.view==='account',r.reply); }
+{ const r=P.createSession().handle('sync now',{}); const a=(r.actions||[]).find(x=>x.type==='navigate'); ok('sync now -> account screen with the sync action, no premature success claim',a&&a.view==='account'&&a.act==='sync'&&!/synced|saved to the cloud\./i.test(r.reply.split(':')[0]),r.reply); }
+{ const r=P.createSession().handle('log out',{}); ok('log out: Copilot does not sign out by itself',/will not sign you out myself/.test(r.reply),r.reply); }
 console.log(`${p} passed, ${f} failed`); process.exit(f?1:0);

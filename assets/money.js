@@ -20,7 +20,7 @@
     return { from: null, to: null };
   }
   function acctName(id) { var a = S.accounts.filter(function (x) { return x.id === id; })[0]; return a ? a.name : (id ? 'Unknown account' : 'General'); }
-  function firmName(slug) { if (!slug) return 'No firm set'; var f = P && P.firms.filter(function (x) { return x.slug === slug; })[0]; return f ? f.name : slug; }
+  function firmName(slug) { if (!slug) return 'No firm set'; var PP = P || window.TTPropData, f = PP && PP.firms.filter(function (x) { return x.slug === slug; })[0]; return f ? f.name : slug; }
 
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), DB.getAll('ledger'), ST.list('expense'), ST.list('recurring')]); }).then(function (r) {
@@ -242,7 +242,7 @@
     if (e.target.id === 'm-range') { S.range = e.target.value; render(); }
     else if (e.target.id === 'm-from') { S.from = e.target.value; render(); } else if (e.target.id === 'm-to') { S.to = e.target.value; render(); }
   });
-  window.addEventListener('tt:view', function (e) { if (e.detail.name === 'money') { load().then(render); } });
+  window.addEventListener('tt:view', function (e) { if (e.detail.name === 'money') { load().then(render); if (!window.TTPropData && window.TTLoadPropData) window.TTLoadPropData().then(function () { render(); }).catch(function () {}); } });
   ['tt:ledger-changed', 'tt:accounts-changed'].forEach(function (n) { window.addEventListener(n, function () { S.stale = true; }); });
   if (window.TTNav) window.TTNav.addHub({ id: 'money', title: 'Money', text: 'Payouts, expenses, subscriptions and what each account cost.', icon: '<rect x="3" y="6" width="18" height="13" rx="3"/><circle cx="12" cy="12.5" r="2.5"/><path d="M6 6V5a2 2 0 012-2h8a2 2 0 012 2v1"/>' });
   window.TTMoneyUI = { reload: reload, state: S };

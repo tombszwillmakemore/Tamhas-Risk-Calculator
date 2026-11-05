@@ -9,3 +9,10 @@ jobs:
         with: { node-version: 22 }
       - run: npm i --no-save playwright && npx playwright install --with-deps chromium
       - run: node scripts/predeploy.js
+        env:   # optional: real Supabase checks (tests/cloudlive.js) run only when these repository secrets exist
+          TRC_LIVE_URL: ${{ secrets.TRC_LIVE_URL }}
+          TRC_LIVE_ANON: ${{ secrets.TRC_LIVE_ANON }}
+          TRC_LIVE_A_EMAIL: ${{ secrets.TRC_LIVE_A_EMAIL }}
+          TRC_LIVE_A_PASSWORD: ${{ secrets.TRC_LIVE_A_PASSWORD }}
+          TRC_LIVE_B_EMAIL: ${{ secrets.TRC_LIVE_B_EMAIL }}
+          TRC_LIVE_B_PASSWORD: ${{ secrets.TRC_LIVE_B_PASSWORD }}

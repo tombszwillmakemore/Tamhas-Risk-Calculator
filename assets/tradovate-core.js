@@ -14,6 +14,7 @@
   'use strict';
   var I = root.TTImport || (typeof require !== 'undefined' ? require('./import-core.js') : null);
   var SES = root.TTSessions || (typeof require !== 'undefined' ? require('./sessions.js') : null);
+  var DD = root.TTDedupe || (typeof require !== 'undefined' ? require('./dedupe-core.js') : null);
 
   function L(h) { return String(h == null ? '' : h).toLowerCase().replace(/[^a-z0-9&]/g, ''); }
   function col(headers, names) { var hs = headers.map(L); for (var n = 0; n < names.length; n++) { var i = hs.indexOf(L(names[n])); if (i >= 0) return i; } return -1; }
@@ -56,7 +57,7 @@
      and applyFeeTemplate (true = use your saved fee where the file has none). Returns everything the preview needs. */
   function read(parsed, report, opts) {
     opts = opts || {}; var spec = LAYOUTS[report]; if (!spec) throw new Error('unknown report');
-    var c = findCols(parsed.headers, spec).cols, fills = [], problems = {}, unsupported = {}, warn = {}, pnlByKey = {}, amb = new Set(), skipped = {}, tplKeys = {};
+    var c = findCols(parsed.headers, spec).cols, fills = [], problems = {}, unsupported = {}, warn = {}, pnlByKey = {}, amb = new Set(), skipped = {}, tplKeys = {}, occ = {};
     var info = { rows: parsed.rows.length, accounts: {}, from: null, to: null, reportedPnlCents: null, reportedRows: 0, feesInFile: false, contracts: {} };
     function seenDate(d) { if (!info.from || d < info.from) info.from = d; if (!info.to || d > info.to) info.to = d; }
     function acctOf(raw) { if (raw) info.accounts[raw] = (info.accounts[raw] || 0) + 1; var m = opts.accountMap || {}; return raw && m[raw] ? m[raw] : (raw ? null : (opts.defaultAccountId || null)); }
@@ -84,12 +85,16 @@
         var bid = cellAt(row, c.buyId), sid = cellAt(row, c.sellId);
         var sides = [['buy', bid, bp, bt], ['sell', sid, sp, st]], keysThisRow = [];
         sides.forEach(function (sd) {
-          var id = sd[1], key = id ? 'tv:pf:' + (acctRaw || '') + ':' + id : 'tv:pr:' + I.hash([acctRaw, sym, sd[0], sd[2], cellAt(row, sd[0] === 'buy' ? c.bought : c.sold), line].join('|'));
+          // Keys identify the execution, not the file: Tradovate fill ids when present (the same id in any report, any row order),
+          // otherwise account + contract + side + price + time to the second + size. `alt` is the key earlier versions saved.
+          var id = sd[1], rawT = cellAt(row, sd[0] === 'buy' ? c.bought : c.sold);
+          var key = id ? 'tv:F:' + id : DD.contentKey('tv:pr2:', [DD.acctKey(acctRaw), DD.contractKey(sym, con), sd[0], DD.priceKey(sd[2]), DD.instantKey(sd[3]), q], occ);
+          var alt = id ? 'tv:pf:' + (acctRaw || '') + ':' + id : 'tv:pr:' + I.hash([acctRaw, sym, sd[0], sd[2], rawT, line].join('|'));
           var ex = byId[key];
           if (ex) {
             if (ex.price !== sd[2] || ex.rawTime !== cellAt(row, sd[0] === 'buy' ? c.bought : c.sold) || ex.side !== sd[0]) { bump(problems, 'the same fill id appears with different prices or times (fill ' + id + ')', line); ex.conflict = true; return; }
             ex.qty += q; ex.lines.push(line);
-          } else byId[key] = { key: key, side: sd[0], price: sd[2], ts: sd[3], rawTime: cellAt(row, sd[0] === 'buy' ? c.bought : c.sold), qty: q, account: acct, accountRaw: acctRaw, contract: con, lines: [line], order: idOrder(id), line: line, file: i };
+          } else byId[key] = { key: key, alt: alt, side: sd[0], price: sd[2], ts: sd[3], rawTime: cellAt(row, sd[0] === 'buy' ? c.bought : c.sold), qty: q, account: acct, accountRaw: acctRaw, contract: con, lines: [line], order: idOrder(id), line: line, file: i };
           keysThisRow.push(key);
         });
         if (pnl != null && keysThisRow.length === 2) pnlByKey[keysThisRow[0]] = (pnlByKey[keysThisRow[0]] || 0) + pnl;   // counted once per row, on its buy fill
@@ -99,7 +104,7 @@
         var f = byId[k]; if (f.conflict) return;
         if (!I.parseNumber || Math.abs(f.price * 100 - Math.round(f.price * 100)) > 1e-7) { bump(problems, 'price has more than 2 decimals (the journal stores 2)', f.line); return; }
         var fee = feeFor(f.contract, f.qty, null);
-        push({ line: f.line, order: f.order != null ? f.order : f.file, contract: f.contract, side: f.side, qty: f.qty, price: f.price, feeCents: fee.cents, tpl: fee.tpl, ts: f.ts, account: f.account, accountRaw: f.accountRaw, key: f.key });
+        push({ line: f.line, order: f.order != null ? f.order : f.file, contract: f.contract, side: f.side, qty: f.qty, price: f.price, feeCents: fee.cents, tpl: fee.tpl, ts: f.ts, account: f.account, accountRaw: f.accountRaw, key: f.key, alt: f.alt });
       });
     } else {
       var feeCol = c.fee != null ? c.fee : -1;
@@ -121,9 +126,10 @@
         var ts = I.parseTimestamp(cellAt(row, c.time), opts); if (!ts) { bump(problems, 'time could not be read (check date order and time zone)', line); return; }
         var fileFee = null; if (feeCol >= 0 && cellAt(row, feeCol) !== '') { var fn = I.parseNumber(cellAt(row, feeCol)); if (fn == null) { bump(problems, 'commission is not a number', line); return; } fileFee = Math.round(Math.abs(fn) * 100); info.feesInFile = true; }
         var acctRaw = cellAt(row, c.account), acct = acctOf(acctRaw), id = cellAt(row, c.id);
-        var key = id ? 'tv:' + (report === 'orders' ? 'o' : 'f') + ':' + (acctRaw || '') + ':' + id : 'tv:h:' + I.hash([acctRaw, sym, side, q, pr, cellAt(row, c.time), line].join('|'));
+        var key = id ? 'tv:' + (report === 'orders' ? 'O' : 'F') + ':' + id : DD.contentKey('tv:h2:', [DD.acctKey(acctRaw), DD.contractKey(sym, con), side, q, DD.priceKey(pr), DD.instantKey(ts)], occ);
+        var alt = id ? 'tv:' + (report === 'orders' ? 'o' : 'f') + ':' + (acctRaw || '') + ':' + id : 'tv:h:' + I.hash([acctRaw, sym, side, q, pr, cellAt(row, c.time), line].join('|'));
         var fee = feeFor(con, q, fileFee);
-        push({ line: line, order: idOrder(id) != null ? idOrder(id) : i, contract: con, side: side, qty: q, price: pr, feeCents: fee.cents, tpl: fee.tpl, ts: ts, account: acct, accountRaw: acctRaw, key: key });
+        push({ line: line, order: idOrder(id) != null ? idOrder(id) : i, contract: con, side: side, qty: q, price: pr, feeCents: fee.cents, tpl: fee.tpl, ts: ts, account: acct, accountRaw: acctRaw, key: key, alt: alt });
         info.reportedRows++;
       });
       // repeated ids (the same report pasted twice into one file) are dropped, keeping the first
@@ -131,7 +137,7 @@
     }
     // ambiguity: an opposite-side fill in the same second on the same account+contract cannot be ordered from time alone
     var bySec = {}; fills.forEach(function (f) { if (!f.ts.hasTime) { amb.add(f.key); return; } var k = (f.accountRaw || f.account || '') + '|' + f.contract + '|' + f.ts.date + ' ' + f.ts.time + ':' + f.ts.sec; (bySec[k] || (bySec[k] = [])).push(f); });
-    Object.keys(bySec).forEach(function (k) { var g = bySec[k]; if (g.length > 1 && g.some(function (x) { return x.side === 'buy'; }) && g.some(function (x) { return x.side === 'sell'; }) && !g.every(function (x) { return typeof x.order === 'number' && x.key.indexOf(':h:') < 0 && x.key.indexOf(':pr:') < 0; })) g.forEach(function (x) { amb.add(x.key); }); });
+    Object.keys(bySec).forEach(function (k) { var g = bySec[k]; if (g.length > 1 && g.some(function (x) { return x.side === 'buy'; }) && g.some(function (x) { return x.side === 'sell'; }) && !g.every(function (x) { return typeof x.order === 'number' && x.key.indexOf(':h2:') < 0 && x.key.indexOf(':pr2:') < 0; })) g.forEach(function (x) { amb.add(x.key); }); });
     var unmatched = Object.keys(info.accounts).filter(function (a) { return !(opts.accountMap && opts.accountMap[a]); });
     return { fills: fills, problems: problems, unsupported: unsupported, warnings: warn, skipped: skipped, pnlByKey: pnlByKey, ambiguousKeys: amb, tplKeys: tplKeys, info: info, unmatchedAccounts: unmatched, feesInFile: info.feesInFile || false };
   }
@@ -227,7 +233,8 @@
   }
   // Words with positions (from the text reader) -> lines (by vertical position) -> a table using the heading positions as columns.
   function toLines(words) {
-    var ws = words.filter(function (w) { return w.text && w.h > 0 && /[A-Za-z0-9]/.test(w.text); })   // borders and rules come out as dashes and marks.slice().sort(function (a, b) { return (a.y + a.h / 2) - (b.y + b.h / 2); });
+    // borders and rules come out as dashes and marks; words are sorted top to bottom so lines group correctly in any reading order
+    var ws = words.filter(function (w) { return w.text && w.h > 0 && /[A-Za-z0-9]/.test(w.text); }).slice().sort(function (a, b) { return (a.y + a.h / 2) - (b.y + b.h / 2); });
     if (!ws.length) return [];
     var hs = ws.map(function (w) { return w.h; }).sort(function (a, b) { return a - b; }), mh = hs[Math.floor(hs.length / 2)], lines = [], cur = null;
     ws.forEach(function (w) { var cy = w.y + w.h / 2; if (cur && Math.abs(cy - cur.cy) <= mh * 0.6) { cur.w.push(w); cur.cy = (cur.cy * (cur.w.length - 1) + cy) / cur.w.length; } else { cur = { cy: cy, w: [w] }; lines.push(cur); } });

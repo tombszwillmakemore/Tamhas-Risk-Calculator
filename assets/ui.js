@@ -216,7 +216,29 @@
   function later(fn, ms) { var t = setTimeout(fn, ms == null ? 300 : ms); return function () { clearTimeout(t); }; }
   function timeout(p, ms, msg) { return new Promise(function (res, rej) { var t = setTimeout(function () { rej(new Error(msg || 'This is taking longer than expected.')); }, ms); Promise.resolve(p).then(function (v) { clearTimeout(t); res(v); }, function (e) { clearTimeout(t); rej(e); }); }); }
 
-  root.TTUI = { skeleton: skeleton, progress: progress, busy: busy, later: later, timeout: timeout, esc: esc, fmtMoney: fmtMoney, fmtMoneyShort: fmtMoneyShort, fmtPct: fmtPct, fmtNum: fmtNum, cls: cls, plural: plural, toast: toast, dialog: dialog, confirm: confirmDlg,
+  /* ---------- value containment for cards (KPIs, stat tiles, P&L figures) ----------
+     A long amount first gets smaller (down to 13px) so it stays on one line inside its card; if it still does not fit, it may wrap
+     at its separators. It is never clipped. Runs after any screen renders (one pass per frame) and on resize. */
+  var FIT_SEL = '.kpi-v, .ui-stat b, .pnl-value, .stat b';
+  function fitValues(scope) {
+    if (!doc) return;
+    (scope || doc).querySelectorAll(FIT_SEL).forEach(function (el) {
+      if (!el.offsetParent) return;
+      el.style.fontSize = ''; el.style.whiteSpace = 'nowrap'; el.classList.remove('ui-wrapped');
+      if (el.scrollWidth <= el.clientWidth + 1) { el.style.whiteSpace = ''; return; }
+      var size = parseFloat(getComputedStyle(el).fontSize) || 16;
+      while (size > 13 && el.scrollWidth > el.clientWidth + 1) { size -= 1; el.style.fontSize = size + 'px'; }
+      if (el.scrollWidth > el.clientWidth + 1) { el.style.whiteSpace = 'normal'; el.classList.add('ui-wrapped'); } else el.style.whiteSpace = 'nowrap';
+    });
+  }
+  if (doc && typeof MutationObserver !== 'undefined' && typeof requestAnimationFrame !== 'undefined') {
+    var fitQueued = false, queueFit = function () { if (fitQueued) return; fitQueued = true; requestAnimationFrame(function () { fitQueued = false; fitValues(); }); };
+    var startFit = function () { new MutationObserver(queueFit).observe(doc.body, { childList: true, subtree: true, characterData: true }); queueFit(); };
+    if (doc.body) startFit(); else doc.addEventListener('DOMContentLoaded', startFit);
+    root.addEventListener('resize', queueFit); root.addEventListener('tt:view', queueFit);
+  }
+
+  root.TTUI = { fitValues: fitValues, skeleton: skeleton, progress: progress, busy: busy, later: later, timeout: timeout, esc: esc, fmtMoney: fmtMoney, fmtMoneyShort: fmtMoneyShort, fmtPct: fmtPct, fmtNum: fmtNum, cls: cls, plural: plural, toast: toast, dialog: dialog, confirm: confirmDlg,
     empty: empty, stat: stat, tabs: tabs, lineChart: lineChart, barChart: barChart, heatmap: heatmap, meter: meter, nice: nice, downsample: downsample };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.TTUI;
 })(typeof window !== 'undefined' ? window : globalThis);

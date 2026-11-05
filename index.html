@@ -9,12 +9,14 @@
 <meta name="application-name" content="TRC">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#03050c">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <title>Tamhas Trading</title>
 <script src="assets/theme-boot.js"></script>
+<script src="assets/cloud-config.js"></script>
+<script src="assets/cloud-boot.js"></script>
 <style>
 #splash{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#03050c;color:#e8f1ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;opacity:0;animation:spIn .35s ease-out .15s forwards,spFail .3s ease-in 6s forwards}
 [data-theme=light] #splash{background:#eef3fb;color:#0d1b3a}
@@ -202,6 +204,11 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
       <div id="iRoot"><p class="note ui-loading" role="status">Loading…</p></div>
     </section>
 
+    <section class="view" id="view-review">
+      <div class="welcome" style="padding-bottom:12px"><small>DATA</small><h1 style="font-size:26px">Import Review</h1></div>
+      <div id="rvRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
+    </section>
+
     <section class="view" id="view-analytics">
       <div class="welcome" style="padding-bottom:12px"><small>PERFORMANCE</small><h1 style="font-size:26px">Analytics</h1></div>
       <div id="anRoot"><p class="note ui-loading" role="status">Loading…</p></div>
@@ -236,6 +243,11 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
     <section class="view" id="view-help">
       <div class="welcome" style="padding-bottom:12px"><small>LEARN</small><h1 style="font-size:26px">Help and glossary</h1></div>
       <div id="hpRoot"><p class="note ui-loading" role="status">Loading…</p></div>
+    </section>
+
+    <section class="view" id="view-account">
+      <div class="welcome" style="padding-bottom:12px"><small>LOGIN &amp; SYNC</small><h1 style="font-size:26px">TRC login</h1></div>
+      <div id="cloudRoot"><div class="ui-skel" aria-hidden="true"><i></i><i></i><i></i></div></div>
     </section>
 
     <section class="view" id="view-install">
@@ -279,6 +291,11 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
         <div class="saved" id="sessionMsg" aria-live="polite"></div>
       </div>
       <div class="panel">
+        <h2>TRC login &amp; cloud sync</h2>
+        <p class="note" style="margin-top:0">Optional. Sign in to use the same journal on your phone, tablet and computer. Without a login everything stays on this device.</p>
+        <button type="button" class="btn" data-go="account">OPEN TRC LOGIN</button>
+      </div>
+      <div class="panel">
         <h2>Animations</h2>
         <div class="ui-tabs" id="animPick" role="radiogroup" aria-label="Animations">
           <button type="button" role="radio" data-anim-set="standard">Standard</button>
@@ -305,15 +322,17 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
 <script src="assets/store.js"></script>
 <script src="assets/ui.js"></script>
 <script src="assets/accounts-core.js"></script>
-<script src="assets/propfirm-data.js"></script>
 <script src="assets/app.js"></script>
+<script src="assets/nav-pin.js"></script>
 <script src="assets/journal.js"></script>
 <script src="assets/journal2.js"></script>
 <script src="assets/dd-core.js"></script>
 <script src="assets/money-core.js"></script>
 <script src="assets/tracker.js"></script>
+<script src="assets/live-core.js"></script>
 <script src="assets/accounts.js"></script>
 <script src="assets/money.js"></script>
+<script src="assets/dedupe-core.js"></script>
 <script src="assets/import-core.js"></script>
 <script src="assets/tradovate-core.js"></script>
 <script src="assets/ocr.js"></script>
@@ -334,6 +353,9 @@ html[data-anim=reduced] #splash,html[data-anim=reduced] #splash .sp-logo{animati
 <script src="assets/copilot-boot.js"></script>
 <script src="assets/analytics.js"></script>
 <script src="assets/import.js"></script>
+<script src="assets/review.js"></script>
+<script src="assets/sync-core.js"></script>
+<script src="assets/cloud.js"></script>
 <script src="assets/platform-core.js"></script>
 <script src="assets/platform.js"></script>
 <script src="assets/pwa.js"></script>

@@ -13,7 +13,7 @@ const txt=async(p,s)=>((await p.locator(s).first().innerText())||'').replace(/\s
   const nb=await p.$$eval('.nav button',b=>b.map(x=>{const r=x.getBoundingClientRect();return [r.width,r.height]})); ok('5 nav buttons (Home, Risk, Journal, Accounts, More) all >=44px tall and visible',nb.length===5&&nb.every(x=>x[1]>=44&&x[0]>=48),nb);
   const sw=await p.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth); ok('no horizontal scroll on accounts',sw);
   // create from template
-  await p.click('[data-act=a-new]'); await p.fill('#n-name','Topstep 50K #1'); await p.fill('#n-bal','50000');
+  await p.click('[data-act=a-new]'); await p.selectOption('#n-type','prop-eval'); await p.waitForSelector('#n-firm'); await p.fill('#n-name','Topstep 50K #1'); await p.fill('#n-bal','50000');
   await p.selectOption('#n-firm','topstep'); await p.waitForSelector('#n-prod');
   const prods=await p.$$eval('#n-prod option',o=>o.map(x=>x.textContent)); ok('products offered for Topstep',prods.length>=3,prods);
   await p.selectOption('#n-prod',{index:1}); ok('note explains template + third-party caveat',/Researched 2026-10-29/.test(await txt(p,'#aRoot')));
@@ -35,7 +35,7 @@ const txt=async(p,s)=>((await p.locator(s).first().innerText())||'').replace(/\s
   await p.click('[data-act=a-edit] >> nth=1'); const f2=await p.$eval('.a-ed input[type=text]',e=>e.id.replace('rv-','')); await p.fill('#rs-'+f2,'javascript:alert(1)'); await p.click('[data-act=a-rule-save]');
   ok('no javascript: link rendered',await p.$$eval('#aRoot a',a=>a.every(x=>/^https?:/.test(x.href))));
   // XSS in name
-  await p.click('[data-act=a-new]'); await p.fill('#n-name','<img src=x onerror=window.__x=1>'); await p.selectOption('#n-cat','live'); await p.click('[data-act=n-save]'); await p.waitForSelector('.a-card:has-text("<img")');
+  await p.click('[data-act=a-new]'); await p.fill('#n-name','<img src=x onerror=window.__x=1>'); await p.selectOption('#n-type','personal-live'); await p.click('[data-act=n-save]'); await p.waitForSelector('.a-card:has-text("<img")');
   ok('account name is escaped, not executed',await p.evaluate(()=>!window.__x&&!document.querySelector('#aRoot img')));
   // journal: add trade to Topstep account
   await p.click('.nav button[data-view=journal]'); await p.waitForSelector('[data-act=new]'); await p.click('[data-act=new]');

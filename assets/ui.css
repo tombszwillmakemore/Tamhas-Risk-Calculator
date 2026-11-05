@@ -150,3 +150,46 @@ html[data-anim=reduced] *, html[data-anim=reduced] *::before, html[data-anim=red
 .upd-bar button { font: inherit; font-size: 11px; font-weight: 700; letter-spacing: .12em; border: 0; border-radius: 99px; padding: 8px 12px; cursor: pointer; min-height: 32px; }
 .upd-go { background: var(--cyan); color: #03050c; } .upd-x { background: transparent; color: var(--muted); font-size: 18px !important; padding: 4px 10px !important; }
 @media (min-width: 900px) { .upd-bar { bottom: 24px; left: calc(50% + var(--side-w) / 2); } }
+
+.ui-wrapped { overflow-wrap: anywhere; line-height: 1.2; }
+
+/* ---------- TRC login & sync ---------- */
+.sync-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--glass); color: var(--muted); font: inherit; font-size: 10.5px; letter-spacing: .1em; cursor: pointer; white-space: nowrap; }
+.sync-chip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; flex: none; }
+.sync-chip[data-state=saved] { color: var(--good); border-color: rgba(37,226,154,.45); }
+.sync-chip[data-state=syncing] { color: var(--cyan); } .sync-chip[data-state=syncing] svg { animation: uiPulse 1.2s ease-in-out infinite; }
+.sync-chip[data-state=attention], .sync-chip[data-state=failed], .sync-chip[data-state=expired], .sync-chip[data-state=old] { color: var(--bad); border-color: rgba(255,93,122,.5); }
+.sync-chip[data-state=pending], .sync-chip[data-state=offline] { color: var(--warn); }
+@keyframes uiPulse { 50% { opacity: .35; } }
+@media (max-width: 420px) { .sync-chip span { display: none; } .sync-chip { width: 44px; justify-content: center; padding: 0; } }
+@media (prefers-reduced-motion: reduce) { .sync-chip svg { animation: none !important; } }
+.cl-pw { display: flex; gap: 8px; align-items: stretch; } .cl-pw input { flex: 1; min-width: 0; } .cl-pw .btn { flex: none; min-width: 64px; }
+.cl-why { margin: 6px 0; padding-left: 18px; } .cl-why li { margin: 2px 0; }
+.btn.danger, .btn.ghost.danger { border-color: rgba(255,93,122,.6); color: var(--bad); }
+
+/* ---------- import preview classes + Import Review (2.2.0) ---------- */
+.im-cls li > span { min-width: 0; overflow-wrap: anywhere; }
+.im-cls li > b { font-variant-numeric: tabular-nums; flex: none; }
+.im-cls li.good > b { color: var(--good); }
+.im-cls li.warn > b { color: var(--warn); }
+.im-cls li.bad > b { color: var(--bad); }
+.im-will { margin: 10px 0 4px; }
+.im-exact summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+.rv-card .rv-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.rv-card .rv-head > div { min-width: 0; overflow-wrap: anywhere; }
+.rv-card .rv-acts { flex-wrap: wrap; margin-top: 10px; }
+.rv-card .rv-acts .btn, .rv-card .rv-head .btn { min-height: 44px; }
+.rv-cmp th[scope=row] { text-align: left; white-space: nowrap; color: var(--muted); font-weight: 600; }
+.rv-cmp td { overflow-wrap: anywhere; min-width: 90px; }
+.rv-cmp tr.rv-diff td { background: var(--wash2); font-weight: 700; }
+.rv-hist summary { cursor: pointer; font-size: 12px; color: var(--muted); min-height: 32px; display: flex; align-items: center; }
+.rv-cmp td, .rv-cmp th { white-space: normal; text-align: left; }
+@media (max-width: 640px) {
+  .rv-cmp thead { display: none; }
+  .rv-cmp, .rv-cmp tbody { display: block; width: 100%; }
+  .rv-cmp tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 12px; padding: 8px 0; border-bottom: 1px solid var(--wash2); }
+  .rv-cmp th[scope=row] { grid-column: 1 / -1; padding: 0; }
+  .rv-cmp td { min-width: 0; padding: 0; border: 0; }
+  .rv-cmp td[data-l]::before { content: attr(data-l); display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .rv-cmp tr.rv-g td:last-child { grid-column: 1 / -1; }
+}
