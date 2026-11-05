@@ -24,7 +24,7 @@
   ];
   var WIDGETS = [
     { id: 'continue', label: 'Continue where you left off' }, { id: 'actions', label: 'Quick actions' }, { id: 'today', label: "Today's trading" }, { id: 'pnl', label: "Today's P&L" },
-    { id: 'favorites', label: 'Favorites' }, { id: 'quickrisk', label: 'Quick risk calculator' }, { id: 'week', label: 'This week' }, { id: 'recentTrades', label: 'Recent trades' },
+    { id: 'favorites', label: 'Favorites' }, { id: 'cash', label: 'Account balances' }, { id: 'quickrisk', label: 'Quick risk calculator' }, { id: 'week', label: 'This week' }, { id: 'recentTrades', label: 'Recent trades' },
     { id: 'recents', label: 'Recently used' }, { id: 'sessions', label: 'Market sessions' }, { id: 'next', label: 'Next event' }, { id: 'tools', label: 'All tools' }, { id: 'news', label: "What's new" }
   ];
   var DEFAULT_HIDDEN = [];     // every section is visible by default; ones with nothing to show simply render nothing

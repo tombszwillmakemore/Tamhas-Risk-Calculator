@@ -193,3 +193,34 @@ html[data-anim=reduced] *, html[data-anim=reduced] *::before, html[data-anim=red
   .rv-cmp td[data-l]::before { content: attr(data-l); display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
   .rv-cmp tr.rv-g td:last-child { grid-column: 1 / -1; }
 }
+
+/* ---------- Cashflow (2.3.0) ---------- */
+.cf-top { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; margin-bottom: 10px; }
+.cf-top label { width: 100%; font-size: 12px; letter-spacing: .1em; color: var(--muted); font-weight: 700; }
+.cf-top select { flex: 1 1 200px; min-height: 44px; min-width: 0; }
+.cf-top .btn { min-height: 44px; }
+.cf-st-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cf-reasons li, .cf-bridge li, .cf-bars li, .cf-tx li { min-width: 0; }
+.cf-reasons li > span, .cf-bridge li > span, .cf-tx .cf-txm { min-width: 0; overflow-wrap: anywhere; }
+.cf-bridge li > b, .cf-tx li > b, .cf-bars li > b { flex: none; font-variant-numeric: tabular-nums; text-align: right; }
+.cf-bridge li.cf-sum { font-weight: 700; border-top: 1px solid var(--line); }
+.cf-bars li > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cf-bar { display: block; height: 6px; border-radius: 3px; background: var(--cyan, #38dcff); opacity: .75; }
+.cf-fresh { font-size: 12px; }
+.cf-tiles .ui-stat b { overflow-wrap: anywhere; }
+.cf-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 4px 12px; }
+.cf-filters .ui-row { grid-column: 1 / -1; flex-wrap: wrap; }
+.cf-frow { display: flex; flex-direction: column; min-width: 0; }
+.cf-frow input, .cf-frow select { min-height: 44px; min-width: 0; }
+.cf-tx li { align-items: flex-start; }
+.cf-tx li.cf-off { opacity: .62; }
+.cf-tx .cf-txm { flex: 1; }
+.cf-src { margin-top: 6px; }
+.cf-raw { display: block; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--wash2); padding: 6px 8px; border-radius: 6px; }
+.cf-pager { justify-content: space-between; margin-top: 8px; }
+.cf-by { flex-wrap: wrap; margin-bottom: 8px; }
+.cf-by .btn.on { border-color: var(--line-hot); color: var(--cyan); }
+.cf-steps { padding-left: 20px; } .cf-steps li { margin: 6px 0; }
+.cf-flow td, .cf-flow th { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.im-interp { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+.im-interp fieldset { border: 0; padding: 0; margin: 6px 0 0; }

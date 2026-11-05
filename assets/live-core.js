@@ -38,43 +38,37 @@
   function usable(l) { return l && !l.voided && typeof l.at === 'number' && isFinite(l.at); }
   function signOf(l) { if (l.type === 'adjustment') return l.dir === 'down' ? -1 : 1; return CASH[l.type] || 0; }
 
-  /* rows: analyzed trades [{t, c}] (TTJournalCore.analyze) of ANY accounts; ledger: all ledger records.
-     opts: {asOf: {date:'YYYY-MM-DD', at: ms}} limits everything to that moment (used to compare with a broker snapshot). */
+  /* Balance of a personal account. Since 2.3.0 this is a thin view over TTCash.summarize, the ONE accounting engine used by the account panel,
+     the Cashflow screen and Copilot (it adds Cash History authority, broker checkpoints and reconciliation states). The fields below are kept
+     for older callers. opts.asOf limits the calculation to a moment (used for comparisons). */
+  // looked up on use: cash-core.js may load after this file
+  function eng() { return root.TTCash || (typeof require !== 'undefined' ? require('./cash-core.js') : null); }
   function balance(acct, rows, ledger, opts) {
-    opts = opts || {}; var id = acct.id, asOf = opts.asOf || null, start = acct.startedOn || null;
-    var mine = (rows || []).filter(function (r) { return (r.t.accountId || DEF) === id; });
-    var before = start ? mine.filter(function (r) { return r.t.date < start; }) : [];
-    var counted = mine.filter(function (r) { return (!start || r.t.date >= start) && (!asOf || r.t.date <= asOf.date); });
-    var closed = counted.filter(function (r) { return r.c.isClosed; }), open = counted.filter(function (r) { return !r.c.isClosed; });
-    var out = { currency: acct.currency || 'USD', openingCents: acct.startingBalanceCents == null ? null : acct.startingBalanceCents, trades: counted.length, closed: closed.length, open: open.length, beforeStart: before.length,
-      grossCents: 0, tradeFeesCents: 0, feesUnknown: 0, netTradingCents: null, netTradingExact: true, depositsCents: 0, withdrawalsCents: 0, adjustmentsCents: 0, accountFeesCents: 0, transfersInCents: 0, transfersOutCents: 0,
-      cashFlowCents: 0, balanceCents: null, exact: true, reasons: [], unrealized: open.length ? 'unavailable' : null, broker: null };
-    closed.forEach(function (r) { out.grossCents += r.c.grossCents; if (r.c.feesCents == null || r.c.feesMissing) out.feesUnknown++; else out.tradeFeesCents += r.c.feesCents; });
-    out.netTradingCents = out.grossCents - out.tradeFeesCents; if (out.feesUnknown) { out.netTradingExact = false; out.exact = false; out.reasons.push(out.feesUnknown + ' closed trade' + (out.feesUnknown === 1 ? ' has' : 's have') + ' no fees entered, so net trading P&L is higher than the real figure.'); }
-    if (!closed.length) out.netTradingCents = 0;
-    (ledger || []).forEach(function (l) {
-      if (!usable(l) || l.accountId !== id || l.type === 'snapshot') return; if (asOf && l.at > asOf.at) return; if (!Number.isInteger(l.amountCents) || l.amountCents <= 0) return;
-      if (l.type === 'deposit') out.depositsCents += l.amountCents; else if (l.type === 'withdrawal' || l.type === 'payout') out.withdrawalsCents += l.amountCents;
-      else if (l.type === 'adjustment') out.adjustmentsCents += signOf(l) * l.amountCents; else if (l.type === 'fee') out.accountFeesCents += l.amountCents;
-      else if (l.type === 'transfer-in') out.transfersInCents += l.amountCents; else if (l.type === 'transfer-out') out.transfersOutCents += l.amountCents;
-    });
-    out.cashFlowCents = out.depositsCents - out.withdrawalsCents + out.transfersInCents - out.transfersOutCents;
-    if (out.openingCents == null) { out.exact = false; out.reasons.unshift('Enter the starting balance to calculate the account balance.'); }
-    else out.balanceCents = out.openingCents + out.netTradingCents + out.cashFlowCents + out.adjustmentsCents - out.accountFeesCents;
-    if (out.currency !== 'USD') { out.exact = false; out.balanceCents = null; out.reasons.unshift('Trade P&L is calculated in US dollars and this account is in ' + out.currency + '. TRC does not convert currencies, so enter balances from your broker instead.'); }
-    if (out.beforeStart) out.reasons.push(out.beforeStart + ' trade' + (out.beforeStart === 1 ? ' is' : 's are') + ' dated before the account\'s starting date and ' + (out.beforeStart === 1 ? 'is' : 'are') + ' not counted in the balance.');
-    if (out.open) out.reasons.push(out.open + ' open position' + (out.open === 1 ? '' : 's') + ': unrealized P&L is not included (TRC has no live prices).');
-    return out;
+    opts = opts || {}; var cut = opts.asOf || null;
+    var led = cut ? (ledger || []).filter(function (l) { return !(typeof l.at === 'number' && l.at > cut.at); }) : ledger;
+    var rws = cut ? (rows || []).filter(function (r) { return r.t.date <= cut.date; }) : rows;
+    var s = eng().summarize(acct, led, rws, { now: opts.now });
+    var t = s.totals, closedMine = (rws || []).filter(function (r) { return (r.t.accountId || DEF) === acct.id && r.c.isClosed; });
+    var reasons = s.reasons.filter(function (x) { return !/No broker balance to compare with/.test(x); }).concat(s.discrepancies.filter(function (d) { return d.kind === 'currency'; }).map(function (d) { return d.text; }));
+    if (s.opening.cents == null && !reasons.some(function (x) { return /opening balance is unknown/i.test(x); })) reasons.unshift('Enter the starting balance to calculate the account balance.');
+    var before = s.excluded.trades.filter(function (x) { return /before the starting date/.test(x.why); }).length;
+    if (before) reasons.push(before + ' trade' + (before === 1 ? ' is' : 's are') + ' dated before the account\'s starting date and ' + (before === 1 ? 'is' : 'are') + ' not counted in the balance.');
+    var feesUnknown = s.unknownFees;
+    if (feesUnknown && !reasons.some(function (x) { return /no fees entered/.test(x); })) reasons.push(feesUnknown + ' closed trade(s) have no fees entered, so net trading P&L is higher than the real figure.');
+    return { currency: s.currency, openingCents: acct.startingBalanceCents == null ? (s.opening.source === 'broker' ? s.opening.cents : null) : s.opening.cents, trades: (rws || []).filter(function (r) { return (r.t.accountId || DEF) === acct.id; }).length,
+      closed: closedMine.length - before, open: s.openPositions, beforeStart: before, grossCents: t.grossCents, tradeFeesCents: t.tradingFeesCents, feesUnknown: feesUnknown, netTradingCents: t.netTradingCents, netTradingExact: !feesUnknown,
+      depositsCents: t.depositsCents, withdrawalsCents: t.withdrawalsCents, adjustmentsCents: t.adjustmentsCents, accountFeesCents: t.accountFeesCents, transfersInCents: t.transfersInCents, transfersOutCents: t.transfersOutCents,
+      cashFlowCents: t.depositsCents - t.withdrawalsCents + t.transfersInCents - t.transfersOutCents, balanceCents: s.balanceCents,
+      exact: s.balanceCents != null && !feesUnknown && !s.estimatedFees, reasons: reasons, unrealized: s.openPositions ? 'unavailable' : null, broker: null, summary: s };
   }
 
-  // Latest broker-reported balance vs TRC's calculation at the same moment. difference = broker - calculated.
+  // Latest broker balance vs TRC's calculation at the same moment. difference = broker - calculated.
   function reconcile(acct, rows, ledger) {
-    var snaps = (ledger || []).filter(function (l) { return usable(l) && l.accountId === acct.id && l.type === 'snapshot' && Number.isInteger(l.balanceCents); }).sort(function (a, b) { return b.at - a.at; });
-    if (!snaps.length) return null;
-    var s = snaps[0], calc = balance(acct, rows, ledger, { asOf: { date: s.date || new Date(s.at).toISOString().slice(0, 10), at: s.at } });
-    var diff = calc.balanceCents == null ? null : s.balanceCents - calc.balanceCents;
-    return { at: s.at, date: s.date || null, brokerCents: s.balanceCents, calculatedCents: calc.balanceCents, differenceCents: diff, matches: diff != null && Math.abs(diff) <= 1, exact: calc.exact, id: s.id,
-      hint: diff == null ? 'Enter a starting balance to compare.' : Math.abs(diff) <= 1 ? 'Matches your broker.' : 'Unexplained difference. Common causes: missing trades or fees, a deposit or withdrawal not entered, or trades in the wrong account.' };
+    var s = eng().summarize(acct, ledger, rows, {}), cp = s.checkpoints[s.checkpoints.length - 1];
+    if (!cp) return null;
+    var diff = cp.calcCents == null ? null : cp.brokerCents - cp.calcCents;
+    return { at: cp.at, date: cp.date, brokerCents: cp.brokerCents, calculatedCents: cp.calcCents, differenceCents: diff, matches: diff != null && Math.abs(diff) <= 0, exact: s.balanceExact, id: cp.id || null, source: cp.source,
+      hint: diff == null ? 'Enter a starting balance to compare.' : diff === 0 ? 'Matches your broker.' : 'Unexplained difference. Common causes: missing trades or fees, a deposit or withdrawal not entered, or trades in the wrong account.' };
   }
 
   // Your own alert (not a broker rule): today's net trading result vs the limit you set. Never blocks anything.

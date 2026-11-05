@@ -363,7 +363,7 @@
     extra = extra || {};
     return JSON.stringify({ app: 'tamhas-trading', kind: 'journal-backup', version: 3, exportedAt: new Date().toISOString(), trades: trades, shots: shots || {}, accounts: extra.accounts || [], ledger: extra.ledger || [], docs: extra.docs || [] });
   }
-  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot', 'withdrawal', 'adjustment'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
+  var LEDGER_TYPES = ['fee', 'payout', 'deposit', 'transfer-in', 'transfer-out', 'snapshot', 'withdrawal', 'adjustment', 'cash'], ACCT_CATS = ['prop', 'live', 'sim', 'other', 'unassigned'];   // 'unassigned' = the default account created by Batch 0
   function cleanAccounts(list) {
     var out = [], skipped = 0, seen = {};
     (Array.isArray(list) ? list : []).slice(0, 2000).forEach(function (a) {
@@ -376,7 +376,9 @@
     var out = [], skipped = 0, seen = {};
     (Array.isArray(list) ? list : []).slice(0, 200000).forEach(function (l) {
       var ok = l && typeof l === 'object' && typeof l.id === 'string' && l.id && !seen[l.id] && typeof l.accountId === 'string' && l.accountId && LEDGER_TYPES.indexOf(l.type) >= 0 && typeof l.at === 'number' && isFinite(l.at);
-      if (ok && l.type !== 'snapshot') ok = Number.isInteger(l.amountCents) && l.amountCents > 0;
+      // 'cash' = a broker cash record imported from a Cash History: a signed change in minor units with its category and source row
+      if (ok && l.type === 'cash') ok = Number.isInteger(l.amountCents) && typeof l.category === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(l.date || '') && (l.balanceAfterCents == null || Number.isInteger(l.balanceAfterCents));
+      else if (ok && l.type !== 'snapshot') ok = Number.isInteger(l.amountCents) && l.amountCents > 0;
       if (ok && l.type === 'adjustment') ok = l.dir === 'up' || l.dir === 'down';
       if (ok && l.type === 'snapshot') ok = ['balanceCents', 'equityCents', 'thresholdCents', 'hwmCents'].every(function (k) { return l[k] == null || Number.isInteger(l[k]); });
       if (!ok) { skipped++; return; } seen[l.id] = 1; out.push(l);

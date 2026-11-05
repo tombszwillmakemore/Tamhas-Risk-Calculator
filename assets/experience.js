@@ -47,7 +47,8 @@
   /* ---------- real data for the dashboard ---------- */
   function loadData() {
     if (!DB || !C) return Promise.resolve();
-    return DB.ready().then(function () { return Promise.all([DB.getAll('trades'), ST ? ST.list('plan') : [], ST ? ST.list('reflection') : []]); }).then(function (r) {
+    return DB.ready().then(function () { return Promise.all([DB.getAll('trades'), ST ? ST.list('plan') : [], ST ? ST.list('reflection') : [], DB.getAll('accounts'), DB.getAll('ledger')]); }).then(function (r) {
+      S.accts = r[3] || []; S.ledger = r[4] || [];
       var ok = []; r[0].forEach(function (raw) { var n = C.normalizeTrade(raw); if (n.ok) ok.push(n.trade); }); S.rows = C.analyze(ok);
       S.plan = r[1].filter(function (x) { return x.id === 'plan-main'; })[0] || null; S.refToday = r[2].some(function (x) { return x.date === todayKey(); }); S.data = true;
     }).catch(function () { S.data = true; });
@@ -63,6 +64,13 @@
   var W = {
     continue: function () { var v = P.lastView; if (!v || v === 'home') return ''; var e = X.entry(v); return e ? '<button type="button" class="cont-btn" data-go="' + v + '"><span><small>CONTINUE WHERE YOU LEFT OFF</small><b>' + esc(e.title) + '</b></span>' + ICON.arrow + '</button>' : ''; },
     actions: function () { return '<div class="qa"><button type="button" class="btn" data-xact="new-trade">+ LOG TRADE</button><button type="button" class="btn" data-go="calc">RISK CALC</button><button type="button" class="btn" data-xact="search">SEARCH</button><button type="button" class="btn" data-go="discipline">REFLECT</button></div>'; },
+    // Balances from the same engine as the Cashflow screen, with their status. Shown only for accounts that have the data for it.
+    cash: function () {
+      var CC = window.TTCash; if (!CC || !S.accts) return '';
+      var list = S.accts.filter(function (a) { return !a.archived && (S.ledger.some(function (l) { return l.type === 'cash' && l.accountId === a.id; }) || ((a.category === 'live' || a.category === 'sim') && a.startingBalanceCents != null)); }).slice(0, 3);
+      if (!list.length) return '';
+      return '<div class="wd-head"><h2>Account balances</h2><a class="linkbtn" href="#cashflow">Cashflow ›</a></div><ul class="ui-list">' + list.map(function (a) { var s = CC.summarize(a, S.ledger, S.rows, {}); return '<li><span>' + esc(a.name) + '<div class="note" style="margin:2px 0 0">' + esc(CC.STATUS[s.status] || '') + (s.freshness.to ? ' · through ' + esc(s.freshness.to) : '') + '</div></span><b>' + esc(CC.fmt(s.balanceCents, s.currency)) + '</b></li>'; }).join('') + '</ul>';
+    },
     today: function () {
       var t = todayKey(), n = S.rows.filter(function (r) { return r.t.date === t; }).length, max = S.plan && S.plan.maxTradesPerDay, note = P.goalDate === t ? P.goalNote : '';
       return '<h2>Today</h2><div class="xrow"><div class="ui-stat"><small>TRADES</small><b>' + n + '</b>' + (max ? '<em>plan allows ' + max + '</em>' : '') + '</div><div class="ui-stat"><small>REFLECTION</small><b>' + (S.refToday ? 'Saved' : '—') + '</b>' + (S.refToday ? '' : '<em><a href="#discipline" data-go="discipline">add one</a></em>') + '</div><div class="ui-stat"><small>PLAN</small><b>' + (S.plan ? 'Set' : '—') + '</b>' + (S.plan ? '' : '<em><a href="#discipline" data-go="discipline">write one</a></em>') + '</div></div>' +

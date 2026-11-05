@@ -9,6 +9,10 @@
   var TABS = [['calc', 'CALCULATE'], ['exposure', 'EXPOSURE'], ['limits', 'LIMITS'], ['scen', 'SCENARIOS'], ['hist', 'HISTORY']];
 
   function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  // Fees from the selected account's own settings (commission + exchange/regulatory per side, x2 for a round trip). Only filled in when you tap
+  // it, and always labelled an estimate: actual historical fees are in Cashflow.
+  function acctFee() { var a = S.accounts.filter(function (x) { return x.id === S.acct; })[0]; if (!a || !Number.isInteger(a.commissionCents)) return null; return { cents: 2 * (a.commissionCents + (Number.isInteger(a.exchangeFeeCents) ? a.exchangeFeeCents : 0)), name: a.name }; }
+  function feeHint() { var fe = acctFee(); return fe ? '<button type="button" class="chip" data-act="rk-acctfee" style="margin-top:6px">USE ' + esc(fe.name.toUpperCase()) + ' FEES (' + esc(m(fe.cents)) + ')</button><small class="ui-hint">Estimate from your account settings, not broker records.</small>' : ''; }
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('trades'), DB.getAll('accounts'), ST.list('risklimit')]); }).then(function (r) {
       var ok = []; r[0].forEach(function (raw) { var n = C.normalizeTrade(raw); if (n.ok) ok.push(n.trade); }); S.rows = C.analyze(ok);
@@ -55,7 +59,7 @@
       (S.accounts.length > 1 ? '<label for="rk-acct">Check against account limits</label><select id="rk-acct" data-acct="1"><option value="">None</option>' + S.accounts.map(function (a) { return '<option value="' + esc(a.id) + '"' + (S.acct === a.id ? ' selected' : '') + '>' + esc(a.name) + '</option>'; }).join('') + '</select>' : '') +
       '<div class="fgrid">' + '<div>' + field('rk-entry', 'Entry price', f.entry, 'e.g. 21050.25') + '</div><div>' + field('rk-stop', 'Stop price', f.stop, 'e.g. 21040') + '</div></div>' +
       field('rk-target', 'Target price (optional)', f.target, 'for reward : risk') +
-      '<div class="fgrid"><div>' + field('rk-risk', 'Risk in $', f.risk, 'e.g. 250') + (lim && lim.maxRiskPerTradeCents ? '<button type="button" class="chip" data-act="rk-usemax" style="margin-top:6px">USE MY MAX (' + esc(m(lim.maxRiskPerTradeCents)) + ')</button>' : '') + '</div><div>' + field('rk-fee', 'Round-trip fees per contract, $ (optional)', f.fee, 'blank = not counted') + '</div></div>' +
+      '<div class="fgrid"><div>' + field('rk-risk', 'Risk in $', f.risk, 'e.g. 250') + (lim && lim.maxRiskPerTradeCents ? '<button type="button" class="chip" data-act="rk-usemax" style="margin-top:6px">USE MY MAX (' + esc(m(lim.maxRiskPerTradeCents)) + ')</button>' : '') + '</div><div>' + field('rk-fee', 'Round-trip fees per contract, $ (optional)', f.fee, 'blank = not counted') + feeHint() + '</div></div>' +
       field('rk-con', 'Contracts for reward : risk (optional)', f.contracts, 'blank = use the size above', 'numeric') + '</div>' +
       '<div class="panel" id="rkOut" aria-live="polite">' + calcResults() + '</div><p class="note">Calculated on your device from CME point values. Not financial advice.</p>';
   }
@@ -166,6 +170,7 @@
   root.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]'); if (!b) return; var a = b.getAttribute('data-act');
     if (a === 'rk-tab') { S.tab = b.getAttribute('data-t'); render(); window.scrollTo(0, 0); }
+    else if (a === 'rk-acctfee') { var fe = acctFee(); if (fe) { S.form.fee = (fe.cents / 100).toFixed(2); S.feeEst = true; render(); } }
     else if (a === 'rk-usemax') { var l = S.limits[S.acct]; if (l && l.limits.maxRiskPerTradeCents) { S.form.risk = String(l.limits.maxRiskPerTradeCents / 100); render(); } }
     else if (a === 'rk-go-limits') { S.limAcct = b.getAttribute('data-id'); S.tab = 'limits'; render(); }
     else if (a === 'rk-save-limits') saveLimits(b.getAttribute('data-id'));

@@ -135,13 +135,15 @@
   var LKIND = { deposit: 'Deposit', withdrawal: 'Withdrawal', adjustment: 'Adjustment', fee: 'Account fee', snapshot: 'Broker balance', payout: 'Withdrawal (payout)', 'transfer-in': 'Transfer in', 'transfer-out': 'Transfer out' };
   function plain(c) { return c == null ? '—' : JC.fmtMoney(Math.abs(c)); }
   function signed(c) { return c == null ? '—' : (c < 0 ? '−' : c > 0 ? '+' : '') + JC.fmtMoney(Math.abs(c)); }
-  function ledgerOf(id) { return S.ledger.filter(function (l) { return l.accountId === id; }).sort(function (a, b) { return b.at - a.at; }); }
+  // Imported Cash History records are listed in Cashflow › Transactions (there can be thousands); this list shows the entries you made.
+  function ledgerOf(id) { return S.ledger.filter(function (l) { return l.accountId === id && l.type !== 'cash'; }).sort(function (a, b) { return b.at - a.at; }); }
   function livePanel(a) {
     var id = a.id, b = L.balance(a, S.rows, S.ledger), rc = L.reconcile(a, S.rows, S.ledger), al = L.dailyAlert(a, S.rows, today()), form = S.lform && S.lform.id === id ? S.lform : null;
     var row = function (label, v, cls, sub) { return '<li><span>' + label + (sub ? '<div class="note" style="margin:2px 0 0">' + sub + '</div>' : '') + '</span><b class="' + (cls || '') + '">' + v + '</b></li>'; };
     var pc = function (c) { return c > 0 ? 'pos' : c < 0 ? 'neg' : ''; };
     var h = '<div class="lv-wrap"><h3 class="a-h">Balance and cash flow</h3><div class="lv-hero" role="group" aria-label="Account balance"><small>CALCULATED BALANCE' + (b.exact ? '' : ' · NEEDS VERIFICATION') + '</small><b class="lv-bal' + (b.balanceCents == null ? ' none' : '') + '">' + esc(b.balanceCents == null ? '—' : (b.balanceCents < 0 ? '−' : '') + plain(b.balanceCents)) + '</b>' +
-      '<span class="note">' + esc(a.currency || 'USD') + ' · calculated by TRC from your entries, not reported by ' + esc(a.broker || 'your broker') + '</span></div>';
+      '<span class="note">' + esc(a.currency || 'USD') + ' · calculated by TRC, not reported live by ' + esc(a.broker || 'your broker') + '</span>' +
+      (b.summary ? '<span class="note"><span class="ui-badge ' + ({ reconciled: 'good', discrepancy: 'bad', insufficient: 'bad', 'import-error': 'bad' }[b.summary.status] || 'warn') + '">' + esc(window.TTCash.STATUS[b.summary.status]) + '</span>' + (b.summary.freshness.to ? ' through ' + esc(b.summary.freshness.to) : '') + ' · <a href="#cashflow" class="linkbtn">Open Cashflow</a></span>' : '') + '</div>';
     h += '<ul class="ui-list lv-break">' + row('Starting balance' + (a.startedOn ? ' (' + esc(a.startedOn) + ')' : ''), esc(b.openingCents == null ? '—' : plain(b.openingCents))) +
       row('Realized trading P&amp;L (gross)', esc(signed(b.grossCents)), pc(b.grossCents), b.closed + ' closed trade' + (b.closed === 1 ? '' : 's')) +
       row('Trading fees', esc(b.tradeFeesCents ? '−' + plain(b.tradeFeesCents) : '$0.00'), '', b.feesUnknown ? '<span class="warnline">' + b.feesUnknown + ' trade(s) without fees</span>' : 'commissions, exchange and regulatory fees on trades') +

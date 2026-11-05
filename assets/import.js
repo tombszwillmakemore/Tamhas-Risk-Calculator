@@ -14,13 +14,13 @@
   var DEF_PREF = { fileTz: 'as-is', dateOrder: 'mdy', accountMap: {}, noAcct: '', feeTemplate: {}, applyFees: true, autoSession: true, defaults: { strategy: '', tags: '' }, keepCopy: false, remember: true };
   var COPY_LIMIT = 1500000;
   var S = { step: 'file', loaded: false, err: null, accounts: [], history: [], templates: [], fileName: '', fileSize: 0, parsed: null, mode: 'fills', mapping: {}, opts: { dateOrder: 'mdy', fileTz: 'as-is', feesPerContract: false }, accountId: 'acct-default', accountMap: {}, plan: null, tplName: '', usedTemplate: null, busy: false, msg: '',
-    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, upd: {}, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, guideOpen: false, nearMiss: null };
+    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, upd: {}, cashPick: {}, cashChoice: {}, typeMap: {}, cashReplace: {}, pendingReview: 0, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, guideOpen: false, nearMiss: null };
 
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), ST.list('import'), ST.list('template'), ST.getPref('tvImport', null)]); }).then(function (r) {
       S.accounts = r[0].map(AC.normalizeAccount).filter(function (a) { return !a.archived; }).sort(function (a, b) { return a.createdAt - b.createdAt; });
       S.history = r[1].sort(function (a, b) { return b.at - a.at; });
-      DB.getByIndex('docs', 'kind', 'dupe').then(function (d) { var n = d.filter(function (x) { return !x.voided && (x.status === 'review' || x.status === 'later'); }).length; if (n !== S.pendingReview) { S.pendingReview = n; if (S.step === 'file') render(); } }).catch(function () {}); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
+      DB.getByIndex('docs', 'kind', 'dupe').then(function (d) { var n = d.filter(function (x) { return !x.voided && (x.status === 'review' || x.status === 'later'); }).length; if (n !== S.pendingReview) { S.pendingReview = n; if (S.step === 'file' && !S.busy && !(document.activeElement && document.activeElement.id === 'im-file')) render(); } }).catch(function () {}); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
       if (r[3] && typeof r[3] === 'object') S.pref = Object.assign(JSON.parse(JSON.stringify(DEF_PREF)), r[3], { defaults: Object.assign({}, DEF_PREF.defaults, r[3].defaults || {}) });
       if (!S.accounts.some(function (a) { return a.id === S.accountId; }) && S.accounts.length) S.accountId = S.accounts[0].id;
     }).catch(function (e) { S.err = (e && e.message) || 'Could not open the local database.'; S.loaded = true; });
@@ -73,16 +73,139 @@
   function historyPanel() {
     if (!S.history.length) return '';
     return '<div class="panel" id="im-history"><h2>Import history</h2><ul class="ui-list">' + S.history.map(function (h) {
-      var rb = h.rolledBack, c = h.counts || {}, nr = c.review != null ? c.review : (c.possible || 0) + (c.ambiguous || 0) + (c.partial || 0), bad = c.invalid != null ? c.invalid : (c.problems || 0);
-      var badge = h.mode === 'summary' ? '<span class="ui-badge">reference</span>' : rb ? '<span class="ui-badge warn">undone</span>' : nr ? '<span class="ui-badge warn">' + nr + ' to review</span>' : (c.trades || c.updated) ? '<span class="ui-badge good">imported</span>' : '<span class="ui-badge">nothing new</span>';
+      var rb = h.rolledBack, c = h.counts || {}, nr = h.mode === 'cash' ? (c.held || 0) + (c.conflicts || 0) - (c.replaced || 0) : c.review != null ? c.review : (c.possible || 0) + (c.ambiguous || 0) + (c.partial || 0), bad = c.invalid != null ? c.invalid : (c.problems || 0);
+      var badge = h.mode === 'summary' ? '<span class="ui-badge">reference</span>' : rb ? '<span class="ui-badge warn">undone</span>' : nr ? '<span class="ui-badge warn">' + nr + ' to review</span>' : (c.trades || c.updated || c.records) ? '<span class="ui-badge good">imported</span>' : '<span class="ui-badge">nothing new</span>';
       return '<li class="m-row"><div><b>' + esc(h.fileName || 'file') + '</b> ' + badge + '<div class="note" style="margin:2px 0 0">' + esc(new Date(h.at).toLocaleString()) + ' · ' + esc(h.report ? h.report.map(function (r) { return REPORT_NAME[r] || r; }).join(' + ') : h.mode) +
         (h.from ? ' · trades ' + esc(h.from) + (h.to && h.to !== h.from ? ' to ' + esc(h.to) : '') : '') + ' · ' + esc((h.accountIds || [h.accountId]).filter(Boolean).map(acctName).join(', ') || '—') +
-        (h.mode === 'summary' ? '' : '<br>' + (c.rows != null ? c.rows + ' rows · ' : '') + (c.detected != null ? c.detected + ' trades found · ' : '') + (c.trades || 0) + ' new · ' + (c.duplicates || 0) + ' duplicates skipped' + (c.updated ? ' · ' + c.updated + ' updated' : '') + (nr ? ' · ' + nr + ' to review' : '') + (bad ? ' · ' + bad + ' unreadable' : '') + (c.deselected ? ' · ' + c.deselected + ' unticked' : '')) +
+        (h.mode === 'summary' ? '' : h.mode === 'cash' ? '<br>Cash History · ' + (c.rows || 0) + ' rows · ' + (c.records || 0) + ' records added · ' + (c.duplicates || 0) + ' already imported' + (c.replaced ? ' · ' + c.replaced + ' corrected' : '') + (c.held ? ' · ' + c.held + ' held' : '') + (c.invalid ? ' · ' + c.invalid + ' unreadable' : '') : '<br>' + (c.rows != null ? c.rows + ' rows · ' : '') + (c.detected != null ? c.detected + ' trades found · ' : '') + (c.trades || 0) + ' new · ' + (c.duplicates || 0) + ' duplicates skipped' + (c.updated ? ' · ' + c.updated + ' updated' : '') + (nr ? ' · ' + nr + ' to review' : '') + (bad ? ' · ' + bad + ' unreadable' : '') + (c.deselected ? ' · ' + c.deselected + ' unticked' : '')) +
         '<br><small>Import id ' + esc(h.id) + '</small>' +
         (rb ? '<br>Undone ' + esc(new Date(rb.at).toLocaleString()) + ': ' + rb.removed + ' removed' + (rb.reverted ? ', ' + rb.reverted + ' updates reversed' : '') + (rb.kept || rb.keptUpdates ? ', ' + ((rb.kept || 0) + (rb.keptUpdates || 0)) + ' kept (edited since, or have screenshots)' : '') : '') + '</div></div><div class="ui-row">' +
         (h.copies && h.copies.length ? '<button class="btn ghost sm" data-act="im-reopen" data-id="' + esc(h.id) + '">RE-OPEN</button>' : '') +
         (h.mode === 'summary' ? '<button class="btn ghost sm" data-act="im-view-sum" data-id="' + esc(h.id) + '">VIEW</button>' : rb ? '' : '<button class="btn ghost sm" data-act="im-rollback" data-id="' + esc(h.id) + '">UNDO IMPORT</button>') + '</div></li>'; }).join('') + '</ul>' +
       '<p class="note">Skipped duplicates and records that need a decision are kept in <button type="button" class="linkbtn" data-act="im-open-review">Import Review</button>. They never count in your P&amp;L unless you restore them.</p></div>';
+  }
+
+  /* =================== Cash History (deposits, withdrawals, realized P&L, fees) =================== */
+  var CC = window.TTCash;
+  function cashAcctMap() { var m = Object.assign({}, S.pref.accountMap || {}); Object.keys(S.cashPick || {}).forEach(function (k) { if (S.cashPick[k]) m[k] = S.cashPick[k]; }); return m; }
+  function buildCash(batchId) {
+    return DB.getAll('ledger').then(function (ledger) {
+      S.cashLedger = ledger; var map = cashAcctMap();
+      S.cash = S.sources.filter(function (s) { return s.det.report === 'cash'; }).map(function (src) {
+        var ch = S.cashChoice[src.id] || null, interp = CC.interpret(src.parsed, src.det.cols, ch);
+        var acct = S.noAcct[src.id] || null, a = S.accounts.filter(function (x) { return x.id === acct; })[0];
+        var rd = CC.read(src.parsed, src.det, { interp: interp, dateOrder: S.pref.dateOrder, fileTz: S.pref.fileTz, targetTz: BROWSER_TZ, accountMap: map, defaultAccountId: acct, typeMap: S.typeMap, file: src.name, fileHash: src.hash, batchId: batchId || null, currency: a ? a.currency : 'USD' });
+        var cl = rd.blocked ? null : CC.classify(rd.entries.filter(function (e) { return e.accountId; }), ledger);
+        return { src: src, interp: interp, rd: rd, cl: cl, noAcctCol: src.det.cols.account < 0 };
+      });
+    });
+  }
+  function cashBlockers() {
+    var b = [], map = cashAcctMap();
+    (S.cash || []).forEach(function (x) {
+      if (x.interp.needsChoice) b.push(x.src.name + ': choose how the amounts are written.');
+      if (x.interp.decimalIssue && !(S.cashChoice[x.src.id] && S.cashChoice[x.src.id].decimal)) b.push(x.src.name + ': choose the decimal mark.');
+      if (x.noAcctCol && !S.noAcct[x.src.id]) b.push('Choose which account ' + x.src.name + ' belongs to.');
+      Object.keys(x.rd.accounts || {}).forEach(function (raw) { if (raw && !map[raw]) b.push('Choose a TRC account for "' + raw + '".'); });
+    });
+    return b;
+  }
+  function cashTotals(entries) { var t = { trading: 0, fees: 0, deposits: 0, withdrawals: 0, other: 0, net: 0 }; entries.forEach(function (e) { var g = CC.group(e.category), a = e.amountCents; t.net += a; if (g === 'trading') t.trading += a; else if (g === 'fee') t.fees += a; else if (e.category === 'deposit' || e.category === 'transfer_in') t.deposits += a; else if (e.category === 'withdrawal' || e.category === 'transfer_out' || e.category === 'payout') t.withdrawals += a; else t.other += a; }); return t; }
+  var READING = { 'delta+balance': ['Delta is the change; Amount is the cash balance after it', 'Used when every Amount equals the previous Amount plus the Delta.'], 'delta-only': ['Delta is the change; ignore Amount', 'Use when Amount is not a running balance.'], amount: ['Amounts are changes as written (fees are negative)', 'Charges are shown with a minus sign.'], 'fees-positive': ['Fees are written as positive numbers but are charges', 'TRC turns fee rows into costs; all other rows stay as written.'] };
+  function cashStep() {
+    var m = function (c, s) { return CC.fmt(c, 'USD', s); }, h = '<div class="ui-sec"><h2>Cash History preview</h2><button class="btn ghost sm" data-act="im-cancel">‹ START AGAIN</button></div>' + (S.nearMiss ? '<div class="ui-banner warn">' + esc(S.nearMiss) + '</div>' : ''), all = { rows: 0, add: 0, dup: 0, con: 0, held: 0, bad: 0 }, adds = [], bl = cashBlockers();
+    (S.cash || []).forEach(function (x) {
+      var rd = x.rd, cl = x.cl || { add: [], dup: [], conflict: [] }; all.rows += x.src.parsed.rows.length; all.add += cl.add.length; all.dup += cl.dup.length; all.con += cl.conflict.length; all.held += (rd.held || []).length; all.bad += (rd.invalid || []).length;
+      adds = adds.concat(cl.add, cl.conflict.filter(function (c) { return S.cashReplace[c.e.key]; }).map(function (c) { var d = Object.assign({}, c.e); d.amountCents = c.e.amountCents - c.existing.amountCents; return d; }));
+      h += '<div class="panel"><div class="ui-row" style="justify-content:space-between"><div><b>' + esc(x.src.name) + '</b><div class="note" style="margin:2px 0 0">' + esc(x.src.det.title) + ' · broker: Tradovate · ' + esc(x.src.encoding || 'UTF-8') + (rd.from ? ' · ' + esc(rd.from) + (rd.to !== rd.from ? ' to ' + esc(rd.to) : '') : '') + ' · ' + U.plural(x.src.parsed.rows.length, 'row') + '</div></div><span class="ui-badge warn">CASH HISTORY</span></div>' +
+        '<p class="note">' + esc(x.src.det.basis) + '</p>';
+      // how the amounts are read (never guessed)
+      h += '<div class="im-interp"><b>How the amounts are read</b><p class="note" style="margin:4px 0">' + esc(x.interp.evidence) + '</p>';
+      if (x.interp.needsChoice || x.interp.chosen) h += '<fieldset class="field"><legend>Choose the reading that matches your file</legend>' + x.interp.choices.concat(x.interp.chosen && x.interp.choices.indexOf(x.interp.mode) < 0 ? [x.interp.mode] : []).map(function (c) { return '<label class="ui-chk"><input type="radio" name="cr-' + x.src.id + '" data-cash-mode="' + x.src.id + '" value="' + c + '"' + (x.interp.chosen && x.interp.mode === c ? ' checked' : '') + '><span><b>' + esc(READING[c][0]) + '</b><br><small class="note">' + esc(READING[c][1]) + '</small></span></label>'; }).join('') + '</fieldset>';
+      if (x.interp.decimalIssue) h += '<label for="cd-' + x.src.id + '">Decimal mark (values like "1,234" can be read two ways)</label><select id="cd-' + x.src.id + '" data-cash-dec="' + x.src.id + '"><option value="">— choose —</option><option value="dot"' + ((S.cashChoice[x.src.id] || {}).decimal === 'dot' ? ' selected' : '') + '>1,234.56 (dot for decimals)</option><option value="comma"' + ((S.cashChoice[x.src.id] || {}).decimal === 'comma' ? ' selected' : '') + '>1.234,56 (comma for decimals)</option></select>';
+      if (x.interp.signUnchecked) h += '<p class="note warnline">There are no fee rows to confirm the signs. Check the preview totals below.</p>';
+      h += '</div>';
+      // accounts
+      var raws = Object.keys(rd.accounts || {}).filter(Boolean);
+      if (raws.length || x.noAcctCol) {
+        h += '<div class="ui-form">' + raws.map(function (raw, i) { return '<label for="cp-' + x.src.id + '-' + i + '">Tradovate account <b>' + esc(raw) + '</b> (' + rd.accounts[raw] + ' rows) goes into</label><select id="cp-' + x.src.id + '-' + i + '" data-cash-acct="' + esc(raw) + '">' + acctOptions(cashAcctMap()[raw], true) + '</select>'; }).join('') +
+          (x.noAcctCol ? '<label for="cn-' + x.src.id + '">This file has no account column. Which account is it from?</label><select id="cn-' + x.src.id + '" data-noacct="' + x.src.id + '">' + acctOptions(S.noAcct[x.src.id] || '', true) + '</select>' : '') + '</div>';
+      }
+      if (rd.blocked) { h += '</div>'; return; }
+      // counts
+      h += '<ul class="ui-list im-cls"><li class="good"><span>New records</span><b>' + cl.add.length + '</b></li><li><span>Already imported (skipped)</span><b>' + cl.dup.length + '</b></li><li class="' + (cl.conflict.length ? 'bad' : '') + '"><span>Corrected by the broker (held)</span><b>' + cl.conflict.length + '</b></li>' +
+        '<li class="' + (rd.held.length ? 'warn' : '') + '"><span>Unknown types (held)</span><b>' + rd.held.length + '</b></li><li class="' + (rd.invalid.length ? 'bad' : '') + '"><span>Unreadable rows</span><b>' + rd.invalid.length + '</b></li></ul>';
+      // warnings
+      var w = [];
+      if (rd.rounded) w.push(rd.rounded + ' amount(s) had more decimals than the currency allows and were rounded to the cent (the original text is kept).');
+      var bySign = rd.entries.filter(function (e) { return e.bySign; }).length; if (bySign) w.push(bySign + ' "Fund Transaction" row(s): Tradovate uses one type for deposits and withdrawals, so the direction comes from the sign (plus = deposit, minus = withdrawal).');
+      if (x.src.det.cols.id < 0) w.push('No id column: duplicates are recognised by account, time, type and amount. Two identical records in the same second are both kept.');
+      if (x.interp.mode !== 'delta+balance') w.push('No broker running balance in this file: TRC cannot confirm the balance from it. Add the balance Tradovate shows (Accounts › + BROKER BALANCE) to reconcile.');
+      var moved = cl.dup.filter(function (d) { return d.balanceMoved; }).length; if (moved) w.push(moved + ' already-imported record(s) now show a different running balance: an earlier record was probably corrected by the broker.');
+      var cur = Object.keys(rd.currencies || {}); if (cur.length > 1 || (cur[0] && cur[0] !== 'USD')) w.push('Currencies in this file: ' + cur.join(', ') + '. Records in another currency than the account are not added to its balance.');
+      if (Object.keys(rd.unmapped || {}).length) w.push('Rows for accounts you have not matched yet are not imported.');
+      if (w.length) h += '<div class="ui-banner warn"><ul class="ui-list">' + w.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul></div>';
+      if (rd.held.length) {
+        var types = {}; rd.held.forEach(function (e) { types[e.brokerType] = (types[e.brokerType] || 0) + 1; });
+        h += '<div class="ui-form"><p class="note"><b>Unknown types</b> are not imported until you say what they are. The broker\'s own name is kept with every record.</p>' + Object.keys(types).map(function (t, i) { return '<label for="ct-' + i + '">"' + esc(t) + '" (' + types[t] + ' rows) is</label><select id="ct-' + i + '" data-cash-type="' + esc(t) + '"><option value="">— keep holding —</option>' + Object.keys(CC.CATS).filter(function (c) { return c !== 'session'; }).map(function (c) { return '<option value="' + c + '"' + (S.typeMap[t] === c ? ' selected' : '') + '>' + esc(CC.label(c)) + '</option>'; }).join('') + '</select>'; }).join('') + '</div>';
+      }
+      if (cl.conflict.length) h += '<div class="panel"><h3 class="im-h3">Corrected by the broker</h3><p class="note" style="margin-top:0">Same broker record, different amount. Nothing changes unless you tick it.</p><ul class="ui-list">' + cl.conflict.map(function (c) { return '<li><label class="ui-chk" style="margin:0"><input type="checkbox" data-cash-replace="' + esc(c.e.key) + '"' + (S.cashReplace[c.e.key] ? ' checked' : '') + '><span>' + esc(c.e.date + ' · ' + c.e.brokerType + ' · ' + m(c.existing.amountCents) + ' → ' + m(c.e.amountCents)) + '<div class="note" style="margin:2px 0 0">Tick to use the corrected amount (the old one is kept for undo).</div></span></label></li>'; }).join('') + '</ul></div>';
+      if (rd.invalid.length) h += '<details class="panel"><summary>Unreadable rows (' + rd.invalid.length + ')</summary><ul class="ui-list">' + rd.invalid.slice(0, 50).map(function (v) { return '<li><span>Line ' + v.line + ': ' + esc(v.why) + '<div class="note" style="margin:2px 0 0">' + esc(v.raw.join(' | ').slice(0, 160)) + '</div></span></li>'; }).join('') + '</ul></details>';
+      h += '</div>';
+    });
+    var t = cashTotals(adds);
+    h += '<div class="panel im-sum" role="status" aria-live="polite"><h2>What will be added</h2><ul class="ui-list im-cls"><li><span>Rows in file(s)</span><b>' + all.rows + '</b></li><li class="good"><span>Records added</span><b>' + adds.length + '</b></li><li><span>Realized trading P&amp;L</span><b>' + esc(m(t.trading, true)) + '</b></li><li><span>Fees</span><b>' + esc(m(t.fees, true)) + '</b></li>' +
+      '<li><span>Deposits</span><b>' + esc(m(t.deposits, true)) + '</b></li><li><span>Withdrawals</span><b>' + esc(m(t.withdrawals, true)) + '</b></li><li><span>Other</span><b>' + esc(m(t.other, true)) + '</b></li><li><span><b>Change to cash</b></span><b>' + esc(m(t.net, true)) + '</b></li></ul>' +
+      '<p class="note">These are the broker\'s cash records. For the period they cover, your Cash History becomes the source for the account balance; journal trades in that period are used for analytics and cross-checking, never added a second time.</p></div>';
+    h += '<div class="panel">' + (bl.length ? '<div class="ui-banner warn" role="alert"><b>Before importing:</b><ul class="ui-list">' + bl.map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') + '</ul></div>' : '') +
+      '<button class="btn wide" data-act="im-cash-commit"' + (S.busy || bl.length || !adds.length && !all.dup ? ' disabled' : '') + '>' + (adds.length ? 'IMPORT ' + U.plural(adds.length, 'CASH RECORD') : 'NOTHING NEW: RECORD AND FINISH') + '</button>' +
+      '<div class="ui-row" style="margin-top:8px"><button type="button" class="btn ghost sm" data-act="im-cancel">CANCEL IMPORT</button><button type="button" class="btn ghost sm" data-act="im-hist">IMPORT HISTORY</button></div></div>';
+    return h + historyPanel();
+  }
+  function cashCommit() {
+    if (S.busy) return; if (cashBlockers().length) { render(); return; }
+    S.busy = true; render(); var batchId = newBatchId();
+    withLock(function () {
+      return buildCash(batchId).then(function () {
+        var now = Date.now(), ops = [], ids = [], replaced = [], accts = {}, c = { rows: 0, records: 0, duplicates: 0, conflicts: 0, replaced: 0, held: 0, invalid: 0 }, from = null, to = null, hashes = [];
+        S.cash.forEach(function (x) {
+          var rd = x.rd, cl = x.cl; c.rows += x.src.parsed.rows.length; c.held += rd.held.length; c.invalid += rd.invalid.length; hashes.push(x.src.hash);
+          if (!cl) return; c.duplicates += cl.dup.length; c.conflicts += cl.conflict.length;
+          cl.add.forEach(function (e) { var l = CC.toLedger(e, batchId, now); ops.push({ store: 'ledger', type: 'put', value: l }); ids.push(l.id); accts[l.accountId] = 1; if (!from || l.date < from) from = l.date; if (!to || l.date > to) to = l.date; });
+          cl.conflict.forEach(function (k) { if (!S.cashReplace[k.e.key]) return; var l = CC.toLedger(k.e, batchId, now); l.id = k.existing.id; l.replaced = { at: now, previousCents: k.existing.amountCents }; ops.push({ store: 'ledger', type: 'put', value: l }); replaced.push({ id: l.id, before: k.existing, after: CC.hash(JSON.stringify(l)) }); accts[l.accountId] = 1; c.replaced++; });
+        });
+        c.records = ids.length;
+        if (!ops.length && !c.duplicates) throw new Error('nothing');
+        var doc = { id: batchId, kind: 'import', mode: 'cash', broker: 'tradovate', report: ['cash'], adapter: CC.ADAPTER, at: now, createdAt: now, updatedAt: now, fileName: S.cash.map(function (x) { return x.src.name; }).join(', ').slice(0, 200), fileHashes: hashes,
+          files: S.cash.map(function (x) { return { name: x.src.name, size: x.src.size, encoding: x.src.encoding || 'UTF-8', reading: x.interp.mode, evidence: x.interp.evidence.slice(0, 200) }; }), accountIds: Object.keys(accts), accountId: Object.keys(accts)[0] || null, from: from, to: to, counts: c, entryIds: ids, replaced: replaced, rolledBack: null,
+          heldRows: [].concat.apply([], S.cash.map(function (x) { return x.rd.held.map(function (e) { return { line: e.source.line, type: e.brokerType, raw: e.source.raw }; }); })).slice(0, 500),
+          invalidRows: [].concat.apply([], S.cash.map(function (x) { return x.rd.invalid.map(function (v) { return { line: v.line, why: v.why }; }); })).slice(0, 500) };
+        if (!doc.accountIds.length) doc.accountIds = Object.keys(S.noAcct).map(function (k) { return S.noAcct[k]; }).filter(Boolean);
+        ops.push({ store: 'docs', type: 'put', value: doc }); ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: now, type: 'import-cash', details: { batchId: batchId, records: c.records, replaced: c.replaced, duplicates: c.duplicates } } });
+        if (S.pref.remember) S.pref.accountMap = cashAcctMap();
+        return DB.batch(ops).then(function () { return savePref(); }).then(function () { return { c: c, cash: true, accountIds: doc.accountIds }; });
+      });
+    }).then(function (r) {
+      ST.invalidate(); S.busy = false; try { window.dispatchEvent(new Event('tt:ledger-changed')); window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {}
+      U.toast(r.c.records ? 'Imported ' + U.plural(r.c.records, 'cash record') + (r.c.duplicates ? ' · ' + r.c.duplicates + ' already imported' : '') + '.' : 'Nothing new: ' + r.c.duplicates + ' already imported.');
+      S.done = r; S.step = 'cashdone'; S.cash = null; return load();
+    }).then(function () { render(); window.scrollTo(0, 0); }).catch(function (e) { S.busy = false; U.toast(e && e.message === 'nothing' ? 'Nothing to import.' : 'Could not save the import. Nothing was changed.', true); render(); });
+  }
+  function cashDoneStep() {
+    var c = S.done.c;
+    return '<div class="panel im-done" role="status"><h2>Cash History imported</h2><div class="ui-grid g2">' + U.stat('Added', String(c.records), 'cash records', c.records ? 'pos' : 'dim') + U.stat('Already imported', String(c.duplicates), 'skipped') + U.stat('Corrected', String(c.replaced), 'replaced with your OK') + U.stat('Held', String(c.held + c.invalid), 'unknown type or unreadable') + '</div>' +
+      (c.held ? '<div class="ui-banner warn">' + c.held + ' row(s) with an unknown type were not imported. Drop the same file again and choose what they are; rows already imported are skipped.</div>' : '') +
+      '<div class="ui-row" style="margin-top:12px"><button class="btn" data-act="im-goto-cash">OPEN CASHFLOW</button><button class="btn ghost" data-act="im-cancel">IMPORT ANOTHER</button></div></div>' + historyPanel();
+  }
+  function cashRollback(h) {
+    return Promise.all([DB.getAll('ledger')]).then(function (r) {
+      var byId = {}; r[0].forEach(function (l) { byId[l.id] = l; }); var ops = [], res = { removed: 0, kept: 0, reverted: 0 }, now = Date.now();
+      (h.entryIds || []).forEach(function (id) { var l = byId[id]; if (!l) return; if (l.source && l.source.batchId === h.id && !l.voided) { ops.push({ store: 'ledger', type: 'del', key: id }); res.removed++; } else res.kept++; });
+      (h.replaced || []).forEach(function (x) { var l = byId[x.id]; if (l && CC.hash(JSON.stringify(l)) === x.after) { ops.push({ store: 'ledger', type: 'put', value: x.before }); res.reverted++; } else res.kept++; });
+      ops.push({ store: 'docs', type: 'put', value: Object.assign({}, h, { rolledBack: { at: now, removed: res.removed, kept: res.kept, reverted: res.reverted }, updatedAt: now }) });
+      ops.push({ store: 'audit', type: 'put', value: { id: DB.uid('au'), at: now, type: 'import-cash-rollback', details: Object.assign({ batchId: h.id }, res) } });
+      return DB.batch(ops).then(function () { return res; });
+    });
   }
 
   /* =================== duplicate summary, review and commit (shared by every import method) =================== */
@@ -158,25 +281,51 @@
   function afterSave() { ST.invalidate(); S.busy = false; try { window.dispatchEvent(new Event('tt:journal-changed')); window.dispatchEvent(new Event('tt:dupes-changed')); } catch (e) {} if (window.TTJournal) window.TTJournal.reload(); }
 
   /* =================== reading what you give it =================== */
-  function readText(file) { return new Promise(function (res, rej) { var rd = new FileReader(); rd.onerror = function () { rej(new Error('Could not read ' + file.name + '.')); }; rd.onload = function () { res(String(rd.result)); }; rd.readAsText(file); }); }
+  // Files are read as bytes: ZIP archives are opened safely (TTZip), text is decoded with the right encoding (UTF-8, UTF-16, Windows-1252).
+  var MAX_FILES = 20;
+  function readBytes(file) { return new Promise(function (res, rej) { var rd = new FileReader(); rd.onerror = function () { rej(new Error('Could not read ' + file.name + '.')); }; rd.onload = function () { res(new Uint8Array(rd.result)); }; rd.readAsArrayBuffer(file); }); }
+  function readFileItems(file) {
+    var Z = window.TTZip, name = file.name || 'file';
+    if (Z && Z.isXlsxName(name)) return Promise.reject(new Error(name + ' is a spreadsheet. Open it and save it as CSV, then import the CSV (spreadsheets can contain formulas, so TRC does not open them directly).'));
+    if (/\.(pdf|docx?|exe|js|html?|json|xml)$/i.test(name)) return Promise.reject(new Error(name + ': this file type is not supported. Export the report as CSV from your broker.'));
+    return readBytes(file).then(function (b) {
+      if (Z && Z.isZip(b)) return Z.extract(b, Z.browserInflate).then(function (r) {
+        if (r.skipped.length) S.zipNote = (S.zipNote ? S.zipNote + ' ' : '') + name + ': skipped ' + r.skipped.map(function (x) { return x.name + ' (' + x.why + ')'; }).join(', ') + '.';
+        if (!r.files.length) throw new Error(name + ': no CSV or text file inside that could be opened safely.');
+        return r.files.map(function (f) { var d = Z.decodeText(f.bytes); return { name: f.name, text: d.text, size: f.bytes.length, encoding: d.encoding }; });
+      });
+      var d = Z ? Z.decodeText(b) : { text: new TextDecoder().decode(b), encoding: 'UTF-8' };
+      if (/[\u0000-\u0008\u000e-\u001f]/.test(d.text.slice(0, 4000))) throw new Error(name + ' does not look like a text or CSV file.');
+      return [{ name: name, text: d.text, size: b.length, encoding: d.encoding }];
+    });
+  }
   function isImage(f) { return /^image\//.test(f.type || '') || /\.(png|jpe?g|webp)$/i.test(f.name || ''); }
   function intake(items) {
     // items: [{file}|{text, name}|{image: blob, name}]
-    S.msg = ''; S.nearMiss = null; S.sources = []; S.queue = []; S.done = null; S.tv = null; S.pick = {}; S.noAcct = {}; S.allow = {}; S.off = {}; S.upd = {}; S.userTotal = ''; S.okMismatch = false; S.showN = 50;
+    if (items.length > MAX_FILES) { S.msg = 'Choose at most ' + MAX_FILES + ' files at a time.'; S.step = 'file'; render(); return; }
+    S.msg = ''; S.zipNote = ''; S.nearMiss = null; S.sources = []; S.queue = []; S.done = null; S.tv = null; S.pick = {}; S.noAcct = {}; S.allow = {}; S.off = {}; S.upd = {}; S.cashPick = {}; S.cashChoice = {}; S.typeMap = {}; S.cashReplace = {}; S.cash = null; S.userTotal = ''; S.okMismatch = false; S.showN = 50;
     var jobs = items.map(function (it) {
       if (it.image || (it.file && isImage(it.file))) { S.queue.push({ name: it.name || (it.file && it.file.name) || 'screenshot.png', blob: it.image || it.file }); return Promise.resolve(); }
       if (it.file && it.file.size > I.LIMITS.chars) return Promise.reject(new Error(it.file.name + ' is larger than ' + (I.LIMITS.chars / 1e6) + ' MB.'));
-      return (it.file ? readText(it.file) : Promise.resolve(it.text)).then(function (text) { addText(it.name || (it.file && it.file.name) || 'pasted text', text, it.file ? it.file.size : text.length); });
+      return (it.file ? readFileItems(it.file) : Promise.resolve([{ name: it.name || 'pasted text', text: it.text, size: it.text.length, encoding: 'pasted' }])).then(function (list) { list.forEach(function (x) { addText(x.name, x.text, x.size, x.encoding); }); });
     });
     Promise.all(jobs).then(route).catch(function (e) { S.msg = e.message; S.step = 'file'; render(); });
   }
-  function addText(name, text, size) {
+  function addText(name, text, size, encoding) {
     var parsed = /\.csv$|\.tsv$/i.test(name) ? I.parseCsv(text) : TV.parsePasted(text);
     if (!parsed.ok) throw new Error((name ? name + ': ' : '') + parsed.error);
-    S.sources.push({ id: 's' + S.sources.length, name: name.slice(0, 120), size: size, text: text, parsed: parsed, det: TV.detect(parsed.headers), kind: 'text' });
+    var cash = window.TTCash ? window.TTCash.detect(parsed) : null;
+    S.sources.push({ id: 's' + S.sources.length, name: name.slice(0, 120), size: size, text: text, parsed: parsed, det: cash || TV.detect(parsed.headers), kind: 'text', encoding: encoding || 'UTF-8', hash: window.TTCash ? window.TTCash.hash(text) : '' });
   }
   function route() {
     if (S.queue.length) { readNextImage(); return; }
+    var cashSrc = S.sources.filter(function (s) { return s.det.report === 'cash'; });
+    if (S.zipNote) { S.nearMiss = S.zipNote; S.zipNote = ''; }
+    if (cashSrc.length) {
+      var rest = S.sources.filter(function (s) { return s.det.report !== 'cash'; });
+      if (rest.length) S.nearMiss = 'Cash History is imported on its own. Import ' + rest.map(function (o) { return o.name; }).join(', ') + ' separately after this.';
+      S.sources = cashSrc; buildCash(null).then(function () { S.step = 'cash'; render(); window.scrollTo(0, 0); }); return;
+    }
     var tv = S.sources.filter(function (s) { return s.det.report && s.det.report !== 'summary'; }), sums = S.sources.filter(function (s) { return s.det.report === 'summary'; }), other = S.sources.filter(function (s) { return !s.det.report; });
     if (tv.length) { S.sources = tv.concat(sums); if (other.length) S.nearMiss = U.plural(other.length, 'file') + ' did not look like a Tradovate report (' + other.map(function (o) { return o.name; }).join(', ') + '). Import ' + (other.length === 1 ? 'it' : 'them') + ' separately with the column mapper.'; buildTv(null).then(function () { S.step = 'tv'; render(); window.scrollTo(0, 0); }); return; }
     if (sums.length) { S.step = 'summary'; S.sources = sums; render(); return; }
@@ -432,6 +581,12 @@
   function rollback(id) {
     var h = S.history.filter(function (x) { return x.id === id; })[0]; if (!h || h.rolledBack) return;
     var c = h.counts || {};
+    if (h.mode === 'cash') {
+      U.confirm('Undo this Cash History import?', 'Removes the ' + U.plural(c.records || 0, 'cash record') + ' it added' + (c.replaced ? ' and puts back the ' + c.replaced + ' amount(s) it corrected' : '') + '. Records you voided or that later imports changed are kept. Nothing else is touched.', 'UNDO IMPORT', true).then(function (yes) {
+        if (!yes) return; withLock(function () { return cashRollback(h); }).then(function (r) { ST.invalidate(); try { window.dispatchEvent(new Event('tt:ledger-changed')); window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} U.toast('Import undone: ' + r.removed + ' removed' + (r.reverted ? ', ' + r.reverted + ' corrections reversed' : '') + (r.kept ? ', ' + r.kept + ' kept' : '') + '.'); return load(); }).then(render).catch(function () { U.toast('Could not undo the import. Nothing was changed.', true); });
+      });
+      return;
+    }
     U.confirm('Undo this import?', 'Removes the ' + U.plural(c.trades || 0, 'trade') + ' it added' + (c.updated ? ' and reverses the ' + U.plural(c.updated, 'update') + ' it applied' : '') + '. Trades you edited since, or that have screenshots, are kept. Trades that were in your journal before are not touched.', 'UNDO IMPORT', true).then(function (yes) {
       if (!yes) return;
       withLock(function () {
@@ -452,7 +607,7 @@
   function render() {
     if (!S.loaded) { root.innerHTML = '<p class="note">Loading…</p>'; return; }
     if (S.err) { root.innerHTML = '<div class="ui-banner bad">' + esc(S.err) + '</div>'; return; }
-    root.innerHTML = S.step === 'map' ? mapStep() : S.step === 'preview' ? previewStep() : S.step === 'review' ? reviewStep() : S.step === 'tv' ? tvStep() : S.step === 'summary' ? summaryStep() : S.step === 'done' ? doneStep() : S.step === 'viewsum' ? viewSumStep() : fileStep();
+    root.innerHTML = S.step === 'map' ? mapStep() : S.step === 'preview' ? previewStep() : S.step === 'review' ? reviewStep() : S.step === 'tv' ? tvStep() : S.step === 'summary' ? summaryStep() : S.step === 'done' ? doneStep() : S.step === 'viewsum' ? viewSumStep() : S.step === 'cash' ? cashStep() : S.step === 'cashdone' ? cashDoneStep() : fileStep();
   }
   function reset() { if (S.review && S.review.url) URL.revokeObjectURL(S.review.url); S.step = 'file'; S.parsed = null; S.plan = null; S.tv = null; S.review = null; S.sources = []; S.queue = []; S.msg = ''; S.nearMiss = null; S.stage = ''; S.done = null; render(); }
   function rebuild() { buildTv(null).then(render); }
@@ -480,6 +635,19 @@
       if (t.hasAttribute('data-allow')) { var f2 = t.getAttribute('data-allow'); if (t.checked) S.allow[f2] = 1; else delete S.allow[f2]; return; }
       if (t.hasAttribute('data-upd')) { S.upd[t.getAttribute('data-upd')] = t.checked; render(); return; }
     }
+    if (S.step === 'cash') {
+      var cid;
+      if ((cid = t.getAttribute('data-cash-mode'))) { S.cashChoice[cid] = Object.assign({}, S.cashChoice[cid], { mode: t.value }); buildCash(null).then(render); return; }
+      if ((cid = t.getAttribute('data-cash-dec'))) { S.cashChoice[cid] = Object.assign({}, S.cashChoice[cid], { decimal: t.value || undefined }); buildCash(null).then(render); return; }
+      var raw2 = t.getAttribute('data-cash-acct'), na2 = t.getAttribute('data-noacct');
+      if (raw2 != null || na2 != null) {
+        var setC = function (id) { if (raw2 != null) S.cashPick[raw2] = id; else S.noAcct[na2] = id; buildCash(null).then(render); };
+        if (/^__new:/.test(t.value)) createAccount(t.value.slice(6), raw2 != null ? raw2 : 'Tradovate cash account').then(function (id) { setC(id || ''); }); else setC(t.value);
+        return;
+      }
+      if (t.hasAttribute('data-cash-type')) { var ty = t.getAttribute('data-cash-type'); if (t.value) S.typeMap[ty] = t.value; else delete S.typeMap[ty]; buildCash(null).then(render); return; }
+      if (t.hasAttribute('data-cash-replace')) { S.cashReplace[t.getAttribute('data-cash-replace')] = t.checked; render(); return; }
+    }
     if (S.step === 'preview') {
       if (t.hasAttribute('data-allow')) { var f3 = t.getAttribute('data-allow'); if (t.checked) S.allow[f3] = 1; else delete S.allow[f3]; return; }
       if (t.hasAttribute('data-upd')) { S.upd[t.getAttribute('data-upd')] = t.checked; render(); return; }
@@ -504,6 +672,8 @@
     else if (a === 'im-more') { S.showN += 50; render(); }
     else if (a === 'im-all-on') { S.off = {}; render(); } else if (a === 'im-all-off') { (S.tv || []).forEach(function (x) { x.plan.trades.forEach(function (t) { S.off[t.fp] = 1; }); }); render(); }
     else if (a === 'im-tv-commit') tvCommit();
+    else if (a === 'im-cash-commit') cashCommit();
+    else if (a === 'im-goto-cash') { reset(); if (window.TTNav) window.TTNav.go('cashflow'); }
     else if (a === 'im-ocr-cancel') { window.TTOcr.cancel(); }
     else if (a === 'im-ocr-retry') { var j = S.retry; S.retry = null; if (j) { S.queue.unshift(j); readNextImage(); } }
     else if (a === 'im-goto-journal') { reset(); if (window.TTNav) window.TTNav.go('journal'); }

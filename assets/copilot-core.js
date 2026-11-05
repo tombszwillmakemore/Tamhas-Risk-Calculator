@@ -183,6 +183,23 @@
       return best;
     }
     var VIEWTAB = { calendar: 'calendar', analytics: 'analytics', backup: 'backup' };
+    function cashAnswer(n, data) {
+      ctx.last = 'nav'; ctx.topic = { type: 'feature', id: 'cashflow' };
+      var list = data.cash || [], open = { type: 'navigate', view: 'cashflow', ok: 'Opened Cashflow.', fail: 'I could not open Cashflow.' };
+      if (!list.length) return R('I have no cash records or starting balances to answer from yet, so I will not guess. Import your Tradovate Cash History, or add a personal account with its starting balance, and ask again.', { actions: [open], feature: 'cashflow' });
+      var pick = list.filter(function (x) { return n.indexOf(norm(x.name)) >= 0; }), many = !pick.length && list.length > 1, use = pick.length ? pick : list;
+      var asOf = function (x) { return x.s.freshness.to ? ' (through ' + x.s.freshness.to + ', from imported records and your entries, not a live balance)' : ''; };
+      var st = function (x) { return x.statusLabel ? ' Status: ' + x.statusLabel + '.' : ''; };
+      var m = function (c) { return c == null ? 'unknown' : money(c); };
+      var per = function (fn) { return use.map(function (x) { return (use.length > 1 ? x.name + ': ' : '') + fn(x); }).join(' '); };
+      if (/why .*(profit|p ?& ?l|pnl)|why .*balance/.test(n)) return R(per(function (x) { var t = x.s.totals; return 'Net trading P&L is ' + m(t.netTradingCents) + ' (gross ' + m(t.grossCents) + ' minus ' + m(t.tradingFeesCents) + ' trading fees). The balance of ' + m(x.s.balanceCents) + ' also includes the starting balance ' + m(x.s.opening.cents) + ', deposits ' + m(t.depositsCents) + ', withdrawals ' + m(t.withdrawalsCents) + (t.accountFeesCents ? ' and account fees ' + m(t.accountFeesCents) : '') + '.'; }) + ' The Cashflow screen shows this line by line.', { actions: [open], feature: 'cashflow' });
+      if (/largest (trading )?(expense|cost|fee)/.test(n)) return R(per(function (x) { var bc = x.s.totals.byCat, best = null; Object.keys(bc).forEach(function (c) { if (bc[c] < 0 && /fee|commission/.test(c) && (!best || bc[c] < bc[best])) best = c; }); return best ? 'Your largest fee type is ' + (x.labels[best] || best) + ': ' + m(-bc[best]) + '.' : 'No fees recorded.'; }), { actions: [open], feature: 'cashflow' });
+      if (/\b(fees?|commissions?)\b/.test(n)) return R(per(function (x) { var t = x.s.totals, com = -(t.byCat.commission || 0); return (/commission/.test(n) ? 'Commissions: ' + m(com) + '. ' : '') + 'Total fees: ' + m(t.feesCents) + ' (' + m(t.tradingFeesCents) + ' on trades, ' + m(t.accountFeesCents) + ' account fees).' + (x.s.unknownFees ? ' ' + x.s.unknownFees + ' trade(s) have no fees entered, so the real total is higher.' : '') + (x.s.estimatedFees ? ' Some fees are estimates from your settings.' : ''); }), { actions: [open], feature: 'cashflow' });
+      if (/deposit/.test(n)) return R(per(function (x) { return 'Deposits: ' + m(x.s.totals.depositsCents) + '.' + asOf(x); }) + ' Deposits are not counted as trading profit.', { actions: [open], feature: 'cashflow' });
+      if (/withdr/.test(n)) return R(per(function (x) { return 'Withdrawals: ' + m(x.s.totals.withdrawalsCents) + '.' + asOf(x); }) + ' Withdrawals are not counted as trading losses.', { actions: [open], feature: 'cashflow' });
+      if (/accurate|correct|\bright\b(?! now)|reconcil|match|discrepanc/.test(n)) return R(per(function (x) { var r = x.s.reasons[0] || ''; return x.statusLabel + '.' + (r ? ' ' + r : '') + (x.s.discrepancies.length ? ' ' + plural(x.s.discrepancies.length, 'problem') + ' listed in Cashflow.' : ''); }), { actions: [{ type: 'navigate', view: 'cashflow', ok: 'Opened Cashflow.', fail: 'I could not open Cashflow.' }], feature: 'cashflow' });
+      return R((many ? 'You have ' + list.length + ' accounts. ' : '') + per(function (x) { return 'Balance ' + m(x.s.balanceCents) + asOf(x) + '.' + st(x); }) + (/live|right now|current/.test(n) ? ' TRC has no live connection to your broker; this is the latest calculated balance.' : ''), { actions: [open], feature: 'cashflow' });
+    }
     function navTo(f, extra) {
       var v = f.view; if (f.virtual) return R('You are already talking to Copilot. Ask me anything or say help.');
       var act = { type: 'navigate', view: v, ok: 'Opened ' + f.title + '.', fail: 'I could not open ' + f.title + ' from here.' }; if (extra) for (var k in extra) act[k] = extra[k];
@@ -442,6 +459,12 @@
       if (!dry && ctx.depth === 0) { var sc = (data.prefs && data.prefs.shortcuts || []).filter(function (x) { return norm(x.phrase) === n; })[0]; if (sc) { ctx.depth = 1; var r0 = parse(sc.command, data); ctx.depth = 0; return r0; } }
       // Smart Import and Install TRC (release 2.0.0): plain requests that do not start with "open". Tour/teach requests go on to the tour handler.
       var teachReq = /\b(tour|teach|walk me through|show me how|guide me)\b/.test(n);
+      // Cashflow (release 2.3.0): answers come ONLY from data.cash, the summaries made by TTCash.summarize - the same engine as the Cashflow screen.
+      // Copilot never calculates money figures itself, never calls an imported balance live, and never changes financial records by voice.
+      var cashQ = !teachReq && (/\b(account )?balance\b|how much (money )?(is|do i have) in my account/.test(n) || /\b(fees?|commissions?)\b.*\b(paid|pay|cost|costing|spent|total|how much)\b|\bhow much\b.*\b(fees?|commissions?)\b|largest (trading )?(expense|cost|fee)/.test(n) ||
+        /why .*(profit|p ?& ?l|pnl).*(differ|different|not (the same|match))|why .*balance.*(differ|different|not match)/.test(n) || /\b(show|list|how much|what are|did i)\b.*\b(deposits?|deposited|withdrawals?|withdrew|withdrawn)\b/.test(n) ||
+        /(imports?|data|numbers|balance).*(accurate|correct|right|reconciled|match)|\breconcil|which (transactions|records|entries) (don.?t|do not|dont) match|discrepanc/.test(n));
+      if (cashQ && !/\b(open|go to|take me to)\b/.test(n)) return cashAnswer(n, data);
       // TRC login and cloud sync (release 2.1.0)
       if (!teachReq && /^(sign ?in|log ?in|sign ?up|log ?out|sign ?out|sync( now| my (data|trades|journal))?|am i synced|is (it|my data) synced|create (a |an )?(trc )?(login|account)( for sync| to sync)?|open (my )?(trc )?login|cloud sync)$/.test(n)) {
         ctx.last = 'nav'; ctx.topic = { type: 'feature', id: 'account' };
