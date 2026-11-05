@@ -14,13 +14,13 @@
   var DEF_PREF = { fileTz: 'as-is', dateOrder: 'mdy', accountMap: {}, noAcct: '', feeTemplate: {}, applyFees: true, autoSession: true, defaults: { strategy: '', tags: '' }, keepCopy: false, remember: true };
   var COPY_LIMIT = 1500000;
   var S = { step: 'file', loaded: false, err: null, accounts: [], history: [], templates: [], fileName: '', fileSize: 0, parsed: null, mode: 'fills', mapping: {}, opts: { dateOrder: 'mdy', fileTz: 'as-is', feesPerContract: false }, accountId: 'acct-default', accountMap: {}, plan: null, tplName: '', usedTemplate: null, busy: false, msg: '',
-    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, upd: {}, cashPick: {}, cashChoice: {}, typeMap: {}, cashReplace: {}, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, guideOpen: false, nearMiss: null };
+    pref: JSON.parse(JSON.stringify(DEF_PREF)), sources: [], queue: [], review: null, tv: null, pick: {}, noAcct: {}, allow: {}, off: {}, upd: {}, cashPick: {}, cashChoice: {}, typeMap: {}, cashReplace: {}, pendingReview: 0, userTotal: '', okMismatch: false, showN: 50, stage: '', done: null, pasteOpen: false, settingsOpen: false, guideOpen: false, nearMiss: null };
 
   function load() {
     return DB.ready().then(function () { return Promise.all([DB.getAll('accounts'), ST.list('import'), ST.list('template'), ST.getPref('tvImport', null)]); }).then(function (r) {
       S.accounts = r[0].map(AC.normalizeAccount).filter(function (a) { return !a.archived; }).sort(function (a, b) { return a.createdAt - b.createdAt; });
       S.history = r[1].sort(function (a, b) { return b.at - a.at; });
-      DB.getByIndex('docs', 'kind', 'dupe').then(function (d) { var n = d.filter(function (x) { return !x.voided && (x.status === 'review' || x.status === 'later'); }).length; if (n !== S.pendingReview) { S.pendingReview = n; if (S.step === 'file') render(); } }).catch(function () {}); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
+      DB.getByIndex('docs', 'kind', 'dupe').then(function (d) { var n = d.filter(function (x) { return !x.voided && (x.status === 'review' || x.status === 'later'); }).length; if (n !== S.pendingReview) { S.pendingReview = n; if (S.step === 'file' && !S.busy && !(document.activeElement && document.activeElement.id === 'im-file')) render(); } }).catch(function () {}); S.templates = r[2].filter(function (t) { return t.type === 'import-mapping'; }); S.loaded = true; S.err = null;
       if (r[3] && typeof r[3] === 'object') S.pref = Object.assign(JSON.parse(JSON.stringify(DEF_PREF)), r[3], { defaults: Object.assign({}, DEF_PREF.defaults, r[3].defaults || {}) });
       if (!S.accounts.some(function (a) { return a.id === S.accountId; }) && S.accounts.length) S.accountId = S.accounts[0].id;
     }).catch(function (e) { S.err = (e && e.message) || 'Could not open the local database.'; S.loaded = true; });

@@ -172,8 +172,9 @@
     else if (a === 'cf-export') exportNow();
   });
   function refresh() { return load().then(render); }
-  window.addEventListener('tt:view', function (e) { if (e.detail.name === 'cashflow') refresh(); });
-  ['tt:ledger-changed', 'tt:journal-changed', 'tt:accounts-changed'].forEach(function (ev) { window.addEventListener(ev, function () { S.cache = {}; if (S.loaded && document.getElementById('view-cashflow') && document.getElementById('view-cashflow').classList.contains('active')) refresh(); }); });
+  // Never show old figures: if anything changed while this screen was hidden, it shows a loading state until the new data are in.
+  window.addEventListener('tt:view', function (e) { if (e.detail.name === 'cashflow') { if (S.stale || !S.loaded) { S.loaded = false; S.stale = false; render(); } refresh(); } });
+  ['tt:ledger-changed', 'tt:journal-changed', 'tt:accounts-changed', 'tt:dupes-changed'].forEach(function (ev) { window.addEventListener(ev, function () { S.cache = {}; var v = document.getElementById('view-cashflow'); if (S.loaded && v && v.classList.contains('active')) refresh(); else S.stale = true; }); });
   // Copilot and other screens read figures through here, so they always match what this screen shows.
   window.TTCashflow = { reload: refresh, state: S, summary: function (id) { return load().then(function () { return id === 'all' ? null : sumOf(id || S.acct); }); }, open: function (id, tab) { S.acct = id || S.acct; S.tab = tab || 'overview'; if (window.TTNav) window.TTNav.go('cashflow'); } };
 })();
