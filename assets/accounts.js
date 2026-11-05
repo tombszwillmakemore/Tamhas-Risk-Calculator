@@ -56,7 +56,7 @@
   }
   function detail(a, st, ruleKeys, stale) {
     var h = '<div class="a-body"><p class="note">' + st.trades + ' trade' + (st.trades === 1 ? '' : 's') + ' logged · ' + st.closed + ' closed' + (st.open ? ' · ' + st.open + ' open' : '') +
-      (a.startingBalanceCents != null ? ' · starting balance ' + money(a.startingBalanceCents) : '') + (st.closed && st.netTrades < st.closed ? ' · net counts only ' + st.netTrades + ' trade(s) with fees entered' : '') + '</p>';
+      (a.startingBalanceCents != null ? ' · starting balance ' + JC.fmtMoney(a.startingBalanceCents) : '') + (st.closed && st.netTrades < st.closed ? ' · net counts only ' + st.netTrades + ' trade(s) with fees entered' : '') + '</p>';
     if (a.template) h += '<p class="note">Started from the <b>' + esc((firmBySlug(a.template.slug) || {}).name || a.template.slug) + ' · ' + esc(a.template.product || 'custom') + '</b> template, researched ' + esc(a.template.researchedOn) + '. These are your editable copies, not live rules.</p>';
     h += '<div class="field"><label for="a-st-' + esc(a.id) + '">Status</label><select id="a-st-' + esc(a.id) + '" data-act="a-status" data-id="' + esc(a.id) + '">' +
       A.STATUSES[a.category].map(function (s) { return '<option' + (s === a.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>';

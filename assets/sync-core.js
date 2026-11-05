@@ -32,6 +32,14 @@
     if (kind === 'doc' && o.kind === 'import' && o.copies) delete o.copies;
     return o;
   }
+  // The same imported trade saved on two devices differs only in WHEN and in WHICH import added it (deterministic ids from the
+  // execution keys make the id identical). That is the same trade, not a conflict: the cloud copy is kept.
+  var IMPORT_META = ['createdAt', 'importBatch', 'updatedAt'];
+  function sameRecord(kind, a, b) {
+    if (kind !== 'trade' || !a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+    var x = JSON.parse(JSON.stringify(a)), y = JSON.parse(JSON.stringify(b)); IMPORT_META.forEach(function (k) { delete x[k]; delete y[k]; });
+    return stable(x) === stable(y);
+  }
   function hashOf(kind, rec) { var p = prepare(kind, rec); return p ? hash(stable(p)) : null; }
   function keyOf(kind, id) { return kind + ':' + id; }
   function emptyState() { return { cursor: { tx: 0, rev: 0 }, base: {}, conflicts: [], skipped: {}, lastSync: null, lastError: null, format: FORMAT }; }
@@ -69,13 +77,15 @@
 
   /* results from trc_push -> new state + conflicts + problems. Never marks a change as saved unless the server said applied/same. */
   function applyPush(state, sent, results) {
-    var s = cleanState(JSON.parse(JSON.stringify(state))), byKey = {}, out = { saved: 0, conflicts: 0, problems: [], tooOld: false };
+    var s = cleanState(JSON.parse(JSON.stringify(state))), byKey = {}, out = { saved: 0, conflicts: 0, problems: [], tooOld: false, adopt: [], duplicates: [] };
     sent.forEach(function (c) { byKey[keyOf(c.kind, c.id)] = c; });
     (results || []).forEach(function (r) {
       var k = keyOf(r.kind, r.id), c = byKey[k]; if (!c) return;
       if (r.status === 'applied' || r.status === 'same') { s.base[k] = { v: r.version, h: c.deleted ? null : c.hash, d: !!c.deleted }; delete s.skipped[k]; out.saved++; }
       else if (r.status === 'conflict' && r.server && isPref(c.kind, c.data)) { s.base[k] = { v: r.server.version, h: r.server.deleted ? null : hashOf(c.kind, r.server.data), d: !!r.server.deleted }; out.retry = true; }   // preferences: this device's newer choice goes over on the next pass
+      else if (r.status === 'conflict' && r.server && !c.deleted && !r.server.deleted && sameRecord(c.kind, c.data, r.server.data)) { s.base[k] = { v: r.server.version, h: hashOf(c.kind, r.server.data), d: false }; out.adopt.push({ store: KIND_STORE[c.kind], value: r.server.data }); out.saved++; }
       else if (r.status === 'conflict' && r.server) { addConflict(s, k, c, r.server); out.conflicts++; }
+      else if (r.status === 'duplicate') { s.skipped[k] = 'duplicate'; out.duplicates.push({ key: k, id: c.id, of: r.of || null }); }
       else if (r.status === 'too_old') { out.tooOld = true; out.problems.push({ key: k, reason: 'too_old' }); }
       else { s.skipped[k] = r.status; out.problems.push({ key: k, reason: r.status }); }
     });
@@ -116,6 +126,8 @@
         s.base[k] = { v: row.version, h: remoteHash, d: !!row.deleted }; applied++;
       } else if ((row.deleted && !loc) || (!row.deleted && loc && localHash === remoteHash)) {
         s.base[k] = { v: row.version, h: remoteHash, d: !!row.deleted };   // both sides ended up the same
+      } else if (loc && !row.deleted && sameRecord(row.kind, loc, row.data)) {
+        ops.push({ store: store, type: 'put', value: row.data }); s.base[k] = { v: row.version, h: remoteHash, d: false }; applied++;   // same imported trade from another device
       } else if (loc && isPref(row.kind, loc)) {
         s.base[k] = { v: row.version, h: remoteHash, d: !!row.deleted };    // preferences: keep this device's change; it is pushed over the cloud copy
       } else {
@@ -162,7 +174,7 @@
   }
 
   var api = { FORMAT: FORMAT, STORES: STORES, KIND_STORE: KIND_STORE, MAX_BYTES: MAX_BYTES, stable: stable, hash: hash, hashOf: hashOf, prepare: prepare, keyOf: keyOf,
-    emptyState: emptyState, cleanState: cleanState, autoDefault: autoDefault, isPref: isPref, diff: diff, pendingCount: pendingCount, applyPush: applyPush, applyPull: applyPull, resolve: resolve, migrationPlan: migrationPlan };
+    emptyState: emptyState, cleanState: cleanState, autoDefault: autoDefault, sameRecord: sameRecord, isPref: isPref, diff: diff, pendingCount: pendingCount, applyPush: applyPush, applyPull: applyPull, resolve: resolve, migrationPlan: migrationPlan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.TTSyncCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);

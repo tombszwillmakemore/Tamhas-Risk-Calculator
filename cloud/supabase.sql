@@ -40,6 +40,8 @@ create table if not exists public.trc_records (
   constraint trc_data_size check (data is null or pg_column_size(data) <= 262144)
 );
 create index if not exists trc_records_sync on public.trc_records (owner, tx, rev);
+-- Finds live trades by their source keys for the duplicate guard in trc_push.
+create index if not exists trc_records_trade_keys on public.trc_records using gin ((data -> 'srcKeys')) where kind = 'trade' and not deleted;
 
 alter table public.trc_records enable row level security;
 alter table public.trc_records force row level security;
@@ -68,7 +70,7 @@ declare
   me uuid := auth.uid();
   lim jsonb := public.trc_limits();
   it jsonb; r public.trc_records%rowtype; out jsonb := '[]'::jsonb;
-  k text; i text; h text; del boolean; d jsonb; base integer; n integer; used bigint; cnt bigint;
+  k text; i text; h text; del boolean; d jsonb; base integer; n integer; used bigint; cnt bigint; dup text; locked boolean := false;
 begin
   if me is null then raise exception 'not signed in' using errcode = '42501'; end if;
   if items is null or jsonb_typeof(items) <> 'array' then raise exception 'items must be an array' using errcode = '22023'; end if;
@@ -87,6 +89,19 @@ begin
     end if;
     if d is not null and pg_column_size(d) > 262144 then
       out := out || jsonb_build_array(jsonb_build_object('kind', k, 'id', i, 'status', 'too_large')); continue;
+    end if;
+
+    -- Server-side duplicate guard: the same execution (source key) may not be saved as two different live trades. Pushes of trades
+    -- from one person are serialised by an advisory lock, so two devices cannot both pass this check at the same moment.
+    if k = 'trade' and not del and jsonb_typeof(d -> 'srcKeys') = 'array' and jsonb_array_length(d -> 'srcKeys') > 0 then
+      if not locked then perform pg_advisory_xact_lock(hashtextextended(me::text || ':trc-trade-keys', 0)); locked := true; end if;
+      select t.id into dup from public.trc_records t
+       where t.owner = me and t.kind = 'trade' and t.id <> i and not t.deleted
+         and (t.data -> 'srcKeys') ?| array(select jsonb_array_elements_text(d -> 'srcKeys'))
+       limit 1;
+      if dup is not null then
+        out := out || jsonb_build_array(jsonb_build_object('kind', k, 'id', i, 'status', 'duplicate', 'of', dup)); dup := null; continue;
+      end if;
     end if;
 
     select * into r from public.trc_records t where t.owner = me and t.kind = k and t.id = i for update;

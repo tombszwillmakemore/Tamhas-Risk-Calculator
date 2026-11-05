@@ -78,6 +78,22 @@
         });
       });
     },
+    // Compare-and-swap write: every check {store, key, hash} must still match hashFn(saved record) (hash null = must not exist), checked
+    // inside the same transaction as the writes. If any differs, nothing is written and the promise rejects with {stale: [keys]}.
+    casBatch: function (checks, ops, hashFn) {
+      var names = []; ops.concat(checks).forEach(function (o) { if (names.indexOf(o.store) < 0) names.push(o.store); });
+      if (!names.length) return Promise.resolve();
+      var stale = null;
+      return run(names, 'readwrite', function (tx) {
+        var left = checks.length;
+        function write() { ops.forEach(function (o) { var st = tx.objectStore(o.store); if (o.type === 'put') st.put(o.value); else if (o.type === 'del') st.delete(o.key); else throw new Error('Unknown operation ' + o.type); }); }
+        if (!left) { write(); return; }
+        checks.forEach(function (c) {
+          var rq = tx.objectStore(c.store).get(c.key);
+          rq.onsuccess = function () { var h = rq.result ? hashFn(rq.result) : null; if (h !== (c.hash || null)) (stale || (stale = [])).push(c.key); if (--left === 0) { if (stale) tx.abort(); else write(); } };
+        });
+      }).catch(function (e) { if (stale) { var er = new Error('Changed elsewhere'); er.stale = stale; throw er; } throw e; });
+    },
     getMeta: function (key) { return api.get('meta', key).then(function (r) { return r ? r.value : undefined; }); },
     setMeta: function (key, value) { return api.put('meta', { key: key, value: value }); },
     audit: function (type, details) { return api.put('audit', { id: uid('au'), at: Date.now(), type: type, details: details || null }); },

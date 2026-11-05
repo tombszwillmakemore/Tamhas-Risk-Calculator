@@ -61,16 +61,35 @@
   // `full` = replace the whole store (used only by "delete everything" and "replace on restore").
   // Otherwise only this journal's own changes are written: trades it holds are saved, trades it removed are deleted, and anything it does
   // not know about (for example just imported from a CSV) or could not read is left exactly as it is, so a stale screen can never erase data.
+  /* Saving is compare-and-swap: only trades this screen changed are written, and only if the saved copy is still the one this screen
+     loaded. If an import, Import Review, another tab or a cloud sync changed it in the meantime, nothing is overwritten: the journal
+     reloads and says so (your form stays open). `full` = replace the whole store (used only by "delete everything" and "replace on restore"). */
+  function hashRec(t) { var D = window.TTDedupe; return D ? D.hash(D.stable(t)) : JSON.stringify(t); }
+  function rebase(raws) { S.base = {}; S.baseN = {}; S.known = {}; (raws || []).forEach(function (x) { S.base[x.raw.id] = hashRec(x.raw); S.baseN[x.t.id] = hashRec(x.t); S.known[x.t.id] = 1; }); }
   function persist(full) {
+    S.saveStale = false;
     if (S.dbOk) {
-      var ops = [], keep = {};
-      if (full) ops.push({ store: 'trades', type: 'clear' });
-      S.trades.forEach(function (t) { keep[t.id] = 1; ops.push({ store: 'trades', type: 'put', value: t }); });
-      if (!full) Object.keys(S.known || {}).forEach(function (id) { if (!keep[id]) ops.push({ store: 'trades', type: 'del', key: id }); });
-      return window.TTDB.batch(ops).then(function () { S.saveFail = false; S.known = keep; return true; }).catch(function () { S.saveFail = true; return false; });
+      var ops = [], keep = {}, checks = [];
+      if (full) {
+        ops.push({ store: 'trades', type: 'clear' }); S.trades.forEach(function (t) { keep[t.id] = 1; ops.push({ store: 'trades', type: 'put', value: t }); });
+        return window.TTDB.batch(ops).then(function () { S.saveFail = false; rebase(S.trades.map(function (t) { return { raw: t, t: t }; })); return true; }).catch(function () { S.saveFail = true; return false; });
+      }
+      S.trades.forEach(function (t) { keep[t.id] = 1; if (S.baseN && S.baseN[t.id] === hashRec(t)) return; ops.push({ store: 'trades', type: 'put', value: t }); checks.push({ store: 'trades', key: t.id, hash: S.base && S.base[t.id] ? S.base[t.id] : null }); });
+      Object.keys(S.known || {}).forEach(function (id) { if (!keep[id]) { ops.push({ store: 'trades', type: 'del', key: id }); checks.push({ store: 'trades', key: id, hash: S.base ? S.base[id] || null : null }); } });
+      if (!ops.length) return Promise.resolve(true);
+      return window.TTDB.casBatch(checks, ops, hashRec).then(function () {
+        S.saveFail = false; S.trades.forEach(function (t) { if (keep[t.id]) { var h = hashRec(t); S.base[t.id] = h; S.baseN[t.id] = h; } });
+        Object.keys(S.known || {}).forEach(function (id) { if (!keep[id]) { delete S.base[id]; delete S.baseN[id]; } }); S.known = keep; return true;
+      }).catch(function (e) {
+        if (e && e.stale) { S.saveStale = true; return loadFromDb().then(function () { return false; }, function () { return false; }); }
+        S.saveFail = true; return false;
+      });
     }
     try { localStorage.setItem(C.STORE_KEY, C.serializeStored(S.trades)); S.saveFail = false; return Promise.resolve(true); } catch (e) { S.saveFail = true; return Promise.resolve(false); }
   }
+  var STALE_MSG = 'This trade was changed somewhere else (an import, Import Review, another tab or another device) after you opened it. Nothing was overwritten: the journal now shows the latest version. Review your change and save again.';
+  // After a failed save: put the previous list back, unless the journal was just reloaded because of a newer saved version.
+  function restoreAfterFail(before) { if (!S.saveStale) S.trades = before; }
   function changed() { try { window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} }
   function rows() { return C.analyze(S.trades); }
   function effBasis(all) {
@@ -164,6 +183,7 @@
     if (S.corrupt) h += '<div class="banner bad">Your saved journal could not be read. A copy of the unreadable data was kept aside. Saving new trades will start a fresh journal. If you have a backup file, restore it in the Backup tab.</div>';
     if (S.rejected) h += '<div class="banner warn">' + plural(S.rejected, 'saved entry') + ' could not be read and ' + (S.rejected === 1 ? 'was' : 'were') + ' set aside (not deleted).</div>';
     if (S.saveFail) h += '<div class="banner bad">Your browser would not save the last change (storage full or blocked). Export a backup now so nothing is lost.</div>';
+    if (S.undoDel && !S.editing) h += '<div class="ui-banner" role="status">Deleted ' + plural(S.undoDel.trades.length, 'trade') + '. <button type="button" class="btn ghost sm" data-act="undo-del">UNDO DELETE</button></div>';
     return h;
   }
   function render() {
@@ -252,7 +272,7 @@
       return D.dialog({ title: 'Apply to ' + plural(ids.length, 'trade'), ok: 'APPLY', fields: [f], validate: function (v) { return (a.op === 'addTag' || a.op === 'removeTag' || a.op === 'addMistake') && !v.v.trim() ? 'Type a label.' : null; } }).then(function (v) {
         if (!v) return; var res = J2.bulkApply(S.trades, ids, { type: a.op, value: v.v });
         return EXT.ctx.updateTrades(res.trades).then(function (ok) {
-          if (!ok) { toast('Could not save (browser storage blocked). Nothing was changed.', true); return; }
+          if (!ok) { toast(S.saveStale ? STALE_MSG : 'Could not save (browser storage blocked). Nothing was changed.', true); render(); return; }
           toast('Updated ' + plural(res.changed, 'trade') + (res.failed.length ? '; ' + res.failed.length + ' could not be changed (' + res.failed[0].reason + ')' : '') + '.', res.failed.length > 0);
           renderList();
         });
@@ -261,10 +281,11 @@
   }
   function deleteMany(ids) {
     var set = {}; ids.forEach(function (i) { set[i] = 1; });
+    var gone = S.trades.filter(function (t) { return set[t.id]; });
     EXT.ctx.updateTrades(S.trades.filter(function (t) { return !set[t.id]; })).then(function (ok) {
-      if (!ok) { toast('Could not delete (browser storage blocked).', true); return; }
-      if (S.imgOk !== false) ids.forEach(function (id) { SLOTS.forEach(function (sl) { IMG.del(id + ':' + sl).catch(function () {}); }); });
-      S.sel = {}; S.expanded = null; toast(plural(ids.length, 'trade') + ' deleted.'); render();
+      if (!ok) { toast(S.saveStale ? STALE_MSG : 'Could not delete (browser storage blocked).', true); render(); return; }
+      offerUndo(gone);
+      S.sel = {}; S.expanded = null; toast(plural(ids.length, 'trade') + ' deleted. UNDO is at the top of the journal.'); render();
     });
   }
   function pnlChip(c) {
@@ -674,14 +695,22 @@
     S.editing = { id: id || null, trade: t, shots: { before: { dataUrl: null, changed: false, removed: false, had: false }, after: { dataUrl: null, changed: false, removed: false, had: false } } };
     render(); window.scrollTo(0, 0);
   }
-  function saveForm() {
+  function saveForm(confirmed) {
+    if (S.saving) return;                                                  // a double tap on SAVE never saves twice
     var E = S.editing, cerr = []; readCustom(cerr); if (cerr.length) { showErrors(cerr); return; }
     var r = C.normalizeTrade(readForm());
     if (!r.ok) { showErrors(r.errors); return; }
     var t = r.trade, before = S.trades.slice(), idx = S.trades.findIndex(function (x) { return x.id === t.id; });
+    // A new trade that matches one already in the journal (imported or typed) is confirmed first, never silently doubled.
+    if (idx < 0 && !confirmed && window.TTDedupe) {
+      var fp = window.TTDedupe.fingerprint(t), twin = S.trades.filter(function (x) { return window.TTDedupe.fingerprint(x) === fp; })[0];
+      if (twin && window.TTUI) { window.TTUI.confirm('This trade may already be in your journal', 'A ' + twin.contract + ' ' + twin.side + ' trade on ' + twin.date + (twin.time ? ' at ' + twin.time : '') + ' with the same account, size and prices already exists' + (twin.srcKeys ? ' (imported)' : '') + '. Saving adds a second one and both count in your P&L.', 'SAVE ANYWAY', false).then(function (y) { if (y) saveForm(true); }); return; }
+    }
     if (idx >= 0) S.trades[idx] = t; else S.trades.push(t);
+    S.saving = true; var sb = root.querySelector('[data-act=save]'); if (sb) { sb.disabled = true; sb.textContent = 'SAVING…'; }
     persist().then(function (ok) {
-    if (!ok) { S.trades = before; showErrors(['Your browser would not save this trade (storage full or blocked). Export a backup, free some space, then try again.']); return; }
+    S.saving = false;
+    if (!ok) { restoreAfterFail(before); if (sb) { sb.disabled = false; sb.textContent = E.id ? 'SAVE CHANGES' : 'SAVE TRADE'; } showErrors([S.saveStale ? STALE_MSG : 'Your browser would not save this trade (storage full or blocked). Export a backup, free some space, then try again.']); return; }
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
     savePrefs({ contract: t.contract, side: t.side, account: t.accountId });
     var ops = [];
@@ -693,14 +722,29 @@
     S.editing = null; S.tab = 'entries'; S.expanded = t.id; changed(); render(); window.scrollTo(0, 0);
     });
   }
+  // Deleted trades can be put back for a few minutes (UNDO DELETE). Their screenshots are only removed once undo is no longer offered.
+  var undoTimer = null;
+  function offerUndo(trades) {
+    finishUndo(); S.undoDel = { trades: trades.map(function (t) { return JSON.parse(JSON.stringify(t)); }), at: Date.now() };
+    undoTimer = setTimeout(function () { finishUndo(); if (!S.editing) render(); }, 120000);
+  }
+  function finishUndo() {
+    clearTimeout(undoTimer); var u = S.undoDel; S.undoDel = null; if (!u || S.imgOk === false) return;
+    u.trades.forEach(function (t) { if (!S.trades.some(function (x) { return x.id === t.id; })) SLOTS.forEach(function (sl) { IMG.del(t.id + ':' + sl).catch(function () {}); }); });
+  }
+  function undoDelete() {
+    var u = S.undoDel; if (!u) return; clearTimeout(undoTimer); S.undoDel = null;
+    var before = S.trades.slice(); u.trades.forEach(function (t) { if (!S.trades.some(function (x) { return x.id === t.id; })) S.trades.push(t); });
+    persist().then(function (ok) { if (!ok) { restoreAfterFail(before); S.undoDel = u; toast(S.saveStale ? 'Your journal changed elsewhere; try UNDO again.' : 'Could not restore (browser storage blocked).', true); render(); return; } changed(); render(); toast('Restored ' + plural(u.trades.length, 'trade') + '.'); });
+  }
   function deleteTrade(id) {
     var t = S.trades.filter(function (x) { return x.id === id; })[0]; if (!t) return;
-    if (!window.confirm('Delete this ' + t.contract + ' trade from ' + t.date + '? This cannot be undone.')) return;
+    if (!window.confirm('Delete this ' + t.contract + ' trade from ' + t.date + '? You can undo this for 2 minutes.')) return;
     var before = S.trades.slice(); S.trades = S.trades.filter(function (x) { return x.id !== id; });
     persist().then(function (ok) {
-      if (!ok) { S.trades = before; toast('Could not delete (browser storage blocked).', true); return; }
-      if (S.imgOk !== false) SLOTS.forEach(function (s) { IMG.del(id + ':' + s).catch(function () {}); });
-      S.editing = null; S.expanded = null; changed(); render(); toast('Trade deleted.');
+      if (!ok) { restoreAfterFail(before); toast(S.saveStale ? STALE_MSG : 'Could not delete (browser storage blocked).', true); render(); return; }
+      offerUndo([t]);
+      S.editing = null; S.expanded = null; changed(); render(); toast('Trade deleted. UNDO is at the top of the journal.');
     });
   }
 
@@ -798,14 +842,21 @@
       var r = C.parseBackup(String(rd.result));
       if (!r.ok) { toast(r.error, true); return; }
       var mode = ($('input[name="bkmode"]:checked') || {}).value || 'merge';
-      var res = C.mergeTrades(S.trades, r.trades, mode);
+      var res = C.mergeTrades(S.trades, r.trades, mode), dupSkip = 0, dupHeld = 0;
+      if (mode === 'merge' && window.TTDedupe) {
+        // Trades from the backup that are already in the journal under a different id (same source ids, or identical content) are skipped;
+        // look-alikes that cannot be proven are added and listed in Import Review by its journal check.
+        var DDx = window.TTDedupe, have = {}; S.trades.forEach(function (t) { have[t.id] = 1; }); var ixr = DDx.index(S.trades, C.compute);
+        res.trades = res.trades.filter(function (t) { if (have[t.id]) return true; var d = DDx.classify(ixr, { trade: t, keys: t.srcKeys || [], alts: [], src: 'backup' }); if (d.cls === 'exact') { dupSkip++; return false; } if (d.cls !== 'new') dupHeld++; DDx.add(ixr, t, { src: 'backup' }); return true; });
+        res.added -= dupSkip; res.skipped += dupSkip;
+      }
       var msg = mode === 'replace' ? 'Replace your whole journal (' + plural(S.trades.length, 'trade') + ') with ' + plural(r.trades.length, 'trade') + ' from this backup?' :
         'Add ' + plural(res.added, 'new trade') + ' from this backup' + (res.skipped ? ' (' + res.skipped + ' already here will be skipped)' : '') + '?';
       if (r.skipped.length) msg += '\n\n' + plural(r.skipped.length, 'row') + ' in the file could not be read and will be skipped.';
       if (!window.confirm(msg)) return;
       var before = S.trades.slice(); S.trades = res.trades;
       persist(mode === 'replace').then(function (ok) {
-      if (!ok) { S.trades = before; toast('Could not save the restored journal (storage full or blocked).', true); return; }
+      if (!ok) { restoreAfterFail(before); toast(S.saveStale ? 'Your journal changed elsewhere while restoring. Nothing was overwritten; try the restore again.' : 'Could not save the restored journal (storage full or blocked).', true); render(); return; }
       var addIds = {}; (mode === 'replace' ? r.trades : r.trades.filter(function (t) { return before.every(function (b) { return b.id !== t.id; }); })).forEach(function (t) { addIds[t.id] = 1; });
       var chain = Promise.resolve();
       chain = chain.then(function () { return restoreExtras(r, mode); });
@@ -815,7 +866,7 @@
       }
       chain.catch(function () { toast('Trades restored, but some screenshots could not be stored.', true); }).then(function () { changed(); render(); });
       if (S.dbOk) window.TTDB.getAll('quarantine').then(function (q) { return window.TTDB.batch(q.filter(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; }).map(function (x) { x.resolved = true; return { store: 'quarantine', type: 'put', value: x }; })); }).catch(function () {}); // kept, just marked handled
-      S.corrupt = false; S.rejected = 0; toast('Restored ' + plural(res.added, 'trade') + '.');
+      S.corrupt = false; S.rejected = 0; toast('Restored ' + plural(res.added, 'trade') + '.' + (dupSkip ? ' ' + plural(dupSkip, 'trade') + ' already in your journal under another id were skipped.' : '') + (dupHeld ? ' ' + dupHeld + ' look like trades already here: see Import Review.' : ''));
       });
     };
     rd.readAsText(file);
@@ -850,6 +901,7 @@
       case 'delete': deleteTrade(el.getAttribute('data-id')); break;
       case 'cancel': S.editing = null; render(); break;
       case 'save': saveForm(); break;
+      case 'undo-del': undoDelete(); break;
       case 'toggle-card': var id = el.getAttribute('data-id'); S.expanded = S.expanded === id ? null : id; renderList(); break;
       case 'more': S.limit += 30; renderList(); break;
       case 'toggle-filters': S.filtersOpen = !S.filtersOpen; el.classList.toggle('on', S.filtersOpen); el.setAttribute('aria-expanded', S.filtersOpen); $('#jFilters').hidden = !S.filtersOpen; break;
@@ -920,15 +972,23 @@
         .catch(function (e) { toast(e.message || 'Could not use that image.', true); });
       return;
     }
+    if (S.editing) S.editing.dirty = true;
     if (t.hasAttribute && t.hasAttribute('data-f')) { onInput(ev); return; }
     if (S.editing) updatePreview();
   });
 
+  // Coming back to the journal (from another screen, another tab or app) always shows what is saved now, so a screen left open never
+  // shows stale trades. An open form is never touched.
+  function freshen() { if (!S.dbOk || S.editing || !S.loaded) return; loadFromDb().then(function () { if (!S.editing) render(); }).catch(function () {}); }
+  window.addEventListener('tt:view', function (e) { if (e.detail && e.detail.name === 'journal') freshen(); });
+  document.addEventListener('visibilitychange', function () { var v = document.getElementById('view-journal'); if (!document.hidden && v && v.classList.contains('active')) freshen(); });
+  window.addEventListener('beforeunload', function (e) { if (S.editing && S.editing.dirty) { e.preventDefault(); e.returnValue = ''; } });
   function loadFromDb() {
     return window.TTDB.getAll('trades').then(function (list) {
       var ok = [], bad = 0;
       list.forEach(function (raw) { var r = C.normalizeTrade(raw); if (r.ok) ok.push(r.trade); else bad++; });
-      S.trades = ok; S.rejected = bad; S.known = {}; ok.forEach(function (t) { S.known[t.id] = 1; });
+      var pairs = []; list.forEach(function (raw) { var r = C.normalizeTrade(raw); if (r.ok) pairs.push({ raw: raw, t: r.trade }); });
+      S.trades = ok; S.rejected = bad; rebase(pairs);
     }).then(function () { return window.TTDB.getAll('quarantine'); }).then(function (q) {
       // Unreadable earlier data was kept aside (never deleted). Keep telling the person until they dismiss it via backup/restore.
       S.corrupt = q.some(function (x) { return x.kind === 'legacy-journal-unreadable' && !x.resolved; });
@@ -953,7 +1013,7 @@
   EXT.ctx = { state: S, rows: rows, filteredRows: filteredRows, effBasis: effBasis, render: render, toast: toast, loadDocs: loadDocs, accountNames: acctNames, fmtDate: fmtDate, fmtR: fmtR, fmtPct: fmtPct, clsOf: clsOf, todayKey: todayKey,
     go: function (tab) { S.tab = tab; render(); window.scrollTo(0, 0); },
     openTrade: function (id) { S.tab = 'entries'; S.expanded = id; S.filters = {}; render(); },
-    updateTrades: function (next) { var before = S.trades; S.trades = next; return persist().then(function (ok) { if (!ok) S.trades = before; else changed(); return ok; }); } };
+    updateTrades: function (next) { var before = S.trades; S.trades = next; return persist().then(function (ok) { if (!ok) restoreAfterFail(before); else changed(); return ok; }); } };
   boot();
   window.TTJournal = { hasShots: function (id) { if (S.imgOk === false) return Promise.resolve(false); return Promise.all(SLOTS.map(function (sl) { return IMG.get(id + ':' + sl).catch(function () { return null; }); })).then(function (r) { return r.some(Boolean); }); }, reload: function () { (S.dbOk ? loadFromDb() : Promise.resolve(loadTrades())).then(function () { render(); }); } };
 })();

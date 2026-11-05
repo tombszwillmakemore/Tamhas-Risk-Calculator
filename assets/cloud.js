@@ -164,7 +164,11 @@
         if (!batch.length) return st;
         return rpc('trc_push', { items: batch, client_fmt: SC.FORMAT, client_device: deviceLabel() }).then(function (res) {
           guard(); var a = SC.applyPush(st, batch, res); out.pushed += a.result.saved; out.conflicts += a.result.conflicts; out.problems = out.problems.concat(a.result.problems); if (a.result.tooOld) out.tooOld = true;
-          return DB.setMeta(STATE_KEY, a.state).then(function () { return (a.result.saved && d.changes.length > BATCH) || (a.result.retry && !st.prefRetried) ? (a.state.prefRetried = true, pushLoop(a.state)) : (delete a.state.prefRetried, a.state); });
+          out.duplicates = (out.duplicates || []).concat(a.result.duplicates || []);
+          // the same imported trade already in the cloud from another device: keep the cloud copy here too (written with the new state)
+          var ops = (a.result.adopt || []).map(function (x) { return { store: x.store, type: 'put', value: x.value }; }).concat([{ store: 'meta', type: 'put', value: { key: STATE_KEY, value: a.state } }]);
+          if (a.result.adopt && a.result.adopt.length) out.pulled += a.result.adopt.length;
+          return DB.batch(ops).then(function () { return (a.result.saved && d.changes.length > BATCH) || (a.result.retry && !st.prefRetried) ? (a.state.prefRetried = true, pushLoop(a.state)) : (delete a.state.prefRetried, a.state); });
         });
       });
     }
@@ -176,8 +180,12 @@
           S.pending = pending; S.conflicts = st.conflicts; S.lastSync = st.lastSync; S.skipped = st.skipped; S.massDelete = st.massDelete || null;
           if (out.pulled) { try { window.dispatchEvent(new Event('tt:journal-changed')); } catch (e) {} if (window.TTJournal && window.TTJournal.reload) window.TTJournal.reload(); }
           // Changes made while this sync ran are not a failure: they upload on the next pass.
-          if (pending && !out.problems.length && !st.conflicts.length && !st.massDelete && !out.tooOld && !out.massDelete) scheduleSync(1500);
-          setStatus(out.tooOld ? 'old' : (st.conflicts.length || st.massDelete) ? 'attention' : out.problems.length ? 'failed' : pending ? 'pending' : 'saved', out.problems.length ? out.problems.length + ' item(s) could not be saved to the cloud (' + uniq(out.problems.map(function (p) { return p.reason; })).join(', ') + ').' : '');
+          // Trades the server refused because the same executions are already saved as another trade wait for the person (Import Review).
+          var dupN = (out.duplicates || []).length; if (dupN) { try { window.dispatchEvent(new Event('tt:dupes-changed')); } catch (e) {} }
+          if (pending && !dupN && !out.problems.length && !st.conflicts.length && !st.massDelete && !out.tooOld && !out.massDelete) scheduleSync(1500);
+          setStatus(out.tooOld ? 'old' : (st.conflicts.length || st.massDelete || dupN) ? 'attention' : out.problems.length ? 'failed' : pending ? 'pending' : 'saved',
+            dupN ? dupN + ' trade(s) on this device hold executions that are already saved in the cloud as other trades, so they were not uploaded. Open Import Review to keep one copy.' :
+            out.problems.length ? out.problems.length + ' item(s) could not be saved to the cloud (' + uniq(out.problems.map(function (p) { return p.reason; })).join(', ') + ').' : '');
           return out;
         });
       });

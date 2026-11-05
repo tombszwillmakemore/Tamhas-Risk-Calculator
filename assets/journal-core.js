@@ -127,7 +127,7 @@
       if (!(Number.isInteger(fc) && fc >= 0)) { e.push('Fees must be zero or more.'); t.feesCents = null; } else t.feesCents = fc;
     } else {
       var f = num(raw.fees);
-      if (!(f >= 0) || decimals(raw.fees) > 2 || f > 100000) { e.push('Fees must be zero or more (max 2 decimals).'); t.feesCents = null; }
+      if (!(f >= 0) || decimals(raw.fees) > 2 || f > 100000) { e.push(f < 0 ? 'Enter fees as a positive amount (for example 2.50, not -2.50). They are always subtracted from the P&L.' : 'Fees must be zero or more (max 2 decimals).'); t.feesCents = null; }
       else t.feesCents = Math.round(f * 100);
     }
 

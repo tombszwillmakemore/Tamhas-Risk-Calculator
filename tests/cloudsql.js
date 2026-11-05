@@ -46,6 +46,16 @@ try {
   r = sql(as(B, "delete from public.trc_records;")); ok('direct DELETE refused', !r.ok && /permission denied/.test(r.out), r.out);
   r = sql(as(B, "insert into public.trc_records(owner,kind,id,hash,data) values ('" + A + "','trade','evil','aaaaaaaaaaaaaaaa','{}');")); ok('direct INSERT (even naming A as owner) refused', !r.ok && /permission denied/.test(r.out), r.out);
   r = sql(as(B, "select count(*) from public.trc_records where owner='" + A + "';")); ok('B asking for A\'s owner id gets nothing', r.out.split('\n').pop() === '0', r.out);
+  // ---- server-side duplicate guard: the same execution can never be saved as two different trades
+  p = push(A, [item('dk1', null, { srcKeys: ['tv:F:1', 'tv:F:2'] })]); ok('dup guard: first trade with its execution keys is saved', p[0].status === 'applied', JSON.stringify(p));
+  p = push(A, [item('dk2', null, { srcKeys: ['tv:F:2', 'tv:F:3'] })]); ok('dup guard: a different trade holding an execution already saved is refused as duplicate', p[0].status === 'duplicate' && p[0].of === 'dk1', JSON.stringify(p));
+  r = sql(as(A, "select count(*) from public.trc_records where id='dk2';")); ok('dup guard: nothing was written for the duplicate', r.out.split('\n').pop() === '0', r.out);
+  p = push(A, [item('dk1', 1, { srcKeys: ['tv:F:1', 'tv:F:2'], feesCents: 148 })]); ok('dup guard: updating the same trade is allowed', p[0].status === 'applied' && p[0].version === 2, JSON.stringify(p));
+  p = push(A, [item('dk3', null, { srcKeys: ['sep:abc:tv:F:2'] })]); ok('dup guard: a trade you restored as separate (own keys) is allowed', p[0].status === 'applied', JSON.stringify(p));
+  p = push(B, [item('dkB', null, { srcKeys: ['tv:F:1'] })]); ok('dup guard: another person with the same keys is unaffected', p[0].status === 'applied', JSON.stringify(p));
+  p = push(A, [item('dk4', null, { srcKeys: ['tv:F:9'] }), item('dk5', null, { srcKeys: ['tv:F:9'] })]); ok('dup guard: two copies in one batch -> first saved, second refused', p[0].status === 'applied' && p[1].status === 'duplicate', JSON.stringify(p));
+  p = push(A, [item('dk1', 2, null, { deleted: true, data: undefined })]); p = push(A, [item('dk2', null, { srcKeys: ['tv:F:2', 'tv:F:3'] })]); ok('dup guard: once the first trade is deleted, the keys are free again', p[0].status === 'applied', JSON.stringify(p));
+  r = sql(as(A, "select count(*) from pg_indexes where indexname='trc_records_trade_keys';")); ok('dup guard: key index exists', r.out.split('\n').pop() === '1', r.out);
   // ---- anonymous
   r = sql(anon("select count(*) from public.trc_records;")); ok('anonymous: no table access', !r.ok && /permission denied/.test(r.out), r.out);
   r = sql(anon("select public.trc_push('[]'::jsonb,1,null);")); ok('anonymous: cannot call push', !r.ok && /permission denied/.test(r.out), r.out);

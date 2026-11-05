@@ -32,7 +32,7 @@ function Device(server, name) {
     const df = S.diff(d.db, d.state); if (!df.changes.length) return { pulled: p.applied, pushed: 0, conflicts: p.conflicts };
     const res = server.push(df.changes, opts.fmt);
     if (opts.dropAck) return { lost: true };                      // the server saved it but the reply never arrived
-    const a = S.applyPush(d.state, df.changes, res); d.state = a.state;
+    const a = S.applyPush(d.state, df.changes, res); d.state = a.state; (a.result.adopt || []).forEach(x => d.put(x.store, x.value));
     return Object.assign({ pulled: p.applied, pushed: a.result.saved, conflicts: p.conflicts + a.result.conflicts }, a.result);
   };
   return d;
@@ -115,4 +115,20 @@ srv = Server(); A = Device(srv); B = Device(srv); A.put('docs', { id: 'pref-prof
 A.put('docs', { id: 'pref-profile', kind: 'pref', recents: ['journal'] }); B.put('docs', { id: 'pref-profile', kind: 'pref', recents: ['calc'] }); A.sync(); r = B.sync(); r = Object.assign(r, B.sync());
 ok('preference edits on two devices: no conflict, last saver wins', B.state.conflicts.length === 0 && srv.rows['doc:pref-profile'].data.recents[0] === 'calc', [B.state.conflicts, srv.rows['doc:pref-profile'].data]);
 A.sync(); eq('...and the other device follows', A.get('docs', 'pref-profile').recents, ['calc']);
+// ---- the same imported trade on two devices (deterministic id from execution keys): one copy, no conflict
+srv = Server(); A = Device(srv, 'phone'); B = Device(srv, 'laptop');
+A.put('trades', T('xk1', 10, { srcKeys: ['tv:F:1', 'tv:F:2'], createdAt: 1, importBatch: 'imp-a' })); B.put('trades', T('xk1', 10, { srcKeys: ['tv:F:1', 'tv:F:2'], createdAt: 2, importBatch: 'imp-b' }));
+A.sync(); r = B.sync();
+eq('same import on two devices: no conflict, one cloud record, both devices agree', [r.conflicts, B.state.conflicts.length, Object.keys(srv.rows).length, B.get('trades', 'xk1').importBatch], [0, 0, 1, 'imp-a']);
+eq('...nothing left to upload', S.pendingCount(B.db, B.state), 0);
+const C1 = Device(srv, 'tablet'); C1.put('trades', T('xk1', 10, { srcKeys: ['tv:F:1', 'tv:F:2'], createdAt: 3, importBatch: 'imp-c' }));
+let dfc = S.diff(C1.db, C1.state), resc = srv.push(dfc.changes), ac = S.applyPush(C1.state, dfc.changes, resc);
+eq('push race (uploaded before pulling): adopted as the same trade, not a conflict', [ac.result.conflicts, ac.result.adopt.length, ac.result.adopt[0].value.importBatch], [0, 1, 'imp-a']);
+const D1 = Device(srv, 'desk'); D1.put('trades', T('xk1', 999, { srcKeys: ['tv:F:1', 'tv:F:2'], createdAt: 4 }));
+r = D1.sync(); ok('a REAL difference under the same id is still a conflict for you to decide', r.conflicts === 1 && D1.state.conflicts.length === 1, r);
+ok('sameRecord ignores only import metadata', S.sameRecord('trade', { id: 'a', x: 1, createdAt: 1, importBatch: 'p' }, { id: 'a', x: 1, createdAt: 2 }) && !S.sameRecord('trade', { id: 'a', x: 1 }, { id: 'a', x: 2 }) && !S.sameRecord('doc', { id: 'a' }, { id: 'a' }));
+// ---- the server refusing a duplicate (same executions saved as another trade)
+const st0 = S.emptyState(), ch = [{ kind: 'trade', id: 'dup2', base: null, hash: 'abcdef0123456789', deleted: false, data: { id: 'dup2' } }];
+const ad = S.applyPush(st0, ch, [{ kind: 'trade', id: 'dup2', status: 'duplicate', of: 'dup1' }]);
+eq('server duplicate refusal: not saved, recorded for review, not a failure', [ad.result.saved, ad.result.duplicates.length, ad.result.duplicates[0].of, ad.state.skipped['trade:dup2'], ad.result.problems.length], [0, 1, 'dup1', 'duplicate', 0]);
 console.log((fail ? 'FAILED ' : 'ALL PASSED ') + pass + ' passed, ' + fail + ' failed'); process.exit(fail ? 1 : 0);
