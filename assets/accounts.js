@@ -2,8 +2,8 @@
    Rules are editable copies of researched templates. They are never presented as official or live. */
 (function () {
   'use strict';
-  var A = window.TTAccountsCore, DB = window.TTDB, P = window.TTPropData, JC = window.TTJournalCore, L = window.TTLiveCore, DDc = window.TTDD, root = document.getElementById('aRoot');
-  if (!root || !A || !DB || !P) return;
+  var A = window.TTAccountsCore, DB = window.TTDB, P = window.TTPropData || null, JC = window.TTJournalCore, L = window.TTLiveCore, DDc = window.TTDD, root = document.getElementById('aRoot');
+  if (!root || !A || !DB) return;
   var DEF = DB.DEFAULT_ACCOUNT_ID;
   var S = { tab: 'accounts', accounts: [], ledger: [], rows: [], adding: false, form: {}, open: null, editing: null, firm: null, errors: [], loaded: false, err: null };
   var LABEL = { prop: 'PROP FIRM', live: 'PERSONAL LIVE', sim: 'DEMO / PAPER', other: 'OTHER' };
@@ -14,7 +14,16 @@
   function today() { return A.ymd(Date.now()); }
   function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
   function money(c) { return c == null ? '—' : JC.fmtMoney(c, true); }
-  function firmBySlug(s) { return P.firms.filter(function (f) { return f.slug === s; })[0] || null; }
+  // The researched firm directory (~200 KB) is loaded only when it is shown: Firm research, a new prop account, or a prop account card.
+  var propP = null;
+  function propData() {
+    if (P) return Promise.resolve(P);
+    if (!propP) propP = new Promise(function (res, rej) { var sc = document.createElement('script'); sc.src = 'assets/propfirm-data.js'; sc.onload = function () { P = window.TTPropData || null; if (P) res(P); else rej(new Error('missing')); }; sc.onerror = function () { propP = null; rej(new Error('Could not load the firm directory. Check your connection and try again.')); }; document.head.appendChild(sc); });
+    return propP;
+  }
+  window.TTLoadPropData = propData;
+  function needProp() { if (P) return true; propData().then(function () { render(); }).catch(function (e) { toast(e.message, true); }); return false; }
+  function firmBySlug(s) { if (!P) return null; return P.firms.filter(function (f) { return f.slug === s; })[0] || null; }
   function productOf(f, name) { return f && f.products.filter(function (p) { return p.name === name; })[0] || null; }
   function toast(msg, bad) { if (window.TTUI) { window.TTUI.toast(msg, bad); return; } var t = document.createElement('div'); t.className = 'toast show' + (bad ? ' bad' : ''); t.setAttribute('role', 'status'); t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, bad ? 6000 : 3000); }
 
@@ -57,7 +66,7 @@
   function detail(a, st, ruleKeys, stale) {
     var h = '<div class="a-body"><p class="note">' + st.trades + ' trade' + (st.trades === 1 ? '' : 's') + ' logged · ' + st.closed + ' closed' + (st.open ? ' · ' + st.open + ' open' : '') +
       (a.startingBalanceCents != null ? ' · starting balance ' + JC.fmtMoney(a.startingBalanceCents) : '') + (st.closed && st.netTrades < st.closed ? ' · net counts only ' + st.netTrades + ' trade(s) with fees entered' : '') + '</p>';
-    if (a.template) h += '<p class="note">Started from the <b>' + esc((firmBySlug(a.template.slug) || {}).name || a.template.slug) + ' · ' + esc(a.template.product || 'custom') + '</b> template, researched ' + esc(a.template.researchedOn) + '. These are your editable copies, not live rules.</p>';
+    if (a.template) h += '<p class="note">Started from the <b>' + esc(((needProp() && firmBySlug(a.template.slug)) || {}).name || a.template.slug) + ' · ' + esc(a.template.product || 'custom') + '</b> template, researched ' + esc(a.template.researchedOn) + '. These are your editable copies, not live rules.</p>';
     h += '<div class="field"><label for="a-st-' + esc(a.id) + '">Status</label><select id="a-st-' + esc(a.id) + '" data-act="a-status" data-id="' + esc(a.id) + '">' +
       A.STATUSES[a.category].map(function (s) { return '<option' + (s === a.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></div>';
     if (L && L.isPersonal(a)) h += livePanel(a); else if (window.TTTracker) h += TTTracker.html(a);
@@ -113,7 +122,8 @@
       h += fld('n-bal', 'Starting balance, $ (optional)', f.bal, 'inputmode="decimal" placeholder="e.g. 50000"');
     }
     if (isProp) {
-      h += '<div class="field"><label for="n-firm">Start from a researched firm (optional)</label><select id="n-firm" data-act="n-firm"><option value="">Custom / not listed</option>' +
+      if (!needProp()) h += '<p class="note ui-loading" role="status">Loading the firm directory…</p>';
+      else h += '<div class="field"><label for="n-firm">Start from a researched firm (optional)</label><select id="n-firm" data-act="n-firm"><option value="">Custom / not listed</option>' +
         P.firms.map(function (x) { return '<option value="' + x.slug + '"' + (f.firm === x.slug ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>';
       if (firm) h += '<div class="field"><label for="n-prod">Product</label><select id="n-prod" data-act="n-prod"><option value="">Firm-wide rules only</option>' + firm.products.map(function (p) { return '<option' + (f.product === p.name ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
         '<p class="note">Researched ' + esc(firm.researchedOn) + '. ' + (prod ? Object.keys(A.templateRules(firm, prod)).length : Object.keys(A.templateRules(firm, null)).length) + ' rules will be copied. You can edit or delete every one, and unknown ones stay blank. Facts marked third-party are unconfirmed.</p>';
@@ -223,6 +233,7 @@
       (safeUrl(x.src) ? ' <a href="' + esc(x.src) + '" target="_blank" rel="noopener noreferrer">source ↗</a>' : '') + (x.pu ? ' <span class="a-age">page dated ' + esc(x.pu) + '</span>' : '') + '</div></div>';
   }
   function firmsTab() {
+    if (!needProp()) return '<p class="note ui-loading" role="status">Loading the firm directory…</p>';
     var h = '<div class="panel"><p class="note" style="margin-top:0"><b>Researched ' + esc(P.asOf) + '.</b> ' + esc(P.caveat) + ' Tamhas Trading is not connected to, endorsed by, or affiliated with any firm, and takes no position on any firm\'s reliability.</p></div>';
     P.firms.forEach(function (f) {
       var open = S.firm === f.slug;
