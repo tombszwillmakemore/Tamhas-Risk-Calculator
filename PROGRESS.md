@@ -8,6 +8,11 @@ Free and local-first (no paid services/APIs), no fabricated data, no broker pass
 no invented firm rules, unknown shows as "-" (never $0), never silently delete data, tests are only reported as passed if actually run.
 
 ## Current stage
+**2026-11-05 - Release 2.3.0 (Cashflow) deployed to `main` after SAFE TO DEPLOY (59 of 60 suites passed, 1 skipped: live Supabase
+secrets not set). Backup of the previous main: `backup-main-before-2.3.0`.** New suites: cash1core (62), zip1core (12), cf1e2e (56),
+copilot1 +9. Report: CASHFLOW-REPORT.md.
+
+
 **2026-11-05 - Release 2.2.0 built on `dev-free-platform` (not merged; `main` is still 2.0.0).** Duplicate-proof imports, Import Review /
 Duplicate Archive, personal live and demo accounts with a cash-flow ledger, journal compare-and-swap saves, server-side duplicate guard.
 New suites: dd1core (134), dd2e2e (53), lv1core (42), lv2e2e (48); cloudsql +9, synccore +6. Rules: DATA-INTEGRITY.md. Audit: AUDIT.md.
